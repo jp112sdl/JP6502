@@ -1,3 +1,5 @@
 (sym_lib_table
-  (lib (name 6502)(type Legacy)(uri ${KIPRJMOD}/6502.lib)(options "")(descr ""))
+	(version 7)
+	(lib (name "6502") (type "Legacy") (uri "${KIPRJMOD}/6502.lib") (options "") (descr ""))
+	(lib (name "65C02_Computer-cache") (type "Legacy") (uri "/Users/pechj/Documents/Arduino/ECHT-Einsatz/6502/wooandy/Schematics/65C02_Computer/65C02_Computer-cache.lib") (options "") (descr "Legacy project cache library"))
 )
