@@ -11,9 +11,11 @@
 ;      .import TXTPTR
 ;      .import INPUTBUFFER
       
+      .import __USERRAM_START__
+
       .export _sd_init
       .export _sd_read
-      
+
 SD_PORTB = $8200
 SD_PORTA = $8201
 SD_DDRB = $8202
@@ -27,9 +29,19 @@ SD_MISO = %00010000
 
 PORTA_OUTPUTPINS = SD_CS | SD_SCK | SD_MOSI
 
-fat32_workspace = $200      ; two pages (was $200)
+; FAT32 sector workspace - 512 bytes, page aligned.
+; Placed by the linker in FAT_RAM ($0c00) instead of a fixed $0200, which
+; used to sit on top of acia_rx_buffer and acia_tx_buffer.
+        .segment "FATBUF"
+fat32_workspace:
+        .res 512
 
-buffer = $400   ; was $400
+        .code
+
+; Destination for fat32_file_read. The whole file is read here, rounded up to
+; whole sectors, so this has to be user RAM - it used to be $0400, which is
+; keyboard_buffer / lcd_line_buffer / text_screen_buffer.
+buffer = __USERRAM_START__
 
 
 
@@ -120,16 +132,11 @@ foundfile:
  ; sta memory_pointer+1
  ; iny
   ldy #0
-  phx 
-  ldx keyboard_rptr
 @printloop:
   lda buffer,y
-  sta keyboard_buffer,y
   jsr tty_write_byte
   iny
-  inx
-  stx keyboard_rptr
-  
+
 ;  cpy #16
 ;  bne @not16
 ;  jsr lcd_setpos_startline1
@@ -147,9 +154,8 @@ foundfile:
 ;  jsr _tty_send_newline
 ;  lda #01
 ;  jsr _delay_sec
-  plx
   rts
-  
+
 ;@loop:
 ;  jmp @loop
   

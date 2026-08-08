@@ -1,4 +1,5 @@
 .import __USERRAM_START__
+.import __BAS_RAM_START__
 
 ; configuration
 CONFIG_2C := 1
@@ -19,7 +20,13 @@ ZP_START4 = $65
 USR             := $000A
 
 ; inputbuffer
-INPUTBUFFER     := $0900
+; Must stay an assembly-time constant: defines.s evaluates INPUTBUFFER in .if
+; expressions and derives INPUTBUFFERX = INPUTBUFFER & $FF00, so a linker
+; symbol cannot be used here. The page is reserved by the BAS_RAM memory area
+; in firmware.ext.cfg; the assert below makes a mismatch a link-time error.
+; Was $0900, which sat inside the BSS segment (menu/modem/tty variables).
+INPUTBUFFER     := $0E00
+.assert INPUTBUFFER = __BAS_RAM_START__, error, "INPUTBUFFER must match BAS_RAM in the linker config"
 STACK2          := TXTBUFFER
 ; constants
 ; STACK_TOP		:= $FC

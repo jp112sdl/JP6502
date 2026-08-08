@@ -1,6 +1,8 @@
         .include "zeropage.inc"
         .include "acia.inc"
         .include "utils.inc"
+        .import __USERRAM_START__
+        .import __USERRAM_SIZE__
         .export _modem_send
         .export _modem_receive
 
@@ -157,6 +159,12 @@ _modem_receive:
         lda recv_buffer,x
         sta memory_pointer+1
         inx
+        ; Reject a load address outside user RAM before writing anything
+        lda memory_pointer+1
+        cmp #>(__USERRAM_START__)
+        bcc @out_of_range
+        cmp #>(__USERRAM_START__ + __USERRAM_SIZE__)
+        bcs @out_of_range
         ; No other first block with be first first
         stz first_block_flag
 @copy_block_to_memory:
@@ -171,6 +179,10 @@ _modem_receive:
         bne @increase_buffer_index
         ; We have crossed page boundary
         inc memory_pointer+1
+        ; Stop before running out of user RAM and into the I/O registers
+        lda memory_pointer+1
+        cmp #>(__USERRAM_START__ + __USERRAM_SIZE__)
+        bcs @out_of_range
 @increase_buffer_index:
         inx
         ; Check if we copied all 128 bytes
@@ -182,6 +194,14 @@ _modem_receive:
         lda #(ACK)
         jsr _acia_write_byte
         jmp @read_block_loop
+
+@out_of_range:
+        ; Load address or transfer size leaves user RAM - abort instead of
+        ; writing over the system buffers, the ROM shadow and the I/O registers
+        jsr @send_abort_message
+        jsr @flush_input
+        lda #(MODEM_RECEIVE_CANCELLED)
+        rts
 
 @receive_complete:
         ; Acknowledge transfer completion

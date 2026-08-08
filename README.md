@@ -17,13 +17,16 @@ SD Card slot
 ```
 ## Memory Map
 ```
-RAM $0000 - $7FFF
-VIA1 $9000
-VIA2 $8800
-ACIA $8400
+RAM  $0000 - $7FFF
+VDP  $8080
 VIA3 $8200
-ROM $A000 - $FFFF
+ACIA $8400
+VIA2 $8800
+VIA1 $9000
+ROM  $A000 - $FFFF
 ```
+See [Software/MEMORY_MAP.md](Software/MEMORY_MAP.md) for the detailed layout of
+zero page, system RAM buffers, BSS, the loadable module area and the ROM segments.
 ## IO
 ```
 VIA1 - LCD
