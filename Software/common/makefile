@@ -41,7 +41,7 @@ PICOCOM_BINARY=picocom
 PICOCOM_FLAGS=-b 19200 -fh --send-cmd 'sz -X'
 
 # Python binary
-PYTHON_BINARY=python2
+PYTHON_BINARY=python
 PYTHON_PROGRAM=../../common/loadtrim.py
 
 # Build folder
@@ -54,7 +54,7 @@ COMMON_LIB_FOLDER=$(BUILD_ROOT)/lib
 # Loadable module linking mode (dynamic/static)
 #ifneq ($(LOAD_LINK),static)
 #	LOAD_LINK=dynamic #Forced dynamic linking
-LOAD_LINK=static
+LOAD_LINK=dynamic
 #endif
 
 LCD_MODE=8bit
@@ -117,6 +117,8 @@ COMMON_SOURCES=syscalls.s	\
 							utils.s       \
 							via.s         \
 							via_utils.s   \
+							vdp.s         \
+							vdp_text_mode.s \
 							sound.s       \
 							tty.s         \
 							parse.s       \

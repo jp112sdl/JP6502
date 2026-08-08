@@ -20,10 +20,10 @@ SD_DDRB = $8202
 SD_DDRA = $8203
 
 
-SD_CS   = %00010000
-SD_SCK  = %00001000
-SD_MOSI = %00000100
-SD_MISO = %00000010      
+SD_CS   = %00000010
+SD_SCK  = %00000100
+SD_MOSI = %00001000
+SD_MISO = %00010000      
 
 PORTA_OUTPUTPINS = SD_CS | SD_SCK | SD_MOSI
 
@@ -34,7 +34,7 @@ buffer = $400   ; was $400
 
 
 subdirname:
-  .asciiz "SUBFOLDR   "
+  .asciiz "SUBFLDR    "
 filename:
   .asciiz "DEEPFILETXT"
 

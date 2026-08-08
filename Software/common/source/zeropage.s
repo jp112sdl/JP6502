@@ -2,7 +2,8 @@
 
       .zeropage
 
-sp:                    .res 2
+c_sp:                  .res 2
+sp = c_sp              ; alias for hand-written assembly (cc65 renamed sp -> c_sp)
 sreg:                  .res 2
 regsave:               .res 4
 ptr1:                  .res 2
@@ -31,6 +32,9 @@ system_break_sp:       .res 1
 user_break_address:    .res 2
 user_break_sp:         .res 1
 user_irq_address:      .res 2
+vdp_buffer_address:    .res 2 
+vdp_vram_address:      .res 2 
+vdp_char_count:        .res 2
 zp_sd_address:         .res 2
 zp_sd_currentsector:      .res 4   ; 4 bytes
 zp_fat32_variables:       .res 24

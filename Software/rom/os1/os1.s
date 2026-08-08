@@ -119,15 +119,15 @@ init:
       .segment "RODATA"
 
 os1_version:
-      .asciiz "Eunice OS 1.0"
+      .asciiz "JP OS 1.0"
 keyboard_disconnected:
       .asciiz "No keyboard"
 keyboard_connected:
       .asciiz "Keyboard connected"
 instruction:
-      .asciiz "Press any key to continue"
+      .asciiz "Press any key"
 shell_connected:
-      .asciiz "Eunice <---> Mac"
+      .asciiz "OS/1 <---> Mac"
 msg_no_acia:
     .asciiz "No serial"
 ;msg_has_acia:

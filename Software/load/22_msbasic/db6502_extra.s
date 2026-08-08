@@ -29,10 +29,12 @@ WaitForKeypress:
 
 	CMP	#'C'			; compare with [C]old start
 ;	BNE	ShowStartMsg
-    BEQ COLD_START
+    BNE @notColdStart
+    JMP COLD_START
+@notColdStart:
 
 ;	JMP	COLD_START	; BASIC cold start
-    JMP WaitForKeyPress
+    JMP WaitForKeypress
 
 WarmStart:
 	JMP	RESTART		; BASIC warm start
@@ -43,14 +45,14 @@ MONCOUT:
 	RTS
 
 MONRDKEY:
- 	LDA	ACIA_STATUS
- 	AND	#ACIA_STATUS_RX_FULL
- 	BEQ	NoDataIn
- 	LDA	ACIA_DATA
- 	SEC		; Carry set if key available
- 	RTS
- NoDataIn:
- 	CLC		; Carry clear if no key pressed
+; 	LDA	ACIA_STATUS
+; 	AND	#ACIA_STATUS_RX_FULL
+; 	BEQ	NoDataIn
+; 	LDA	ACIA_DATA
+; 	SEC		; Carry set if key available
+; 	RTS
+; NoDataIn:
+; 	CLC		; Carry clear if no key pressed
   jsr _acia_is_data_available
  ; skip, no data available at this point
   cmp #(ACIA_NO_DATA_AVAILABLE)

@@ -55,6 +55,14 @@ VIA2_DDRA  = __VIA2_START__ + VIA_REGISTER_DDRA
 
     .code
 init:
+      pha
+      lda #%10000010 ; Set pin 7 as out for LED, others are input for buttons
+ ;     lda VIA2_DDRB
+ ;     and #%10000000
+      sta VIA2_DDRB
+  ;    lda #%11111111
+  ;    sta VIA2_PORTB
+      pla
 play_a_song:
     ; Play Mary Had a Little Lamb located
     LDX #$00                ; Index into our song array

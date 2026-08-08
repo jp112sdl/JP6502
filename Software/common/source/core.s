@@ -2,6 +2,7 @@
         .include "zeropage.inc"
         .include "utils.inc"
         .include "lcd.inc"
+        .include "vdp_text_mode.inc"
         .include "acia.inc"
         .include "blink.inc"
         .include "keyboard.inc"
@@ -67,7 +68,10 @@ _system_init:
         ; Initialize ACIA
         jsr _acia_init
         ; Initialize keyboard
-        jsr _keyboard_init  ; No keyboard
+        jsr _keyboard_init
+        ; Initialize Video Display Processor to Text mode
+        jsr vdp_text_init
+
         ; Disable BCD mode
         cld
         ; Enable interrupt processing
