@@ -9,6 +9,16 @@ CONFIG_PRINT_CR := 0 ; print CR when line end reached
 CONFIG_SCRTCH_ORDER := 3
 CONFIG_SMALL := 1
 
+; Skip the "MEMORY SIZE" and "TERMINAL WIDTH" questions at cold start. Both
+; only make sense on a machine whose RAM size and terminal are unknown at build
+; time; here the memory map is fixed and WIDTH/WIDTH2 below are the answer.
+; BASIC behaves as if both had been confirmed with an empty line: the RAM probe
+; runs and finds the top of USERRAM by itself.
+CONFIG_NO_INIT_PROMPTS := 1
+
+; Sign-on line, emitted at QT_BASIC in the shared common/source/init.s.
+.define BASIC_BANNER "DB6502 BASIC VERSION 2C"
+
 ; zero page
 ZP_START1 = $00
 ZP_START2 = $0D

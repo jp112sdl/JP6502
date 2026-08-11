@@ -70,33 +70,54 @@
 .setcpu "65C02"
 .macpack longbranch
 
+; Everything pulled in with a "../../common/source/" path is shared verbatim
+; with the ROM build - these used to be byte-identical copies in this directory,
+; and keeping them in two places is how the local init.s silently ended up
+; without the DB6502 RAM probe limit. A plain file name is a deliberately local
+; file; the reason is noted next to it.
+;
+; ca65 resolves a nested .include relative to the directory of the file doing
+; the including, so the shared files pull in their own neighbours from
+; common/source automatically - flow1.s picks up iscntc.s that way.
+
+; Local: selects and pulls in defines_db6502.s by bare name, which differs
+; between the two builds.
 .include "defines.s"
-.include "macros.s"
+.include "../../common/source/macros.s"
+; Local: exports INPUTBUFFER as an absolute symbol, the ROM build does not.
 .include "basic_zp.s"
 
-.include "header.s"
-.include "token.s"
-.include "error.s"
-.include "message.s"
-.include "memory.s"
+.include "../../common/source/header.s"
+.include "../../common/source/token.s"
+.include "../../common/source/error.s"
+.include "../../common/source/message.s"
+.include "../../common/source/memory.s"
+; Local: no SD card LOAD/SAVE in the loadable build, so no sd_finish/inline.s
+; hooks.
 .include "program.s"
-.include "flow1.s"
-.include "loadsave.s"
-.include "flow2.s"
-.include "misc1.s"
+.include "../../common/source/flow1.s"
+.include "../../common/source/loadsave.s"
+.include "../../common/source/flow2.s"
+.include "../../common/source/misc1.s"
+; Local: line ends go straight to the TTY instead of through sd_newline.
 .include "print.s"
-.include "input.s"
-.include "eval.s"
-.include "var.s"
-.include "array.s"
-.include "misc2.s"
-.include "string.s"
-.include "misc3.s"
-.include "poke.s"
-.include "float.s"
-.include "chrget.s"
-.include "rnd.s"
-.include "trig.s"
-.include "init.s"
+.include "../../common/source/input.s"
+.include "../../common/source/eval.s"
+.include "../../common/source/var.s"
+.include "../../common/source/array.s"
+.include "../../common/source/misc2.s"
+; Same file as the local string.s used to be, it is just named ms_string.s in
+; common/source.
+.include "../../common/source/ms_string.s"
+.include "../../common/source/misc3.s"
+.include "../../common/source/poke.s"
+.include "../../common/source/float.s"
+.include "../../common/source/chrget.s"
+.include "../../common/source/rnd.s"
+.include "../../common/source/trig.s"
+; The only build-specific bit in here is the sign-on line, which comes from
+; BASIC_BANNER in defines_db6502.s.
+.include "../../common/source/init.s"
+; Local: pulls in db6502_extra.s by bare name, which differs between the builds.
 .include "extra.s"
 
