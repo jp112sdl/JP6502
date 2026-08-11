@@ -37,4 +37,4 @@ vdp_vram_address:      .res 2
 vdp_char_count:        .res 2
 zp_sd_address:         .res 2
 zp_sd_currentsector:      .res 4   ; 4 bytes
-zp_fat32_variables:       .res 24
+zp_fat32_variables:       .res 26

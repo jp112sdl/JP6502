@@ -1,6 +1,9 @@
       .include "acia.inc"
       .include "keyboard.inc"
       .include "sd.inc"
+      .include "lcd.inc"
+      .include "blink.inc"
+      .include "sys_const.inc"
       .import ACIA_STATUS
       .import ACIA_DATA
 ;      .import ACIA_STATUS_RX_FULL
@@ -15,6 +18,13 @@ ISCNTC:
 init:
 _start_msbasic:
       stz EXITFLAG
+
+      ; BSS is not part of the ROM image, so at power-on these hold whatever
+      ; the SRAM came up with. MONCOUT and INLIN both test them on every
+      ; character and every line, so they have to be forced idle here - a
+      ; stray non-zero value diverts the whole console to the SD card.
+      stz sd_loadmode
+      stz sd_savemode
 
 ; Display startup message
 ShowStartMsg:
@@ -42,9 +52,21 @@ WarmStart:
 	JMP	RESTART		; BASIC warm start
 
 MONCOUT:
-
+    ; Every character BASIC prints goes through here, which is what makes SAVE
+    ; possible: while a save is running the stream is diverted to the card.
+    pha
+    lda sd_savemode
+    bne @tocard
+    pla
+    pha
     jsr _tty_send_character
-	RTS
+    ; _tty_send_character does not preserve A, but the LIST loop looks at the
+    ; character it just printed to keep track of string literals
+    pla
+    RTS
+@tocard:
+    pla
+    jmp sd_putbyte
 
 MONRDKEY:
 ; 	LDA	ACIA_STATUS
@@ -89,20 +111,8 @@ StartupMessage:
 ;	.byte	"Cold [C] or warm [W] start?",$0D,$0A,$00
 	.byte	"Cold start [C] or warm [W] start?",$00
 	
-LoadMessage:
-    .byte "LOAD", $00
-    
-SaveMessage:
-    .byte "SAVE", $00 	
-
-LOAD:
-;    writeln_tty #LoadMessage
-    jsr _sd_read
-	RTS
-	
-SAVE:
-    writeln_tty #SaveMessage
-	RTS
+; LOAD, SAVE and the "$" directory listing
+.include "db6502_sdbasic.s"
 
 .segment "STARTUP"
   jmp init

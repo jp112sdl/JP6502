@@ -104,6 +104,8 @@ COMMON_SOURCE_FOLDER=$(COMMON_ROOT)/source
 BASE_LIBRARY=$(COMMON_ROOT)/none.lib
 
 # Common objects to be linked
+# msbasic.s is deliberately not here: it is a whole application, not a shared
+# routine, and it is built directly by the rom/microsoft_basic project.
 COMMON_SOURCES=syscalls.s	\
 							acia.s        \
 							blink.s       \
@@ -123,8 +125,7 @@ COMMON_SOURCES=syscalls.s	\
 							tty.s         \
 							parse.s       \
 							menu.s        \
-							sd.s          \
-							msbasic.s
+							sd.s
 
 
 COMMON_OBJECTS=$(COMMON_SOURCES:%.s=$(COMMON_BUILD_FOLDER)/%.o)
@@ -178,32 +179,38 @@ else
 	LOAD_LINK_LIBRARY = $(COMMON_LIBRARY)
 endif
 
+# Dependency tracking
+# ca65/cc65 write the list of files pulled in via .include / #include to a .d
+# file, which is fed back into make below. Without this, editing an included
+# file (defines_db6502.s, basic_zp.s, init.s, ...) does not trigger a rebuild.
+DEP_FLAG=--create-dep $(@:.o=.d)
+
 # Compile assembler sources
 $(BUILD_FOLDER)/%.o: %.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile C sources
 $(BUILD_FOLDER)/%.o: %.c $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
-	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $(@:.o=.s) $<
-	$(CA65_BINARY) $(CA65_FLAGS) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
+	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
+	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources
 $(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile common C sources
 $(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.c $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $(@:.o=.s) $<
-	$(CA65_BINARY) $(CA65_FLAGS) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
+	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
+	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources for load module (shared objects)
 $(COMMON_BUILD_FOLDER)/%.load.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -Dload -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -Dload -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 $(COMMON_LIBRARY): $(COMMON_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
@@ -263,7 +270,16 @@ clean:
 	$(BUILD_FOLDER)/*.lst \
 	$(BUILD_FOLDER)/*.s \
 	$(BUILD_FOLDER)/*.map \
+	$(BUILD_FOLDER)/*.d \
+	$(BUILD_FOLDER)/*.cdep \
 	$(COMMON_BUILD_FOLDER)/*.o \
 	$(COMMON_BUILD_FOLDER)/*.lst \
 	$(COMMON_BUILD_FOLDER)/*.s \
+	$(COMMON_BUILD_FOLDER)/*.d \
+	$(COMMON_BUILD_FOLDER)/*.cdep \
 	$(COMMON_LIB_FOLDER)/*.lib
+
+# Pull in the generated dependency files (see DEP_FLAG above).
+# Wildcards, so the first build - when no .d files exist yet - just works.
+-include $(wildcard $(BUILD_FOLDER)/*.d) $(wildcard $(BUILD_FOLDER)/*.cdep)
+-include $(wildcard $(COMMON_BUILD_FOLDER)/*.d) $(wildcard $(COMMON_BUILD_FOLDER)/*.cdep)

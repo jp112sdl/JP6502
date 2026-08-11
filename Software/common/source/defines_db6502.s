@@ -22,11 +22,17 @@ USR             := $000A
 ; inputbuffer
 ; Must stay an assembly-time constant: defines.s evaluates INPUTBUFFER in .if
 ; expressions and derives INPUTBUFFERX = INPUTBUFFER & $FF00, so a linker
-; symbol cannot be used here. The page is reserved by the BAS_RAM memory area
-; in firmware.ext.cfg; the assert below makes a mismatch a link-time error.
-; Was $0900, which sat inside the BSS segment (menu/modem/tty variables).
-INPUTBUFFER     := $0E00
-.assert INPUTBUFFER = __BAS_RAM_START__, error, "INPUTBUFFER must match BAS_RAM in the linker config"
+; symbol cannot be used here. The pages are reserved by the BAS_RAM memory
+; area in firmware.ext.cfg; the assert below makes a mismatch a link-time
+; error. Was $0900, which sat inside the BSS segment (menu/modem/tty
+; variables).
+;
+; It sits in the *second* page of BAS_RAM because PUT_NEW_LINE assembles the
+; link pointer and the line number at INPUTBUFFER-4..INPUTBUFFER-1 - the page
+; below has to belong to BASIC as well. At $0E00 those four bytes fell into
+; the tail of the FAT32 sector buffer.
+INPUTBUFFER     := $0F00
+.assert INPUTBUFFER = __BAS_RAM_START__ + $0100, error, "INPUTBUFFER must be the second page of BAS_RAM in the linker config"
 STACK2          := TXTBUFFER
 ; constants
 ; STACK_TOP		:= $FC

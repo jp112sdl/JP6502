@@ -1,1 +1,9 @@
 build
+
+# Build artefacts that used to end up next to the sources
+*.o
+*.lst
+*.d
+*.cdep
+*.map
+*.raw

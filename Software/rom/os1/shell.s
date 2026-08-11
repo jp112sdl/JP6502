@@ -123,7 +123,25 @@ _process_run:
         rts
 
 _process_sd:
-        jsr _sd_read
+        ; Read the test file into user RAM and report the result. This used to
+        ; hang in an error loop whenever the card or the file was missing.
+        lda #<__USERRAM_START__
+        sta sd_address
+        lda #>__USERRAM_START__
+        sta sd_address+1
+
+        lda #<sd_test_filename
+        ldx #>sd_test_filename
+        jsr _sd_load
+        bcs @error
+
+        write_tty #msgsdloaded
+        write_tty_dec sd_length
+        jsr _tty_send_newline
+        rts
+
+@error:
+        writeln_tty #msgsderror
         rts
         
 ;_process_msbasic:
@@ -269,6 +287,13 @@ lcd_hello:
          .asciiz "Welcome to OS/1"
 msghello3:
         .asciiz "Enter HELP to get list of possible commands"
+sd_test_filename:
+        ; Raw FAT 8.3 name - eight characters, three characters, space padded
+        .byte "DEEPFILETXT"
+msgsdloaded:
+        .asciiz "Bytes read from card: "
+msgsderror:
+        .asciiz "SD card read failed"
 msgload:
         .asciiz "Initiating load operation..."
 msgrun:

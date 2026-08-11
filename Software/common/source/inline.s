@@ -50,6 +50,12 @@ L0C32:
         rts
   .endif
   .ifdef DB6502
+        ; While LOAD is running the lines come off the SD card instead of the
+        ; keyboard - see db6502_sdbasic.s
+        lda     sd_loadmode
+        beq     INLIN_KEYBOARD
+        jmp     sd_getline
+INLIN_KEYBOARD:
         tty_read_line #INPUTBUFFER, 80
         ldx     #<(INPUTBUFFER-1)
         ldy     #>(INPUTBUFFER-1)

@@ -286,7 +286,7 @@ General rule is simple: `make` should be sufficient for all the build/installati
 
 Beside the targets, there are three very important build flags:
 
-- `ADDRESS_MODE` - with acceptable values `basic` and `ext` (the latter being default if omitted) that drives target addressing model. To build for Ben Eater's machine, use `basic` mode; for my build, use `ext` mode. If you want to support your own model, create additional configuration file, as explained in common sources section below,
+- `ADDRESS_MODE` - drives the target addressing model by selecting `common/firmware.$(ADDRESS_MODE).cfg`. The only value shipped today is `ext` (also the default if omitted). The `basic` mode for Ben Eater's machine has been **removed**: `common/source/via.s` unconditionally references the third VIA, and the VDP is mapped as well, so `firmware.basic.cfg` had not linked for a long time. If you want to support your own model, create an additional configuration file, as explained in the common sources section below,
 - `CLOCK_MODE` - used to control internal delay routines to work with different clock setups. The following modes are supported:
   - `slow` - to be used with external clock module, all delays are basically disabled,
   - `250k` - to be used with Arduino Mega Debugger (my own variant running at approx. 275kHz),
@@ -300,10 +300,10 @@ Beside the targets, there are three very important build flags:
 Build examples:
 
 ```shell
-make ADDRESS_MODE=basic CLOCK_MODE=slow clean all test install
+make CLOCK_MODE=slow clean all test install
 ```
 
-This will build sources with Ben's addressing scheme (16K RAM, 32K ROM, VIA at 0x6000), with support for slow clocking - any delay routines will be skipped. First, all the binaries will be removed, then built from scratch, hexdump of the resulting binary will be displayed and the binary uploaded to the EEPROM, assuming it's connected via minipro-compatible programmer.
+This will build sources with support for slow clocking - any delay routines will be skipped. First, all the binaries will be removed, then built from scratch, hexdump of the resulting binary will be displayed and the binary uploaded to the EEPROM, assuming it's connected via minipro-compatible programmer.
 
 ```shell
 make CLOCK_MODE=1m all test
@@ -319,7 +319,7 @@ There are quite many programs in the `Software` folder, making the navigation a 
 
 In the `rom` folder you will find the following ROM images:
 
-- `01_nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in firmware configuration files (`common/firmware.basic.cfg` and `common/firmware.ext.cfg`),
+- `01_nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in the firmware configuration file (`common/firmware.ext.cfg`),
 - `02_nop_fffc` - extension of the above program by adding `VECTORS` segment, containing start address for 6502. Address of the `init` label depends on the firmware configuration used,
 - `03_first_code` - very simple program that actually executes some code, but there is no effect to be observed,
 - `04_blink_s` - first example of a program interfacing with external world, using VIA2 to drive LEDs, as in Ben's videos,
@@ -342,11 +342,13 @@ In the `rom` folder you will find the following ROM images:
 - `21_serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
 - `22_modem_test` - barebone modem testing application, sort of bootloader without user interface,
 - `23_blink_test` - copy of `load/01_blink_test` to show how simple `makefile` change can be used to build the same source either as ROM image or bootloader-compatible loadable module,
-- `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection,
+- `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection. Loads and saves programs on the SD card - see [BASIC on the SD card](#basic-on-the-sd-card) below,
 - `minimal_bootloader` - simplest possible bootloader application that can be used to simplify software development thanks to making ROM flashing unnecessary for each code change,
 - `os1` - **work in progress** - basic operating system.
 
-The following table summarizes compatibility of each program with different versions of the 6502 computers:
+The following table summarizes compatibility of each program with different versions of the 6502 computers.
+
+> **Note:** the `BE6502` column is historical. It refers to `ADDRESS_MODE=basic`, which has been removed - see the build flags section above. Only the `DB6502` column describes a configuration that can still be built.
 
 | Program                   | BE6502 execution notes            | DB6502 execution notes                                                              |
 | ------------------------- | --------------------------------- | ------------------------------------------------------------------ |
@@ -376,6 +378,122 @@ The following table summarizes compatibility of each program with different vers
 | `rom/microsoft_basic`     | Not supported                     | Works out of the box                                               |
 | `rom/minimal_bootloader`  | Not supported                     | Works out of the box                                               |
 | `rom/os1`                 | Not supported                     | Works out of the box                                               |
+
+### BASIC on the SD card
+
+`rom/microsoft_basic` keeps programs on the card as **plain text**, one BASIC line per text
+line, exactly the way `LIST` prints them. There is no tokenised file format: `LOAD` feeds the
+file through the interpreter's own line input, and `SAVE` runs `LIST` with the output
+redirected. A saved program can therefore be edited on a PC, and it survives changes to the
+token table or to the load address.
+
+| Command | Effect |
+| --- | --- |
+| `LOAD` | read `BASIC.BAS` |
+| `LOAD "NAME.BAS"` | read `NAME.BAS` from the root directory |
+| `LOAD "$"` | replace the program with a listing of the card, then `LIST` it |
+| `SAVE` | write `BASIC.BAS` |
+| `SAVE "NAME.BAS"` | write `NAME.BAS` |
+
+Both accept any string expression, so `LOAD F$` works too. Names are folded to upper case and
+cut down to 8.3; long file names on the card are ignored, only the short name matches.
+
+`LOAD` clears the program first, then inserts every line as if it had been typed - so a text
+line without a line number is *executed* rather than stored, and a syntax error stops the load
+with the usual message.
+
+`SAVE` creates the file if the card does not have it yet, and it rebuilds the cluster chain
+from scratch every time: the old chain is released first, then clusters are taken off the free
+list as the listing comes in. The file therefore always ends up exactly as long as the program,
+with no leftover tail and no size that disagrees with the chain. Both copies of the FAT are
+kept in step, and the free-space fields in the FSInfo block are marked "unknown" afterwards so
+a PC counts them again rather than trusting a stale number. A save that fails part way through
+gives its clusters back and leaves an empty file rather than something a `chkdsk` would have to
+find.
+
+Names that are about to create a new entry are checked first: control characters and the
+characters FAT reserves (`" * + , . / : ; < = > ? [ \ ] |`) are refused with `?SYNTAX ERROR`
+rather than written into the directory.
+
+Two things the card could do but this does not, on purpose - a 1541 does not do them either,
+and the point of `LOAD`/`SAVE`/`LOAD "$"` here is to feel like a C64:
+
+- **one flat directory.** Files live in the root and nowhere else; a subdirectory on the card
+  shows up in `LOAD "$"` as `DIR` and cannot be entered,
+- **no timestamps.** There is no clock in the machine, and CBM DOS has no date field at all, so
+  every entry gets the same fixed stamp of 2026-01-01 12:00. It is there only because a blank
+  date field makes some tools on a PC complain.
+
+Actual limitations:
+
+- **the root directory cannot grow.** Once its slots are used up, `SAVE` reports
+  `?DIRECTORY FULL` - the same wall a 1541 hits at 144 entries, just at a different number.
+  How many depends on how the card was formatted: one entry per 32 bytes of the root
+  directory's clusters, and long file names written by a PC eat several entries each.
+
+The card does **not** have to be in the slot when the machine is switched on. `LOAD` and `SAVE`
+each bring it up from scratch first - the same sequence that runs at power-on - so a card can
+be put in later, taken out and put back, or swapped for a different one between commands. The
+swap is the reason this happens every time rather than only after a failure: carrying one
+card's layout over to another would have `SAVE` writing over whatever lives at those sector
+numbers. It costs roughly 0.4 s per command at 1 MHz, and about twice that for `SAVE`, which
+reads the BPB again for the fields the boot-time init does not keep.
+
+Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
+`?DIRECTORY FULL`, `?WRITE ERROR`, `?CARD ERROR`.
+
+**If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
+of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
+`common/source/libfat32.s` are deliberately linked into their own ROM block `SDCODE` at `$ec00`
+instead of into `CODE`, and their variables into `BASBUF` instead of `BSS`. Growing `CODE` past
+roughly `$dc50` moves every library module behind `msbasic.o` to a new address, and on this
+board that alone kills the VDP picture - a ROM built from unchanged sources plus 1110 dead
+filler bytes reproduces it. That is a hardware-level effect, not a bug in this code, so new code
+belongs in `SDCODE` (305 bytes left) or in another fixed-offset block. `EXTCODE` at `$e700` is
+exactly that: an additional block in what used to be filler, holding the panel, the drive light,
+the error texts, the free space bookkeeping and the `BLOCKS FREE` line, with 118 bytes still
+free. It has been confirmed working on the hardware.
+
+`LOAD "$"` ends the way a C64 directory does, with a line saying how much room is left:
+
+```text
+0 "SD CARD"
+1 "HELLO.BAS        1"
+2 "PROG.BAS         6"
+3 "78566 BLOCKS FREE"
+```
+
+A block is 512 bytes, the same unit the size column uses. The figure comes out of the FSInfo
+block rather than from counting the FAT - on an 8 GB card that count would mean reading some
+eight thousand sectors, about thirteen minutes. `SAVE` therefore keeps the FSInfo count in step
+as it takes and returns clusters, instead of marking it unknown; `fsck_msdos` confirms the
+number afterwards. A card that arrives without a usable count is told apart from one with a
+real zero: the line then reads `??? BLOCKS FREE`.
+
+### The panel
+
+The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the
+card is in use, out again when the command finished, still lit if it did not:
+
+```text
+MICROSOFT BASIC
+SD READY
+21817 BYTES FREE
+SAVE PROG.BAS   120
+```
+
+The banner and the free memory line are repainted at every direct mode prompt, so the panel
+puts itself back together after anything that disturbs it; the card line follows each mount,
+and the bottom line follows the transfer. `BYTES FREE` is the figure `PRINT FRE(0)` gives.
+
+The counter is lines: read for `LOAD`, written for `SAVE`, listed for `LOAD "$"`. Lines rather
+than 512 byte blocks because that is the unit these files come in - a BASIC program of a few
+hundred bytes is nought blocks from beginning to end, and a counter that never moves is worse
+than no counter. It sticks at 999. Column 19 is
+never written: reaching the end of the last row makes `lcd_wrap_line` scroll the whole display
+and wait 150 ms, which would throw the line away and make every update slow. For the same
+reason the cursor is parked at the top of the display before the card is touched - `sd_init`
+prints `SD not initialized` wherever the cursor happens to be.
 
 ### Loadable programs in `load` folder
 

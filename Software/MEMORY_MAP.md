@@ -1,6 +1,6 @@
 # DB6502 / wooandy — Memory Map
 
-Stand: 2026-08-08. Abgeleitet aus `common/firmware.ext.cfg`, `common/load.cfg`
+Stand: 2026-08-10. Abgeleitet aus `common/firmware.ext.cfg`, `common/load.cfg`
 und den ld65-Mapfiles des vollständigen Builds (cc65 V2.19).
 Referenz-Build: `rom/os1` mit `ADDRESS_MODE=ext` (Default).
 Alle Pfadangaben sind relativ zu `Software/`.
@@ -13,10 +13,10 @@ Alle Pfadangaben sind relativ zu `Software/`.
 |---|---|---|---|---|
 | ZP | `$0000` | `$00FF` | 256 | Zero Page |
 | STACK | `$0100` | `$01FF` | 256 | 6502 Hardware-Stack |
-| SYS_RAM | `$0200` | `$0BFF` | 2560 | Firmware-RAM (`SYSRAM` + `BSS`) |
+| SYS_RAM | `$0200` | `$09FF` | 2048 | Firmware-RAM (`SYSRAM` + `BSS`) |
+| SD_RAM | `$0A00` | `$0BFF` | 512 | `SDBUF` — Sektorpuffer für BASIC-`SAVE`, page-aligned |
 | FAT_RAM | `$0C00` | `$0DFF` | 512 | `FATBUF` — FAT32-Sektor-Workspace, page-aligned |
-| BAS_RAM | `$0E00` | `$0EFF` | 256 | MS-BASIC `INPUTBUFFER`, page-aligned |
-| *(Reserve)* | `$0F00` | `$0FFF` | 256 | frei |
+| BAS_RAM | `$0E00` | `$0FFF` | 512 | MS-BASIC Zeileneingabe (Guard-Page + `INPUTBUFFER`) |
 | USERRAM | `$1000` | `$7FFF` | 28672 | Ladebereich + User-RAM + C-Stack |
 | *(frei/unbelegt)* | `$8000` | `$807F` | 128 | kein Baustein dekodiert |
 | VDP | `$8080` | `$80FF` | 128 | TMS9918: `$8080` VRAM, `$8081` Register |
@@ -36,10 +36,10 @@ EEPROM-Image (AT28C256, 32K) = `$8000`–`$FFFF`.
 
 | Von | Bis | Bytes | Quelle | Inhalt |
 |---|---|---|---|---|
-| `$0000` | `$004C` | 77 | `common/source/zeropage.s` | cc65-Runtime (`c_sp`,`sreg`,`regsave`,`ptr1..4`,`tmp1..4`) + System-Variablen |
-| `$004D` | `$0053` | 7 | `common/source/modem.s` | `crc`,`block_number`,`first_block_flag`,`memory_pointer`,`delay_counter` |
-| `$0054` | `$0055` | 2 | `common/source/sd.s` | `memory_pointer` (2. Instanz) |
-| `$0056` | `$00FF` | **170** | — | **frei** |
+| `$0000` | `$004E` | 79 | `common/source/zeropage.s` | cc65-Runtime (`c_sp`,`sreg`,`regsave`,`ptr1..4`,`tmp1..4`) + System-Variablen |
+| `$004F` | `$0055` | 7 | `common/source/modem.s` | `crc`,`block_number`,`first_block_flag`,`memory_pointer`,`delay_counter` |
+| `$0056` | `$0057` | 2 | `common/source/sd.s` | `memory_pointer` (2. Instanz) |
+| `$0058` | `$00FF` | **168** | — | **frei** |
 
 Aufteilung von `zeropage.s` (`$00`–`$4C`):
 
@@ -60,14 +60,15 @@ Aufteilung von `zeropage.s` (`$00`–`$4C`):
 | `$27` | 2 | `user_irq_address` |
 | `$29` | 6 | `vdp_buffer_address`, `vdp_vram_address`, `vdp_char_count` |
 | `$2F` | 6 | `zp_sd_address`, `zp_sd_currentsector` |
-| `$35` | 24 | `zp_fat32_variables` |
+| `$35` | 26 | `zp_fat32_variables` |
 
-Bei MS-BASIC (`rom/microsoft_basic`) belegt `basic_zp.s` zusätzlich `$004D`–`$00BD`;
-ZP-Ende dort `$00C6`, frei `$00C7`–`$00FF` (57 Bytes).
+Bei MS-BASIC (`rom/microsoft_basic`) schiebt sich `basic_zp.s` dazwischen: `$004F`–`$00C7`
+(121 Bytes), danach `modem.s` `$00C8`–`$00CE` und `sd.s` `$00CF`–`$00D0`.
+ZP-Ende dort `$00D0`, frei `$00D1`–`$00FF` (47 Bytes).
 
 ---
 
-## 3. SYS_RAM — `$0200`–`$0EFF`
+## 3. System-RAM — `$0200`–`$0FFF`
 
 ### 3.1 Segment `SYSRAM` (`common/source/sysram_map.s`), `$0200`–`$0813`
 
@@ -79,7 +80,16 @@ ZP-Ende dort `$00C6`, frei `$00C7`–`$00FF` (57 Bytes).
 | `$0440` | `$0453` | 20 | `lcd_line_buffer` |
 | `$0454` | `$0813` | 960 | `text_screen_buffer` (VDP 40×24) |
 
-### 3.2 Segment `BSS` (Build `rom/os1`), `$0814`–`$09AC`
+Bei `rom/microsoft_basic` hängt MS-BASIC weitere 64 Bytes an dasselbe Segment an
+(`db6502_extra.s`), sodass `SYSRAM` dort bis `$0853` reicht:
+
+| Von | Bis | Bytes | Symbol |
+|---|---|---|---|
+| `$0814` | `$0853` | 64 | `TXTBUFFER` — zugleich `STACK2`, der String-Deskriptor-Stack |
+
+### 3.2 Segment `BSS`
+
+`rom/os1`: `$0814`–`$09C0` (429 Bytes).
 
 | Von | Bis | Bytes | Modul |
 |---|---|---|---|
@@ -91,22 +101,50 @@ ZP-Ende dort `$00C6`, frei `$00C7`–`$00FF` (57 Bytes).
 | `$0927` | `$0934` | 14 | `tty.o` |
 | `$0935` | `$093C` | 8 | `parse.o` |
 | `$093D` | `$09AC` | 112 | `menu.o` (`line_buffer` 32, `tokenize_buffer` 64, +16) |
+| `$09AD` | `$09C0` | 20 | `sd.o` (Parameter + `sd_dirent*`) |
 
-| `$09AD` | `$0BFF` | **595** | **frei** (Reserve für wachsendes BSS) |
+`rom/microsoft_basic`: `$0854`–`$0990` (317 Bytes).
 
-BSS bei `rom/microsoft_basic`: `$0814`–`$092C` (281 Bytes).
+Die Zustandsvariablen von `db6502_sdbasic.s` liegen bewusst **nicht** hier, sondern in
+`BAS_RAM` (Abschnitt 3.5). `BSS` wird von allen Bibliotheksmodulen geteilt, und jedes Byte,
+das `msbasic.o` hier belegt, verschiebt `vdp_line`/`vdp_char_pos` und alles dahinter.
 
-### 3.3 `FAT_RAM` — `$0C00`–`$0DFF`
+Frei bis `$09FF` — darüber beginnt `SD_RAM`, ein Überlauf ist ein ld65-Fehler.
+
+### 3.3 `SD_RAM` — `$0A00`–`$0BFF`
+
+Segment `SDBUF` aus `common/source/db6502_sdbasic.s`: `sd_sectorbuffer`, der Sektorpuffer,
+in dem `SAVE` das LIST-Ergebnis sammelt. Kann sich `fat32_workspace` **nicht** teilen —
+`fat32_writenextsector` liest beim Weiterlaufen der Cluster-Kette FAT-Sektoren dorthin und
+würde die Nutzdaten überschreiben. Nur im MS-BASIC-Build belegt.
+
+### 3.4 `FAT_RAM` — `$0C00`–`$0DFF`
 
 Segment `FATBUF`, definiert in `common/source/sd.s`. Enthält `fat32_workspace` (512 Bytes,
 page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gelinkt wird.
 
-### 3.4 `BAS_RAM` — `$0E00`–`$0EFF`
+### 3.5 `BAS_RAM` — `$0E00`–`$0FFF`
 
-`INPUTBUFFER` von MS-BASIC. Bleibt eine Assemblierzeit-Konstante in `defines_db6502.s`
-(`defines.s` wertet sie in `.if` aus und bildet `INPUTBUFFERX = INPUTBUFFER & $FF00`);
-die Übereinstimmung mit der Memory-Area wird per `.assert` gegen `__BAS_RAM_START__`
-zur Linkzeit geprüft.
+| Von | Bis | Bytes | Inhalt |
+|---|---|---|---|
+| `$0E00` | `$0E21` | 34 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) |
+| `$0E22` | `$0E4E` | 45 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E4F` | `$0EFB` | 173 | ungenutzt |
+| `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
+| `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
+
+`INPUTBUFFER` bleibt eine Assemblierzeit-Konstante in `defines_db6502.s` (`defines.s` wertet
+sie in `.if` aus und bildet `INPUTBUFFERX = INPUTBUFFER & $FF00`); die Übereinstimmung mit
+der Memory-Area wird per `.assert` gegen `__BAS_RAM_START__ + $0100` zur Linkzeit geprüft.
+
+Die Guard-Page darunter ist nicht optional: bei `INPUTBUFFER = $0E00` lagen jene vier
+Scratch-Bytes auf den letzten vier Bytes des FAT32-Sektorpuffers.
+
+Dass die FAT32-Schreibvariablen hier statt im `BSS` liegen, hat denselben Grund wie die
+Lage von `SDCODE` (Abschnitt 5.2): `sd.o` ist das letzte Modul, das zum `BSS` beiträgt,
+und alles, was dort hinzukommt, verschiebt die Variablen von `sd.s` — womit sich die
+Operanden im bereits verifizierten `CODE` ändern würden. `db6502_sdbasic.s` prüft per
+`.assert`, dass `BASBUF` nicht über `INPUTBUFFER-4` hinauswächst.
 
 ---
 
@@ -132,17 +170,79 @@ MS-BASIC `RAMSTART2 = __USERRAM_START__` → `$1000` (ROM-Build) bzw. `$30FF` (L
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
-| `$A000` | `$CA85` | 10886 | `CODE` |
-| `$CA86` | `$DD3F` | 4794 | `RODATA` |
-| `$DE00` | `$DFFF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E000` | `$F7FF` | 6144 | frei |
+| `$A000` | `$CC88` | 11401 | `CODE` |
+| `$CC89` | `$DF78` | 4848 | `RODATA` |
+| `$E000` | `$E1FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
+| `$E200` | `$F7FF` | 5632 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$FFF9` | 1880 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt ≈ 8 KB von 24 KB.
-`rom/microsoft_basic`: `CODE` `$A000`–`$D9CF`, `RODATA` bis `$E0F6`, `BAS_VEC/KEY/ERR` `$E0F7`–`$E283`,
-`RODATA_PA` `$E300`–`$E4FF`, frei `$E500`–`$F7FF`.
+ROM frei gesamt ≈ 7,5 KB von 24 KB.
+
+### 5.1 Build `rom/microsoft_basic`
+
+| Von | Bis | Bytes | Segment |
+|---|---|---|---|
+| `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
+| `$A003` | `$DC53` | 15441 | `CODE` |
+| `$DC54` | `$E36A` | 1815 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E36B` | `$E4F8` | 398 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
+| `$E700` | `$EB89` | 1162 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE` |
+| `$EB8A` | `$EBFF` | 118 | frei |
+| `$EC00` | `$F6CE` | 2767 | `SDCODE` — Rumpf von `db6502_sdbasic.s` und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F6CF` | `$F7FF` | 305 | frei |
+| `$F800` | `$F8A1` | 162 | `SYSCALLS` |
+| `$FFFA` | `$FFFF` | 6 | `VECTORS` |
+
+### 5.2 Warum `SDCODE` ein eigener Block ist
+
+`SDCODE` ist mit `offset=$4c00` fest positioniert und liegt damit *hinter* allem anderen,
+statt wie üblich am Ende von `CODE`. Der Grund ist kein Platzproblem, sondern ein Befund
+aus der Hardware-Fehlersuche vom 10.08.2026:
+
+Solange `db6502_sdbasic.s` in `CODE` lag, wuchs `msbasic.o` um ca. 1,1 KB und schob damit
+**jedes Bibliotheksmodul dahinter auf neue Adressen** — `CODE` endete auf `$E08D` statt
+`$DC37`, `RODATA_PA` rutschte von `$E500` auf `$EA00`. Auf dieser Platine bleibt der
+VDP-Bildschirm dann blau ohne Textausgabe.
+
+Das ist **kein Softwarefehler**. Nachgewiesen mit zwei Kontroll-ROMs:
+
+* Ein ROM aus *unveränderten* Quellen plus 1110 toten Füllbytes in `CODE` — also mit
+  identischem Verhalten, nur verschoben — zeigt denselben Defekt.
+* Ein 65C02-Simulationslauf beider ROMs vom Reset-Vektor an liefert identische
+  VDP-Transaktionen: 122 Kontrollport-Schreibzugriffe, `R1 = $D0` (Display an),
+  `R7 = $F4`, Banner korrekt in der Namenstabelle.
+
+Ebenfalls ausgeschlossen: der VDP-Treiber (Code und Registertabelle sind byteidentisch,
+nur reloziert), die RAM-Aufteilung (ein ROM mit Baseline-Code und der neuen RAM-Karte
+läuft), und das Timing (1 MHz, `clock_mode_flag=2`).
+
+Die Ursache liegt damit außerhalb der Software — verdächtig sind das EEPROM oder die
+Adressdekodierung. **Konsequenz für künftige Änderungen:** wächst `CODE` über etwa
+`$DC50` hinaus, kann derselbe Effekt wieder auftreten. Neuen Code deshalb bevorzugt in
+`SDCODE` oder einen weiteren fest positionierten Block legen.
+
+Das ist auch der Grund, warum der allozierende Schreibpfad (Datei anlegen, Cluster
+vergeben) am Ende von `libfat32.s` in einem eigenen `.segment "SDCODE"` steht und
+`fat32_init` unangetastet blieb: die dort fehlenden BPB-Felder holt `fat32_readbpb` bei
+Bedarf neu von der Karte, statt sie beim Booten zu merken. Verifiziert per Byte-Vergleich
+gegen das auf der Hardware bestätigte ROM — `CODE`, `RODATA`, `BAS_*`, `RODATA_PA`,
+`SYSCALLS` und `VECTORS` sind unverändert; abweichend sind allein sechs Operandenbytes,
+nämlich die vier Sprungziele der Hooks (`sd_getline`, `sd_newline`, `sd_putbyte`,
+`sd_finish`) — dazu ein Byte in `BAS_VEC` (`$E395`, Low-Byte der `SAVE`-Adresse in der
+Anweisungstabelle). Alle sieben wandern zwangsläufig mit, weil `SDCODE` selbst gewachsen ist.
+
+Genau so ist `EXTCODE` bei `offset=$4700` entstanden: ein **zusätzlicher** Block in der
+bis dahin ungenutzten Lücke, nicht ein verschobenes `SDCODE`. Er nimmt das LCD-Panel, die Laufwerks-LED,
+die Fehlertexte, die FSInfo-Buchführung und die `BLOCKS FREE`-Zeile auf; das Auslagern der Texte hat `SDCODE` gleich
+wieder auf 305 freie Bytes gebracht. In `EXTCODE` sind noch 118 frei.
+
+Der Bereich `$E700`–`$EBFF` war auf dieser Platine zuvor **nie belegt** — er lag im
+`$EA`-Füllbereich. Ob er sich anders verhält als der Rest, ließ sich nur durch Benutzen
+herausfinden; deshalb kam er bewusst zuerst mit einer kleinen, gut sichtbaren Funktion an
+die Reihe. Auf der Hardware bestätigt am 10.08.2026: Bild bleibt, Statuszeile erscheint.
 
 ---
 
@@ -154,16 +254,28 @@ Behoben in Phase 1 (Build `rom/microsoft_basic`, verifiziert gegen die Mapfiles)
 |---|---|---|
 | 1 | `sd.s: fat32_workspace = $0200` über `acia_rx_buffer`/`acia_tx_buffer` | Segment `FATBUF` → `$0C00` |
 | 2 | `sd.s: buffer = $0400` über `keyboard_buffer`/`lcd_line_buffer`/`text_screen_buffer` | `buffer = __USERRAM_START__` (`$1000`) |
-| 3 | `INPUTBUFFER = $0900` im `BSS` | `$0E00` in `BAS_RAM`, per `.assert` abgesichert |
+| 3 | `INPUTBUFFER = $0900` im `BSS` | `$0F00` in `BAS_RAM`, per `.assert` abgesichert |
 | 4 | MS-BASIC RAM-Probe ohne Obergrenze → schreibt in VDP/VIA/ACIA | `.ifdef DB6502` Limit `$8000` in `init.s` |
 | 5 | XMODEM-Empfang ohne Bereichsprüfung | Ladeadresse und Fortschritt auf `$1000`–`$7FFF` begrenzt |
-| — | `SYS_RAM` reichte bis `$0EFF`, Überlauf blieb unbemerkt | `SYS_RAM` endet `$0BFF`, Überlauf ist jetzt ein ld65-Fehler |
+| — | `SYS_RAM` reichte bis `$0EFF`, Überlauf blieb unbemerkt | `SYS_RAM` endet `$09FF`, Überlauf ist jetzt ein ld65-Fehler |
+
+Behoben in Phase 3 (ASCII-`LOAD`/`SAVE`):
+
+| # | Ehemals | Jetzt |
+|---|---|---|
+| 6 | `INPUTBUFFER = $0E00` → `PUT_NEW_LINE` schrieb `$0EFC`–`$0EFF`, also die letzten vier Bytes von `fat32_workspace` | `INPUTBUFFER = $0F00`, `BAS_RAM` um eine Guard-Page auf `$0E00`–`$0FFF` erweitert |
+| 7 | `db6502_sdbasic.s` in `CODE` und `BSS` → `CODE` bis `$E08D`, `RODATA_PA` auf `$EA00`, `vdp_line` auf `$0907`; VDP zeigt nur noch blau | Rumpf in `SDCODE` `$EC00`, Variablen in `BASBUF` `$0E00` — Bibliotheksmodule bleiben auf ihren Adressen (siehe 5.2) |
+
+Phase 4 (`SAVE` legt Dateien an), 2026-08-10 — ohne Kollision, aber nach denselben Regeln:
+
+| # | Änderung | Wo |
+|---|---|---|
+| — | Allozierender Schreibpfad (Verzeichniseintrag anlegen, Cluster vergeben und freigeben, beide FAT-Kopien nachziehen, FSInfo entwerten) | Neu am Ende von `libfat32.s` in `.segment "SDCODE"`, Variablen in `BASBUF` `$0E22`–`$0E4E`; `fat32_init` und alles in `CODE` blieben unangetastet |
 
 Offen (bewusst zurückgestellt, Loadable-Builds außerhalb des Scope):
 
 | # | Bereich | Kollidiert mit |
 |---|---|---|
-| 7 | `load/22_msbasic/defines_db6502.s: INPUTBUFFER = $0900` | Firmware-`BSS` |
-| 8 | `db6502_extra.s: TXTBUFFER` in Segment `SYSRAM` (64 B, ab `$0814`) | Firmware-`BSS` bei Loadable-Build |
-| 9 | `load.cfg: USERRAM $30FF+$5000` → Ende `$80FE` | VDP `$8080` |
-| 10 | `firmware.basic.cfg` — wird in Phase 2 gelöscht | — |
+| 8 | `load/22_msbasic/defines_db6502.s: INPUTBUFFER = $0900` | Firmware-`BSS` |
+| 9 | `db6502_extra.s: TXTBUFFER` in Segment `SYSRAM` — im ROM-Build unkritisch (`$0814`–`$0853`, `BSS` folgt danach), beim Loadable-Build läge es auf dem Firmware-`BSS` | Firmware-`BSS` bei Loadable-Build |
+| 10 | `load.cfg: USERRAM $30FF+$5000` → Ende `$80FE` | VDP `$8080` |

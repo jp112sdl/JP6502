@@ -73,6 +73,9 @@ RESTART:
         beq KeepGoing
         rts
 KeepGoing:
+        ; Getting back to the prompt always ends a transfer, whether LIST ran
+        ; out of program or an error cut it short - see db6502_sdbasic.s
+        jsr sd_finish
 .endif
 .ifdef KBD
         jsr     CRDO
