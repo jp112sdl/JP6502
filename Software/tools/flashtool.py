@@ -1,0 +1,1 @@
+../../FlashPROMv2/tools/flashtool.py

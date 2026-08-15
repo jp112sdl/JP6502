@@ -1,0 +1,3 @@
+[submodule "FlashPROMv2"]
+	path = FlashPROMv2
+	url = https://github.com/jp112sdl/FlashPROMv2
