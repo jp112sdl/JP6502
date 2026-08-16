@@ -38,10 +38,7 @@ init:
       ldx #$ff
       txs
       ; Run setup routine
-      jsr _system_init
-      ; The shell loads programs with _sd_load, which only checks sd_ready and
-      ; never mounts on its own, so the card has to come up at boot here
-      jsr _sd_init
+      jsr os1_init
       ; Display hello message
       write_lcd #os1_version
       jsr _lcd_newline
@@ -136,3 +133,16 @@ msg_no_acia:
     .asciiz "No serial"
 ;msg_has_acia:
 ;    .asciiz "Serial connected"          
+
+      .segment "EXTCODE"
+
+; _system_init no longer brings the card up - see the comment at the end of it.
+; The shell loads programs with _sd_load, which only checks sd_ready and never
+; mounts on its own, so OS/1 has to do it here.
+;
+; This sits in EXTCODE and replaces the "jsr _system_init" at init rather than
+; being a second call next to it, so CODE keeps its length and nothing linked
+; after os1.o moves - see MEMORY_MAP.md section 5.2.1.
+os1_init:
+      jsr _system_init
+      jmp _sd_init
