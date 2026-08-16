@@ -4,6 +4,7 @@
       .include "core.inc"
       .include "acia.inc"
       .include "keyboard.inc"
+      .include "sd.inc"
       .include "syscalls.inc"
       .include "via.inc"
       .include "zeropage.inc"
@@ -38,6 +39,9 @@ init:
       txs
       ; Run setup routine
       jsr _system_init
+      ; The shell loads programs with _sd_load, which only checks sd_ready and
+      ; never mounts on its own, so the card has to come up at boot here
+      jsr _sd_init
       ; Display hello message
       write_lcd #os1_version
       jsr _lcd_newline

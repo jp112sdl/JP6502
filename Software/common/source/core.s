@@ -79,8 +79,23 @@ _system_init:
         ; Turn off BLINK LED, init done
         lda #(BLINK_LED_OFF)
         jsr _blink_led
+        ; The card is deliberately not brought up here. _sd_mount runs the
+        ; whole sequence itself and LOAD/SAVE call it every time, so a boot
+        ; time mount buys nothing and costs the card timeout on every reset
+        ; when the slot is empty. Anything that instead uses _sd_load /
+        ; _sd_save, which only test sd_ready, has to call _sd_init for itself -
+        ; rom/os1 does.
+        ;
+        ; The three bytes the "jsr _sd_init" occupied are padded rather than
+        ; dropped. core.o sits in common.lib ahead of most other modules, so
+        ; shortening it moves every library module in the BASIC ROM to a new
+        ; address - the one change this board is known to react badly to, see
+        ; MEMORY_MAP.md section 5.2. Padding keeps CODE, RODATA and BAS_* on
+        ; the addresses the working ROM has.
+        nop
+        nop
+        nop
         ; Done, return from subroutine
-        jsr _sd_init
         rts
 
 ; TENTATIVE C COMPLIANT
