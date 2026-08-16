@@ -28,6 +28,7 @@
 #define PS2_F11       0
 #define PS2_F12       0
 #define PS2_SCROLL      0
+#define CTRL_C        3  // ETX, breaks a running BASIC program
 #define CTRL_X        24 // CANCEL
 
 #define PS2_INVERTED_EXCLAMATION  161 // ¡
@@ -402,6 +403,8 @@ static char get_iso8859_code(void)
       } else if (state & CTRL) {
         if (s == 0x22) {
           c = CTRL_X;
+        } else if (s == 0x21) {
+          c = CTRL_C;
         }
       } else {
         if (s < PS2_KEYMAP_SIZE)
