@@ -220,9 +220,40 @@ nur reloziert), die RAM-Aufteilung (ein ROM mit Baseline-Code und der neuen RAM-
 läuft), und das Timing (1 MHz, `clock_mode_flag=2`).
 
 Die Ursache liegt damit außerhalb der Software — verdächtig sind das EEPROM oder die
-Adressdekodierung. **Konsequenz für künftige Änderungen:** wächst `CODE` über etwa
-`$DC50` hinaus, kann derselbe Effekt wieder auftreten. Neuen Code deshalb bevorzugt in
-`SDCODE` oder einen weiteren fest positionierten Block legen.
+Adressdekodierung. **Konsequenz für künftige Änderungen:** neuen Code bevorzugt in
+`SDCODE`, `EXTCODE` oder einen weiteren fest positionierten Block legen.
+
+### 5.2.1 Nachtrag 2026-08-16: es ist nicht das Wachsen, es ist das Verschieben
+
+Die ursprüngliche Formulierung — "wächst `CODE` über etwa `$DC50` hinaus" — legte eine
+Größenschwelle nahe. Die gibt es nicht. Beim Entfernen des `jsr _sd_init` aus
+`_system_init` **schrumpfte** `CODE` um drei Bytes, blieb also weit unterhalb jeder
+Schwelle: Bildschirm schwarz. Reproduziert, zweimal geflasht.
+
+Drei Bytes weniger in `core.o` verschieben jedes Bibliotheksmodul dahinter. Byteweise
+gegen das laufende ROM waren das 7281 abweichende Bytes in `CODE`, 1493 in `RODATA`,
+389 in `BAS_*`, 68 in `SYSCALLS` und eines in `VECTORS` — praktisch jeder absolute
+Operand, der hinter `core.o` zeigt. `RODATA_PA` blieb durch das Page-Alignment liegen,
+half aber nichts.
+
+Kontrollen am selben Tag, beide laufen: das unveränderte ROM aus `HEAD`, und eine
+Fassung derselben Änderung, bei der `CODE`, `RODATA`, `BAS_*`, `RODATA_PA`, `SYSCALLS`
+und `VECTORS` byteidentisch bleiben (5 abweichende Bytes in `CODE`, alle übrigen
+Segmente 0). Damit ist die Relokation als Auslöser bestätigt und ein misslungener
+EEPROM-Brand als Erklärung ausgeschlossen.
+
+**Arbeitsregel.** Code, der in ein bestehendes Modul muss, darf dessen Länge nicht
+ändern:
+
+* Wegfallende Aufrufe durch `nop` ersetzen statt streichen — so gehandhabt in
+  `core.s`, wo der SD-Init beim Booten entfiel.
+* Neue Routinen ans **Ende** von `EXTCODE` oder `SDCODE` hängen und über eine
+  gleich breite Call-Site erreichen. `JMP COLD_START` → `JMP sd_coldstart` und
+  `jsr sd_panelprompt` → `jsr sd_promptled` in `db6502_sdbasic.s` sind die Muster:
+  nur der Operand ändert sich, kein Byte wandert.
+* Vor dem Flashen gegen das zuletzt auf der Hardware bestätigte ROM byteweise
+  vergleichen. `CODE`, `RODATA`, `BAS_*`, `RODATA_PA`, `SYSCALLS` und `VECTORS`
+  dürfen nur in Operanden abweichen.
 
 Das ist auch der Grund, warum der allozierende Schreibpfad (Datei anlegen, Cluster
 vergeben) am Ende von `libfat32.s` in einem eigenen `.segment "SDCODE"` steht und
