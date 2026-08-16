@@ -44,6 +44,13 @@ PICOCOM_FLAGS=-b 19200 -fh --send-cmd 'sz -X'
 PYTHON_BINARY=python
 PYTHON_PROGRAM=../../common/loadtrim.py
 
+# Relocation check against the ROM last confirmed on the hardware. The
+# reference files live in the project folder and are only meaningful for
+# firmware builds - see MEMORY_MAP.md section 5.2.1
+ROMCHECK_PROGRAM=../../common/romcheck.py
+REFERENCE_BINARY=reference.$(ADDRESS_MODE).bin
+REFERENCE_SEGMENTS=reference.$(ADDRESS_MODE).segments
+
 # Build folder
 BUILD_ROOT=../../build
 BUILD_FOLDER=$(BUILD_ROOT)/$(BUILD_TYPE)/$(PROJECT_NAME)
@@ -251,9 +258,32 @@ endif
 	$(HEXDUMP_BINARY) $(HEXDUMP_FLAGS) $<
 	@$(MD5_BINARY) $<
 
+# Check the fresh image against the one confirmed on the hardware. This board
+# leaves the display dead when library modules end up at new addresses, and
+# noticing that after the burn costs an hour - see MEMORY_MAP.md section 5.2.1
+ifeq ($(BUILD_TYPE),load)
+romcheck:
+	@echo "romcheck applies to firmware builds only"
+
+romfreeze:
+	@echo "romfreeze applies to firmware builds only"
+else
+ROMCHECK_ARGS=--config $(FIRMWARE_CFG) --reference $(REFERENCE_BINARY) \
+              --segments $(REFERENCE_SEGMENTS) --binary $(FIRMWARE_BINARY) \
+              --map $(FIRMWARE_MAP)
+
+romcheck: $(FIRMWARE_BINARY)
+	@$(PYTHON_BINARY) $(ROMCHECK_PROGRAM) $(ROMCHECK_ARGS)
+
+# Record the current build as the new reference. Only after it has run on the
+# board - the reference is a claim that this image works
+romfreeze: $(FIRMWARE_BINARY)
+	@$(PYTHON_BINARY) $(ROMCHECK_PROGRAM) --freeze $(ROMCHECK_ARGS)
+endif
+
 # Burn ROM to EEPROM
-install: $(FIRMWARE_BINARY)
-	$(MINIPRO_BINARY) -p $(EEPROM_MODEL) -w $<	
+install: romcheck $(FIRMWARE_BINARY)
+	$(MINIPRO_BINARY) -p $(EEPROM_MODEL) -w $(FIRMWARE_BINARY)
 
 # Emulate code
 emu: $(FIRMWARE_BINARY)

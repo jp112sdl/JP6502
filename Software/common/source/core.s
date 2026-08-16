@@ -90,7 +90,7 @@ _system_init:
         ; dropped. core.o sits in common.lib ahead of most other modules, so
         ; shortening it moves every library module in the BASIC ROM to a new
         ; address - the one change this board is known to react badly to, see
-        ; MEMORY_MAP.md section 5.2. Padding keeps CODE, RODATA and BAS_* on
+        ; MEMORY_MAP.md section 5.2.1. Padding keeps CODE, RODATA and BAS_* on
         ; the addresses the working ROM has.
         nop
         nop
