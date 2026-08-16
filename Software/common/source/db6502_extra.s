@@ -45,7 +45,7 @@ WaitForKeypress:
     BNE WaitForKeypress
 ;    BEQ COLD_START
 
-	JMP	COLD_START	; BASIC cold start
+	JMP	sd_coldstart	; BASIC cold start, with the busy light on
 ;    JMP WaitForKeypress
 
 WarmStart:

@@ -760,7 +760,7 @@ sd_flushsector:
 ; LIST ran out of program or an error cut it short.
 ; ---------------------------------------------------------------------------
 sd_finish:
-        jsr sd_panelprompt
+        jsr sd_promptled
         lda sd_loadmode
         beq @checksave
         ; An error interrupted a load - back to the keyboard
@@ -1344,3 +1344,32 @@ sd_msgwrite:
         .byte "?WRITE ERROR", $00
 sd_msgcard:
         .byte "?CARD ERROR", $00
+
+; ---------------------------------------------------------------------------
+; The busy light around the cold start
+;
+; Both routines are appended here, at the end of EXTCODE, and both are reached
+; by replacing an existing call with one of the same width. Nothing in CODE or
+; SDCODE changes size and nothing already in EXTCODE moves - this board reacts
+; badly to relocated code, see MEMORY_MAP.md section 5.2.
+; ---------------------------------------------------------------------------
+
+; Entered from WaitForKeypress in db6502_extra.s in place of COLD_START. The
+; RAM probe walks all of user RAM a byte at a time and the vector setup that
+; follows takes a while too, so the machine looks dead between the "C" and the
+; first prompt. The drive light doubles as a busy light for that stretch.
+sd_coldstart:
+        jsr sd_ledon
+        jmp COLD_START
+
+; Called by sd_finish in place of sd_panelprompt. Reaching the direct mode
+; prompt ends the cold start, so the light goes out here - except while a save
+; is still open, which sd_finish is about to close and which puts the light out
+; itself once the last sector is written.
+sd_promptled:
+        jsr sd_panelprompt
+        lda sd_savemode
+        bne @busy
+        jmp sd_ledoff
+@busy:
+        rts
