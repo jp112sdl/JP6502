@@ -3,6 +3,8 @@ RM_FLAGS=-rf
 
 MD5_BINARY=md5sum
 
+PYTHON_BINARY=python
+
 BUILD_FOLDER=build
 ROM_FOLDER=$(BUILD_FOLDER)/rom
 LOAD_FOLDER=$(BUILD_FOLDER)/load
@@ -49,6 +51,22 @@ all: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 
 test: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 	@$(MD5_BINARY) $^ 
+
+# Projects whose layout MEMORY_MAP.md describes. The mapdoc: comments in the
+# document name the same ones - keep the two in step
+MAPDOC_PROJECTS = os1 microsoft_basic
+
+# Check that the address tables in MEMORY_MAP.md still describe what the linker
+# actually produces. The sub-makes are invoked rather than depended on, because
+# the .bin rules here have no prerequisites and would not notice a stale build
+mapdoc:
+	@for project in $(MAPDOC_PROJECTS); do \
+		$(MAKE) -s -C $(FIRMWARE_PROJECTS_FOLDER)/$$project \
+			ADDRESS_MODE=$(ADDRESS_MODE) all || exit 1; \
+	done
+	@$(PYTHON_BINARY) common/mapdoc.py --doc MEMORY_MAP.md \
+		--config common/firmware.$(ADDRESS_MODE).cfg \
+		--build $(ROM_FOLDER) --address-mode $(ADDRESS_MODE)
 
 clean:
 	$(RM_BINARY) $(RM_FLAGS) $(BUILD_FOLDER)

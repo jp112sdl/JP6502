@@ -91,6 +91,8 @@ Bei `rom/microsoft_basic` hängt MS-BASIC weitere 64 Bytes an dasselbe Segment a
 
 `rom/os1`: `$0814`–`$09D0` (445 Bytes).
 
+<!-- mapdoc: os1 BSS -->
+
 | Von | Bis | Bytes | Modul |
 |---|---|---|---|
 | `$0814` | `$0817` | 4 | `shell.o` |
@@ -124,6 +126,8 @@ Segment `FATBUF`, definiert in `common/source/sd.s`. Enthält `fat32_workspace` 
 page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gelinkt wird.
 
 ### 3.5 `BAS_RAM` — `$0E00`–`$0FFF`
+
+<!-- mapdoc: microsoft_basic BASBUF -->
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
@@ -168,6 +172,12 @@ MS-BASIC `RAMSTART2 = __USERRAM_START__` → `$1000` (ROM-Build) bzw. `$30FF` (L
 
 ## 5. ROM — `$A000`–`$FFFF` (Build `rom/os1`)
 
+Die beiden ROM-Tabellen und die zwei Segmenttabellen oben werden von
+`make mapdoc` gegen die Mapfiles geprüft; die `mapdoc:`-Kommentare darüber
+sagen dem Prüfer, welcher Build gemeint ist.
+
+<!-- mapdoc: os1 rom -->
+
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$CD39` | 11578 | `CODE` |
@@ -177,15 +187,17 @@ MS-BASIC `RAMSTART2 = __USERRAM_START__` → `$1000` (ROM-Build) bzw. `$30FF` (L
 | `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
-| `$EC00` | `$F377` | 1912 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F378` | `$F7FF` | 1160 | frei |
+| `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F37E` | `$F7FF` | 1154 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$FFF9` | 1880 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5218 Bytes von 24576.
+ROM frei gesamt 5212 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
+
+<!-- mapdoc: microsoft_basic rom -->
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
