@@ -253,7 +253,17 @@ EEPROM-Brand als Erklärung ausgeschlossen.
   nur der Operand ändert sich, kein Byte wandert.
 * Vor dem Flashen gegen das zuletzt auf der Hardware bestätigte ROM byteweise
   vergleichen. `CODE`, `RODATA`, `BAS_*`, `RODATA_PA`, `SYSCALLS` und `VECTORS`
-  dürfen nur in Operanden abweichen.
+  dürfen nur in Operanden abweichen. `make romcheck` tut genau das und prüft
+  gegen `rom/<projekt>/reference.ext.bin`; `make romfreeze` setzt die Referenz
+  neu, und zwar erst, nachdem das Image auf der Platine lief.
+
+**Platz, Stand 2026-08-19.** Beide Offset-Blöcke sind inzwischen weitgehend
+belegt: `EXTCODE` hat noch etwa 100 freie Bytes, `SDCODE` noch etwa 74 bis
+`SYSCALLS` bei `$F800`. Der nächste größere Zuwachs passt in keinen von beiden.
+Frei wäre dann nur noch `$F8A2`–`$FFF9` — ein Bereich, der auf dieser Platine
+noch nie belegt war. Bei `EXTCODE` (Abschnitt 5.2, Ende) ließ sich das nur
+durch Benutzen herausfinden; für einen neuen Block dort gilt dasselbe, also
+bewusst mit einer kleinen, gut sichtbaren Funktion anfangen.
 
 Das ist auch der Grund, warum der allozierende Schreibpfad (Datei anlegen, Cluster
 vergeben) am Ende von `libfat32.s` in einem eigenen `.segment "SDCODE"` steht und
