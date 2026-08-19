@@ -41,11 +41,20 @@ FIRMWARE_BINARIES=$(FIRMWARE_PROJECTS:%=$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin)
 
 LOADABLE_BINARIES=$(LOADABLE_PROJECTS:%=$(LOAD_FOLDER)/%.load.bin)
 
-$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin:
-	$(MAKE) -C $(@:$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin=$(FIRMWARE_PROJECTS_FOLDER)/%) ADDRESS_MODE=$(ADDRESS_MODE) all
+# FORCE makes these run every time. Without it make sees the .bin already on
+# disk, and since the rule names no prerequisites it declares the target up to
+# date and never enters the project - so an edit to anything under
+# common/source/ produced no rebuild at all, silently. The project makefiles do
+# track their sources properly, they just have to be asked
+$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin: FORCE
+	@$(MAKE) --no-print-directory -C $(@:$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin=$(FIRMWARE_PROJECTS_FOLDER)/%) ADDRESS_MODE=$(ADDRESS_MODE) all
 
-$(LOAD_FOLDER)/%.bin:
-	$(MAKE) -C $(@:$(LOAD_FOLDER)/%.load.bin=$(LOADABLE_PROJECTS_FOLDER)/%) all
+$(LOAD_FOLDER)/%.bin: FORCE
+	@$(MAKE) --no-print-directory -C $(@:$(LOAD_FOLDER)/%.load.bin=$(LOADABLE_PROJECTS_FOLDER)/%) all
+
+FORCE:
+
+.PHONY: all test mapdoc clean FORCE
 
 all: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 
@@ -57,13 +66,8 @@ test: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 MAPDOC_PROJECTS = os1 microsoft_basic
 
 # Check that the address tables in MEMORY_MAP.md still describe what the linker
-# actually produces. The sub-makes are invoked rather than depended on, because
-# the .bin rules here have no prerequisites and would not notice a stale build
-mapdoc:
-	@for project in $(MAPDOC_PROJECTS); do \
-		$(MAKE) -s -C $(FIRMWARE_PROJECTS_FOLDER)/$$project \
-			ADDRESS_MODE=$(ADDRESS_MODE) all || exit 1; \
-	done
+# actually produces
+mapdoc: $(MAPDOC_PROJECTS:%=$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin)
 	@$(PYTHON_BINARY) common/mapdoc.py --doc MEMORY_MAP.md \
 		--config common/firmware.$(ADDRESS_MODE).cfg \
 		--build $(ROM_FOLDER) --address-mode $(ADDRESS_MODE)

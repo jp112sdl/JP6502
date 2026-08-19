@@ -232,8 +232,11 @@ $(COMMON_C_LIBRARY): $(COMMON_C_LIB_OBJECTS)
 	$(CP_BINARY) $(CP_FLAGS) $(BASE_LIBRARY) $@
 	$(AR65_BINARY) $(AR65_FLAGS) $(COMMON_C_LIBRARY) $^
 
-# Standard build
+# Standard build. The empty recipe keeps make from announcing "Nothing to be
+# done" - the top level makefile now enters every project on every run, so an
+# up to date build would otherwise print that line once per project
 all: $(FIRMWARE_BINARY)
+	@:
 
 # Linking process
 ifeq ($(BUILD_TYPE),load)
