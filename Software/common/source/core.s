@@ -70,7 +70,7 @@ _system_init:
         ; Initialize keyboard
         jsr _keyboard_init
         ; Initialize Video Display Processor to Text mode
-        jsr vdp_text_init
+        jsr vdp_boot_init
 
         ; Disable BCD mode
         cld

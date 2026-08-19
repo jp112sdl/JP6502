@@ -6,8 +6,10 @@
     .include "sysram_map.inc"
     .include "zeropage.inc"
     .include "blink.inc"
+    .include "utils.inc"
 
     .export vdp_text_init
+    .export vdp_boot_init
     .export vdp_scroll_line
     .export vdp_line
     .export vdp_char_pos
@@ -364,3 +366,112 @@ vdp_scroll_line:
     pla
     rts
     .endscope
+
+;------------------------------------------------------------------------------
+;
+; vdp_boot_init - bring the VDP up at power-on
+;
+; Two things go wrong on a cold start that never go wrong afterwards, and both
+; are handled here rather than in the routines above, which have to stay fast.
+;
+; The control port carries a flip-flop that decides whether the next write is
+; the first or the second half of a pair. Its power-on state is undefined, and
+; nothing in this project ever read the status register, which is what clears
+; it. While it stands wrong, all eight registers land shifted by one. They
+; cannot be read back, so this is prevented, not detected.
+;
+; The chip also wants about 8 us between two accesses. vdp_init_text_mode gives
+; it 4, vdp_set_vram_addr and vdp_enable_display give it 2 - enough once it is
+; warm, not enough at power-on. The vdp_boot_* routines in vdp.s are the same
+; set-up with a wait between every access.
+;
+; What is left after that is the chip simply not being ready yet, so the whole
+; thing is retried until VRAM holds what was written to it and the status
+; register shows frames going out.
+;
+; This sits in SDCODE because CODE has to keep its byte count and EXTCODE is
+; nearly full - see MEMORY_MAP.md section 5.2.1.
+;
+;------------------------------------------------------------------------------
+
+VDP_BOOT_TRIES    = 20
+VDP_BOOT_WAIT_MS  = 50
+
+; Longer than one frame at both 60 Hz and 50 Hz
+VDP_FRAME_WAIT_MS = 30
+
+; Two addresses at the top of VRAM, clear of the name, pattern and colour
+; tables. Two different values, because an unclocked VDP tends to return the
+; byte last on the bus and a single probe would pass on bus capacitance alone
+VDP_PROBE_LO      = $3FFE
+VDP_PROBE_VALUE1  = $5A
+VDP_PROBE_VALUE2  = $A5
+
+      .segment "SDCODE"
+
+vdp_boot_init:
+      phx
+      ldx #VDP_BOOT_TRIES
+@attempt:
+      lda VDP_REG                       ; clears the control port flip-flop
+      jsr vdp_boot_registers
+      jsr vdp_boot_patterns
+      jsr vdp_boot_clear
+      jsr vdp_boot_enable
+      stz vdp_line
+      stz vdp_char_pos
+
+      jsr vdp_alive
+      bcc @up
+      lda #VDP_BOOT_WAIT_MS
+      jsr _delay_ms
+      dex
+      bne @attempt
+      ; Out of tries. Carry on regardless - a machine that reaches the prompt
+      ; with a dead screen is still worth more than one that hangs here
+@up:
+      plx
+      rts
+
+;------------------------------------------------------------------------------
+;
+; vdp_alive - is the chip up, and did what was written to it stick?
+; Carry clear when it is. A is destroyed, X and Y are kept.
+;
+;------------------------------------------------------------------------------
+vdp_alive:
+      ldy #<VDP_PROBE_LO
+      lda #(>VDP_PROBE_LO) | VDP_WRITE_VRAM_SELECT
+      jsr vdp_write_address
+      lda #VDP_PROBE_VALUE1
+      sta VDP_VRAM
+      jsr vdp_wait
+      lda #VDP_PROBE_VALUE2
+      sta VDP_VRAM                      ; auto-incremented to the next address
+      jsr vdp_wait
+
+      ldy #<VDP_PROBE_LO
+      lda #(>VDP_PROBE_LO) | VDP_READ_VRAM_SELECT
+      jsr vdp_write_address
+
+      lda VDP_VRAM
+      cmp #VDP_PROBE_VALUE1
+      bne @dead
+      jsr vdp_wait
+      lda VDP_VRAM
+      cmp #VDP_PROBE_VALUE2
+      bne @dead
+
+      ; Working VRAM does not prove the chip is producing video. F in the
+      ; status register is set at every vertical retrace, so after more than a
+      ; frame time it has to be there. Reading it clears it for the next round.
+      lda #VDP_FRAME_WAIT_MS
+      jsr _delay_ms
+      lda VDP_REG
+      bpl @dead
+
+      clc
+      rts
+@dead:
+      sec
+      rts

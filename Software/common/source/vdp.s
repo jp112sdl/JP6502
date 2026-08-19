@@ -16,6 +16,13 @@
     .export vdp_clear_screen
     .export vdp_enable_display
 
+    .export vdp_wait
+    .export vdp_write_address
+    .export vdp_boot_registers
+    .export vdp_boot_patterns
+    .export vdp_boot_clear
+    .export vdp_boot_enable
+
     .export vdp_vram_write_buffer
     .export vdp_vram_read_buffer
 
@@ -398,3 +405,113 @@ no_writechar_carry:
   pla
   rts
 .endscope
+
+
+;------------------------------------------------------------------------------
+;
+; Cold start set-up - the same thing vdp_text_init does, paced
+;
+; The TMS9918A wants roughly 8 us between two accesses. The routines above sit
+; under that wherever they write a pair: 4 us between the value and the
+; register number in vdp_init_text_mode, 2 us between the two halves of an
+; address in vdp_set_vram_addr and in vdp_enable_display. That is enough for a
+; chip that has been running for a while and not enough for one that was
+; switched on a moment ago, which showed as a screen full of garbage, a blank
+; screen, or the right screen, differing from boot to boot.
+;
+; So the boot path gets its own copies with a wait between every access. Only
+; every access is paced. The two bulk loops already leave 14 and 25 us between
+; bytes, but a chip that has just been switched on is exactly the case this
+; is about, so they are paced as well - it costs about 50 ms, once. The routines
+; above stay untouched and stay fast for everything that runs afterwards.
+;
+; In SDCODE because CODE must keep its byte count - MEMORY_MAP.md 5.2.1.
+;
+;------------------------------------------------------------------------------
+
+      .segment "SDCODE"
+
+; 16 cycles including the call, against the 8 us the chip asks for at 1 MHz
+vdp_wait:
+      nop
+      nop
+      rts
+
+; A = value, X = register number
+vdp_write_register:
+      sta VDP_REG
+      jsr vdp_wait
+      txa
+      ora #VDP_REGISTER_SELECT
+      sta VDP_REG
+      jmp vdp_wait
+
+; Y = low byte of the address, A = high byte including the select bits
+vdp_write_address:
+      pha
+      tya
+      sta VDP_REG
+      jsr vdp_wait
+      pla
+      sta VDP_REG
+      jmp vdp_wait
+
+vdp_boot_registers:
+      ldx #0
+@loop:
+      lda vdp_text_mode_register_inits,x
+      jsr vdp_write_register
+      inx
+      cpx #(vdp_text_mode_register_inits_end - vdp_text_mode_register_inits)
+      bne @loop
+      rts
+
+vdp_boot_patterns:
+      ldy #<VDP_PATTERN_TABLE_BASE
+      lda #(>VDP_PATTERN_TABLE_BASE) | VDP_WRITE_VRAM_SELECT
+      jsr vdp_write_address
+
+      lda #<VDP_TEXT_PATTERNS_START
+      sta vdp_vram_address
+      lda #>VDP_TEXT_PATTERNS_START
+      sta vdp_vram_address+1
+@loop:
+      lda (vdp_vram_address)
+      sta VDP_VRAM
+      jsr vdp_wait
+      inc vdp_vram_address
+      bne @same_page
+      inc vdp_vram_address+1
+@same_page:
+      lda vdp_vram_address+1
+      cmp #>VDP_TEXT_PATTERNS_END
+      bne @loop
+      lda vdp_vram_address
+      cmp #<VDP_TEXT_PATTERNS_END
+      bne @loop
+      rts
+
+vdp_boot_clear:
+      ldy #<VDP_NAME_TABLE_BASE
+      lda #(>VDP_NAME_TABLE_BASE) | VDP_WRITE_VRAM_SELECT
+      jsr vdp_write_address
+
+      lda #$C0
+      sta vdp_vram_address
+      lda #$04
+      sta vdp_vram_address+1
+@loop:
+      lda #' '
+      sta VDP_VRAM
+      jsr vdp_wait
+      dec vdp_vram_address
+      bne @loop                 ; true again after $FF
+      dec vdp_vram_address+1
+      bne @loop
+      rts
+
+vdp_boot_enable:
+      lda vdp_text_mode_register_1
+      ora #VDP_REG1_SCREEN_ACTIVE
+      ldx #VDP_REGISTER_1
+      jmp vdp_write_register
