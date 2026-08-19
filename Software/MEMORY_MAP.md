@@ -1,6 +1,6 @@
 # DB6502 / wooandy — Memory Map
 
-Stand: 2026-08-10. Abgeleitet aus `common/firmware.ext.cfg`, `common/load.cfg`
+Stand: 2026-08-19. Abgeleitet aus `common/firmware.ext.cfg`, `common/load.cfg`
 und den ld65-Mapfiles des vollständigen Builds (cc65 V2.19).
 Referenz-Build: `rom/os1` mit `ADDRESS_MODE=ext` (Default).
 Alle Pfadangaben sind relativ zu `Software/`.
@@ -89,7 +89,7 @@ Bei `rom/microsoft_basic` hängt MS-BASIC weitere 64 Bytes an dasselbe Segment a
 
 ### 3.2 Segment `BSS`
 
-`rom/os1`: `$0814`–`$09C0` (429 Bytes).
+`rom/os1`: `$0814`–`$09D0` (445 Bytes).
 
 | Von | Bis | Bytes | Modul |
 |---|---|---|---|
@@ -101,7 +101,7 @@ Bei `rom/microsoft_basic` hängt MS-BASIC weitere 64 Bytes an dasselbe Segment a
 | `$0927` | `$0934` | 14 | `tty.o` |
 | `$0935` | `$093C` | 8 | `parse.o` |
 | `$093D` | `$09AC` | 112 | `menu.o` (`line_buffer` 32, `tokenize_buffer` 64, +16) |
-| `$09AD` | `$09C0` | 20 | `sd.o` (Parameter + `sd_dirent*`) |
+| `$09AD` | `$09D0` | 36 | `sd.o` (Parameter + `sd_dirent*`) |
 
 `rom/microsoft_basic`: `$0854`–`$0990` (317 Bytes).
 
@@ -127,9 +127,9 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E21` | 34 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) |
-| `$0E22` | `$0E4E` | 45 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
-| `$0E4F` | `$0EFB` | 173 | ungenutzt |
+| `$0E00` | `$0E32` | 51 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) |
+| `$0E33` | `$0E68` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E69` | `$0EFB` | 147 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
 
@@ -170,31 +170,40 @@ MS-BASIC `RAMSTART2 = __USERRAM_START__` → `$1000` (ROM-Build) bzw. `$30FF` (L
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
-| `$A000` | `$CC88` | 11401 | `CODE` |
-| `$CC89` | `$DF78` | 4848 | `RODATA` |
-| `$E000` | `$E1FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E200` | `$F7FF` | 5632 | frei |
+| `$A000` | `$CD39` | 11578 | `CODE` |
+| `$CD3A` | `$E029` | 4848 | `RODATA` |
+| `$E02A` | `$E0FF` | 214 | frei |
+| `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
+| `$E300` | `$E6FF` | 1024 | frei |
+| `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
+| `$E854` | `$EBFF` | 940 | frei |
+| `$EC00` | `$F377` | 1912 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F378` | `$F7FF` | 1160 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$FFF9` | 1880 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt ≈ 7,5 KB von 24 KB.
+ROM frei gesamt 5218 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DC53` | 15441 | `CODE` |
-| `$DC54` | `$E36A` | 1815 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E36B` | `$E4F8` | 398 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$A003` | `$DC0B` | 15369 | `CODE` |
+| `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E308` | `$E495` | 398 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$E496` | `$E4FF` | 106 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E700` | `$EB89` | 1162 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE` |
-| `$EB8A` | `$EBFF` | 118 | frei |
-| `$EC00` | `$F6CE` | 2767 | `SDCODE` — Rumpf von `db6502_sdbasic.s` und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F6CF` | `$F7FF` | 305 | frei |
+| `$E700` | `$EB9B` | 1180 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte |
+| `$EB9C` | `$EBFF` | 100 | frei |
+| `$EC00` | `$F7B5` | 2998 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7B6` | `$F7FF` | 74 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
+| `$F8A2` | `$FFF9` | 1880 | frei — auf dieser Platine noch nie belegt, siehe 5.2.1 |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
+
+ROM frei gesamt 2160 Bytes von 24576.
 
 ### 5.2 Warum `SDCODE` ein eigener Block ist
 
