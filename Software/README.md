@@ -83,7 +83,7 @@ For serial communication you can use regular PuTTy, but it doesn't have the feat
 
 ### Running the simplest possible program
 
-Now you need to build the first program. Go to `Software/rom/01_nop_fill` folder and run:
+Now you need to build the first program. Go to `Software/rom/nop_fill` folder and run:
 
 ```shell
 make clean all test
@@ -94,37 +94,52 @@ You expect output similar to the following:
 ```text
 $ make clean all test
 rm -f ../../build/rom/*.bin \
-rm -f ../../build/rom/*.raw \
-../../build/rom/01_nop_fill/*.o \
-../../build/rom/01_nop_fill/*.lst \
-../../build/rom/01_nop_fill/*.s \
-../../build/rom/*.map \
-../../build/common/*.o \
-../../build/common/*.lst \
-../../build/common/*.s \
-../../build/common/*.lib
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/rom/01_nop_fill/nop_fill.o -l ../../build/rom/01_nop_fill/nop_fill.lst nop_fill.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/zeropage.o -l ../../build/common/zeropage.lst ../../common/source/zeropage.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/sysram_map.o -l ../../build/common/sysram_map.lst ../../common/source/sysram_map.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/syscalls.o -l ../../build/common/syscalls.lst ../../common/source/syscalls.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/acia.o -l ../../build/common/acia.lst ../../common/source/acia.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/blink.o -l ../../build/common/blink.lst ../../common/source/blink.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/core.o -l ../../build/common/core.lst ../../common/source/core.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/keyboard.o -l ../../build/common/keyboard.lst ../../common/source/keyboard.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/lcd.o -l ../../build/common/lcd.lst ../../common/source/lcd.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/modem.o -l ../../build/common/modem.lst ../../common/source/modem.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/string.o -l ../../build/common/string.lst ../../common/source/string.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/utils.o -l ../../build/common/utils.lst ../../common/source/utils.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/via.o -l ../../build/common/via.lst ../../common/source/via.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/via_utils.o -l ../../build/common/via_utils.lst ../../common/source/via_utils.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/tty.o -l ../../build/common/tty.lst ../../common/source/tty.s
-ar65 r ../../build/lib/common.lib ../../build/common/zeropage.o ../../build/common/sysram_map.o ../../build/common/syscalls.o ../../build/common/acia.o ../../build/common/blink.o ../../build/common/core.o ../../build/common/keyboard.o ../../build/common/lcd.o ../../build/common/modem.o ../../build/common/string.o ../../build/common/utils.o ../../build/common/via.o ../../build/common/via_utils.o ../../build/common/tty.o
-ld65  -C ../../common/firmware.ext.cfg -m ../../build/rom/01_nop_fill/01_nop_fill.ext.map -o ../../build/rom/01_nop_fill.ext.bin ../../build/rom/01_nop_fill/nop_fill.o ../../build/lib/common.lib
-hexdump -C ../../build/rom/01_nop_fill.ext.bin
+	rm -f ../../build/rom/*.raw \
+	../../build/rom/nop_fill/*.o \
+	../../build/rom/nop_fill/*.lst \
+	../../build/rom/nop_fill/*.s \
+	../../build/rom/nop_fill/*.map \
+	../../build/rom/nop_fill/*.d \
+	../../build/rom/nop_fill/*.cdep \
+	../../build/common/*.o \
+	../../build/common/*.lst \
+	../../build/common/*.s \
+	../../build/common/*.d \
+	../../build/common/*.cdep \
+	../../build/lib/*.lib
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/zeropage.d -o ../../build/common/zeropage.o -l ../../build/common/zeropage.lst ../../common/source/zeropage.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sysram_map.d -o ../../build/common/sysram_map.o -l ../../build/common/sysram_map.lst ../../common/source/sysram_map.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/rom/nop_fill/nop_fill.d -o ../../build/rom/nop_fill/nop_fill.o -l ../../build/rom/nop_fill/nop_fill.lst nop_fill.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/syscalls.d -o ../../build/common/syscalls.o -l ../../build/common/syscalls.lst ../../common/source/syscalls.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/acia.d -o ../../build/common/acia.o -l ../../build/common/acia.lst ../../common/source/acia.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/blink.d -o ../../build/common/blink.o -l ../../build/common/blink.lst ../../common/source/blink.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/dpad.d -o ../../build/common/dpad.o -l ../../build/common/dpad.lst ../../common/source/dpad.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/core.d -o ../../build/common/core.o -l ../../build/common/core.lst ../../common/source/core.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/keyboard.d -o ../../build/common/keyboard.o -l ../../build/common/keyboard.lst ../../common/source/keyboard.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/lcd.d -o ../../build/common/lcd.o -l ../../build/common/lcd.lst ../../common/source/lcd.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/lcd8bit.d -o ../../build/common/lcd8bit.o -l ../../build/common/lcd8bit.lst ../../common/source/lcd8bit.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/modem.d -o ../../build/common/modem.o -l ../../build/common/modem.lst ../../common/source/modem.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/string.d -o ../../build/common/string.o -l ../../build/common/string.lst ../../common/source/string.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/utils.d -o ../../build/common/utils.o -l ../../build/common/utils.lst ../../common/source/utils.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/via.d -o ../../build/common/via.o -l ../../build/common/via.lst ../../common/source/via.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/via_utils.d -o ../../build/common/via_utils.o -l ../../build/common/via_utils.lst ../../common/source/via_utils.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/vdp.d -o ../../build/common/vdp.o -l ../../build/common/vdp.lst ../../common/source/vdp.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/vdp_text_mode.d -o ../../build/common/vdp_text_mode.o -l ../../build/common/vdp_text_mode.lst ../../common/source/vdp_text_mode.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sound.d -o ../../build/common/sound.o -l ../../build/common/sound.lst ../../common/source/sound.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/tty.d -o ../../build/common/tty.o -l ../../build/common/tty.lst ../../common/source/tty.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/parse.d -o ../../build/common/parse.o -l ../../build/common/parse.lst ../../common/source/parse.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/menu.d -o ../../build/common/menu.o -l ../../build/common/menu.lst ../../common/source/menu.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sd.d -o ../../build/common/sd.o -l ../../build/common/sd.lst ../../common/source/sd.s
+ar65 r ../../build/lib/common.lib ../../build/common/syscalls.o ../../build/common/acia.o ../../build/common/blink.o ../../build/common/dpad.o ../../build/common/core.o ../../build/common/keyboard.o ../../build/common/lcd.o ../../build/common/lcd8bit.o ../../build/common/modem.o ../../build/common/string.o ../../build/common/utils.o ../../build/common/via.o ../../build/common/via_utils.o ../../build/common/vdp.o ../../build/common/vdp_text_mode.o ../../build/common/sound.o ../../build/common/tty.o ../../build/common/parse.o ../../build/common/menu.o ../../build/common/sd.o
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/crt0.d -o ../../build/common/crt0.o -l ../../build/common/crt0.lst ../../common/source/crt0.s
+cp -f ../../common/none.lib ../../build/lib/common.c.lib
+ar65 r ../../build/lib/common.c.lib ../../build/common/crt0.o
+ld65  -C ../../common/firmware.ext.cfg -m ../../build/rom/nop_fill/nop_fill.ext.map -o ../../build/rom/nop_fill.ext.bin ../../build/common/zeropage.o ../../build/common/sysram_map.o ../../build/rom/nop_fill/nop_fill.o ../../build/lib/common.lib ../../build/lib/common.c.lib
+hexdump -C ../../build/rom/nop_fill.ext.bin
 00000000  ea ea ea ea ea ea ea ea  ea ea ea ea ea ea ea ea  |................|
 *
 00008000
-49d01fd92a6a02370364f8eef2ee2c93 *../../build/rom/01_nop_fill.ext.bin
+49d01fd92a6a02370364f8eef2ee2c93  ../../build/rom/nop_fill.ext.bin
 ```
 
 If you remember Ben's video - this is the first program he uploads to ROM. Now, run `make install` to upload the binary to your EEPROM - I assume you put the ROM chip in TL866II+ programmer and it is connected to your machine.
@@ -136,7 +151,7 @@ make install
 You expect the following output:
 
 ```text
-minipro -p AT28C256 -w ../../build/rom/01_nop_fill.ext.bin
+minipro -p AT28C256 -w ../../build/rom/nop_fill.ext.bin
 Found TL866II+ 04.2.109 (0x26d)
 Erasing... 0.02Sec OK
 Protect off...OK
@@ -173,16 +188,11 @@ If you have any problems during build, installation or execution - check instruc
 
 ### More complex programs
 
-After having ran the first one, try executing the following programs:
-
-- `Software/rom/02_nop_fffc` - this one will jump to the beginning of the accessible ROM address space and will confirm your address decoder functions correctly,
-- `Software/rom/03_first_code` - this is another program taken directly from Ben's videos - it will store value 0x42 in the address 0x6000. Please note: this will have no effect whatsoever.
-
-Now, if the both above work as expected (when checked using bus analyzer), you can try connecting peripherals to your computer. If you want to follow Ben's videos, keep reading this section, otherwise, skip to [next one](#initiate-warp-speed).
+After having ran the first one, you can try connecting peripherals to your computer. If you want to follow Ben's videos, keep reading this section, otherwise, skip to [next one](#initiate-warp-speed).
 
 First, let's play with some LEDs. Using the connectors in bottom left corner of the PCB, connect 8 LEDs to VIA2 PORTB lines PB0-PB7, and then, using current limiting resistors of 220Ohm, connect these to ground (also from the VIA2 PORTB connector).
 
-Having these connected, upload `Software/rom/04_blink_s` or `Software/rom/05_knight_rider` to your ROM. After powering on, you should see LEDs blinking in a way similar to what Ben did in his videos. If it works correctly, you can move on to connecting LCD. For now, use it in 8-bit mode with slow clock - just as in Ben's videos.
+Having these connected, upload `Software/rom/blink_s` to your ROM. After powering on, you should see LEDs blinking in a way similar to what Ben did in his videos. If it works correctly, you can move on to connecting LCD. For now, use it in 8-bit mode with slow clock - just as in Ben's videos.
 
 To do this, connect LCD to breadboard (not to the dedicated LCD port on PCB), and then connect each line as listed below:
 
@@ -202,33 +212,33 @@ To do this, connect LCD to breadboard (not to the dedicated LCD port on PCB), an
 
 Also, connect A and VDD connectors to +5V, K and VSS to GND and connect V0 to a middle pin of 10KOhm potentiometer plugged between GND and +5V.
 
-Now upload program `Software/rom/06_lcd_test` to ROM - when executed, it should display "Merry Christmas!" message on the LCD.
+Now upload program `Software/rom/lcd_test` to ROM - when executed, it should display "Merry Christmas!" message on the LCD.
 
-If it works correctly, follow with `Software/rom/07_mem_test` and `Software/rom/08_stack_test` - these will test if RAM works as expected: first one will copy data from ROM to RAM, while the second will use stack routines. Congratulations, you have working CPU, ROM, RAM, VIA and address decoder!
+If it works correctly, you have a working CPU, ROM, VIA and address decoder.
 
 ### Initiate warp speed
 
 Now it's time to go a bit faster and test the more complex features. Please note: you could keep using the analyzer and external clock with these programs, you just have to remember to build them with `CLOCK_MODE=slow` flag. More details can be found in [building software section](#building-software).
 
-For now let's assume we move to 1MHz clock. To do it, put jumper on two leftmost pins of clock connector (J1). Disconnect external clock and bus analyzer - first one is not needed, second one will not work with high frequencies anyway. Connect your LCD to onboard LCD port and upload `Software/rom/13_4bit_lcd` to your ROM. Upon boot you expect to see message "Hello 4-bit! Chars!" on your screen. If it works, it means that the primary VIA works just fine and clock is OK.
+For now let's assume we move to 1MHz clock. To do it, put jumper on two leftmost pins of clock connector (J1). Disconnect external clock and bus analyzer - first one is not needed, second one will not work with high frequencies anyway. Connect your LCD to the onboard LCD port.
 
-Next one to test will be serial connection, so upload `Software/rom/15_serial_irq`. Now, depending on whether you soldered on FT230X chip or not, connect your board using USB cable to PC (using either MicroUSB or USB-B port), or use external USB->UART connector. Connect to your board using `picocom` with baud rate of 19200.
+First one to test will be serial connection, so upload `Software/rom/serial_wdc_irq`. Now, depending on whether you soldered on FT230X chip or not, connect your board using USB cable to PC (using either MicroUSB or USB-B port), or use external USB->UART connector. Connect to your board using `picocom` with baud rate of 19200.
 
 ```shell
 picocom -b 19200 /dev/tty.usbserial-HANF88HD
 ```
 
-When you get "Terminal ready" message, press any key - you should get a response of "Hello IRQ>". This means that two things are working correctly: interrupt handling and serial communication. Congratulations, you are almost ready to go.
+When you get "Terminal ready" message, you should see "Hello from WDC65C51 (irq), press any key...". This means that two things are working correctly: interrupt handling and serial communication. The polling counterpart is `Software/rom/serial_wdc`, useful when you want to take the interrupt path out of the picture. Congratulations, you are almost ready to go.
 
 ### Keyboard connection
 
 Even if you don't intend to use keyboard just yet, you still need to upload the controller sketch to ATtiny4313. Recommended way of doing that is to use onboard AVR-ISP connector and some kind of AVR programmer. I used USBasp programmer and it works lovely directly from Arduino IDE. The sketch to upload is in `Arduino/keyboard-4313` folder. **PLEASE NOTE:** by default, Arduino IDE will not set fuses of your ATtiny4313 to reflect your clock settings. This can result in unpredictable behavior and/or failure of keyboard connection. Make sure you invoke "Tools->Burn bootloader" before uploading the sketch to ensure correct operation. See [issue #50](https://github.com/dbuchwald/6502/issues/50) for additional details.
 
-After successful sketch upload, flash your rom with `Software/rom/19_keyboard_test`. Connect your PS/2 keyboard to the port and try pressing some keys - you should see messages on the LCD with confirmation.
+After successful sketch upload, flash your rom with `Software/rom/keyboard_test`. Connect your PS/2 keyboard to the port and try pressing some keys - you should see messages on the LCD with confirmation.
 
 ### Using the bootloader
 
-Currently only the minimal bootloader is provided, but it should be sufficient for software development without constant need to reflash the EEPROM. To use it, build ROM image in `Software/rom/minimal_bootloader` folder and flash it to EEPROM. To test this functionality, you have to build example loadable programs in `Software/load/01_blink_test` and `Software/load/02_hello_world`.
+Currently only the minimal bootloader is provided, but it should be sufficient for software development without constant need to reflash the EEPROM. To use it, build ROM image in `Software/rom/minimal_bootloader` folder and flash it to EEPROM. To test this functionality, you have to build an example loadable program in `Software/load/hello_world`.
 
 **PLEASE NOTE:** Both the bootloader and sample programs will be built automatically when invoking `make all` directly in `Software` folder.
 
@@ -240,9 +250,9 @@ Upon boot you will be prompted to connect to the PC via serial connection and pr
 
 In MacOS/Linux you can use `picocom` for this operation, under Windows I have successfully used [ExtraPuTTy](https://www.extraputty.com/).
 
-After connection is established you need to press enter as prompted (either on PS/2 keyboard or terminal window) and you will be prompted to initiate file transfer. In `picocom` this requires that your send command is set to `sz -X` (see `make terminal` target in `Software/common/makefile`) and you initiate transfer with Ctrl+A followed by Ctrl+S. Enter load file path (i.e. `Software/build/load/01_blink_test.load.bin`) and press enter. If the transfer fails, try again. `picocom` seems to fail every now and then, while ExtraPuTTy hardly ever has any issues.
+After connection is established you need to press enter as prompted (either on PS/2 keyboard or terminal window) and you will be prompted to initiate file transfer. In `picocom` this requires that your send command is set to `sz -X` (see `make terminal` target in `Software/common/makefile`) and you initiate transfer with Ctrl+A followed by Ctrl+S. Enter load file path (i.e. `Software/build/load/hello_world.load.bin`) and press enter. If the transfer fails, try again. `picocom` seems to fail every now and then, while ExtraPuTTy hardly ever has any issues.
 
-In ExtraPuTTy open "Files Transfer" menu item, then "Xmodem" and "Send". Point to loadable module (i.e. `Software/build/load/02_hello_world.load.bin`) and click "Open" button.
+In ExtraPuTTy open "Files Transfer" menu item, then "Xmodem" and "Send". Point to loadable module (i.e. `Software/build/load/hello_world.load.bin`) and click "Open" button.
 
 Program should load and be automatically executed. Congratulations, you got yourself working bootloader!
 
@@ -319,65 +329,41 @@ There are quite many programs in the `Software` folder, making the navigation a 
 
 In the `rom` folder you will find the following ROM images:
 
-- `01_nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in the firmware configuration file (`common/firmware.ext.cfg`),
-- `02_nop_fffc` - extension of the above program by adding `VECTORS` segment, containing start address for 6502. Address of the `init` label depends on the firmware configuration used,
-- `03_first_code` - very simple program that actually executes some code, but there is no effect to be observed,
-- `04_blink_s` - first example of a program interfacing with external world, using VIA2 to drive LEDs, as in Ben's videos,
-- `05_knight_rider` - modification of the previous one to achieve classic effect,
-- `06_lcd_test` - modified version of Ben Eater's first LCD program. Modification involves using loops, but runs without RAM, only ROM is used. This program will work only on slow clock (not 1MHz), and will not work with onboard LCD connector. To execute this one, you need to connect LCD via breadboard to VIA2 connectors on the PCB. When compiled for BE6502 (with `ADDRESS_MODE = basic`) it will work out of the box,
-- `07_mem_test` - modification of the previous one, testing RAM module usage - message contents are copied first from ROM to RAM and only then displayed on the LCD,
-- `08_stack_test` - modification of the previous one, but this time stack is utilized for JSR/RTS operation showcase,
-- `09_serial_test` - simplest possible ACIA/serial testing program, using blocking send/receive operation to send simple message in response to each input on serial terminal,
-- `10_blink_c` - modification of `04_blink_s`, but mixing low-level ASM code for hardware handling and C code for "business logic", shows how to use software stack to write code in C,
-- `11_int_test` - illustration how to use VIA1 clock timer interrupt - basically displays text on LCD attached to VIA2 while changing LED (connected to VIA2 PA0) state each 50 cycles. Obviously needs to be executed in slow clock mode,
-- `12_handshake_test` - very simple program that shows how to use CA1/CA2 hardware handshake operation with keyboard controller, will print on the LCD screen (connected to onboard LCD connector in 4-bit mode!) keys pressed on the attached PS/2 keyboard. Requires 1MHz clock for smooth operation, and is not compatible with BE6502,
-- `13_4bit_lcd` - testing program for 4-bit LCD interface, hence not compatible with BE6502,
-- `14_irq_test` - small program to run with slow clock showing operation of the VIA1 timer interrupt,
-- `15_serial_irq` - interrupt-driven serial communication (both RX and TX), sends static message in response to each input from serial terminal,
-- `16_delay_test` - testing program for improved 4-bit LCD library for onboard port, using functions like line wrap and vertical screen scrolling, not compatible with BE6502 because of the 4-bit interface,
-- `17_blink_test` - another blink program, but this one uses common library functions to drive onboard LCD. Can be adapted to work with BE6502, you just need to connect the LCD to PB0,
-- `18_core_program` - test program used to verify operation of aggregated system init operation, uses onboard LCD to present contents of RX/TX buffer pointers (used in debugging of serial connection),
-- `19_keyboard_test` - more complex program presenting integration with onboard keyboard controller, with IRQ driven data transmission, hardware state change detection and pretty interface on the onboard LCD port,
-- `20_convert_test` - small testing program to test hex conversion function, aimed at x6502 emulator execution,
-- `21_serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
-- `22_modem_test` - barebone modem testing application, sort of bootloader without user interface,
-- `23_blink_test` - copy of `load/01_blink_test` to show how simple `makefile` change can be used to build the same source either as ROM image or bootloader-compatible loadable module,
+- `nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in the firmware configuration file (`common/firmware.ext.cfg`),
+- `blink_s` - first example of a program interfacing with external world, using VIA2 to drive LEDs, as in Ben's videos,
+- `blink_c` - modification of `blink_s`, but mixing low-level ASM code for hardware handling and C code for "business logic", shows how to use software stack to write code in C,
+- `blink_test` - another blink program, but this one drives the onboard LED through the common library functions instead of touching the VIA directly. The same source is also built as a loadable module, so it doubles as an illustration of what the `BUILD_TYPE=` flag in the `makefile` changes,
+- `lcd_test` - modified version of Ben Eater's first LCD program. Modification involves using loops, but runs without RAM, only ROM is used. This program will work only on slow clock (not 1MHz), and will not work with onboard LCD connector. To execute this one, you need to connect LCD via breadboard to VIA2 connectors on the PCB,
+- `keyboard_test` - more complex program presenting integration with onboard keyboard controller, with IRQ driven data transmission, hardware state change detection and pretty interface on the onboard LCD port,
+- `serial_test` - simplest possible ACIA/serial testing program, using blocking send/receive operation to send simple message in response to each input on serial terminal,
+- `serial_wdc` - ACIA test using polled send and receive, prints "Hello from WDC65C51, press any key...",
+- `serial_wdc_irq` - the same test driven by interrupts, prints "Hello from WDC65C51 (irq), press any key...",
+- `serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
+- `modem_test` - barebone modem testing application, sort of bootloader without user interface,
 - `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection. Loads and saves programs on the SD card - see [BASIC on the SD card](#basic-on-the-sd-card) below,
 - `minimal_bootloader` - simplest possible bootloader application that can be used to simplify software development thanks to making ROM flashing unnecessary for each code change,
 - `os1` - **work in progress** - basic operating system.
 
-The following table summarizes compatibility of each program with different versions of the 6502 computers.
+The following table summarizes how each program behaves on this machine. The
+`BE6502` column that used to stand next to it is gone with `ADDRESS_MODE=basic`,
+which the build no longer supports.
 
-> **Note:** the `BE6502` column is historical. It refers to `ADDRESS_MODE=basic`, which has been removed - see the build flags section above. Only the `DB6502` column describes a configuration that can still be built.
-
-| Program                   | BE6502 execution notes            | DB6502 execution notes                                                              |
-| ------------------------- | --------------------------------- | ------------------------------------------------------------------ |
-| `rom/01_nop_fill`         | Works out of the box              | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/02_nop_fffc`         | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/03_first_code`       | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/04_blink_s`          | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/05_knight_rider`     | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/06_lcd_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/07_mem_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/08_stack_test`       | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/09_serial_test`      | ACIA chip needs to be added       | Works out of the box with R6551, WDC65C51 needs slow clock         |
-| `rom/10_blink_c`          | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/11_int_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD and LED to VIA2, needs slow clock |
-| `rom/12_handshake_test`   | Not supported                     | Works out of the box, 1MHz clock recommended, onboard LCD port     |
-| `rom/13_4bit_lcd`         | Not supported                     | Works out of the box, onboard LCD port                             |
-| `rom/14_irq_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/15_serial_irq`       | ACIA chip needs to be added       | Works out of the box with R6551, 1MHz recommended                  |
-| `rom/16_delay_test`       | Not supported                     | Works out of the box, 1MHz clock recommended, onboard LCD port     |
-| `rom/17_blink_test`       | ADDRESS_MODE=basic, LED on PB0    | Works out of the box                                               |
-| `rom/18_core_program`     | Not supported                     | Works out of the box                                               |
-| `rom/19_keyboard_test`    | Not supported                     | Works out of the box                                               |
-| `rom/20_convert_test`     | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/21_serial_load_test` | Not supported                     | Works out of the box                                               |
-| `rom/22_modem_test`       | ACIA chip needs to be added       | Works out of the box                                               |
-| `rom/23_blink_test`       | ADDRESS_MODE=basic, LED on PB0    | Works out of the box                                               |
-| `rom/microsoft_basic`     | Not supported                     | Works out of the box                                               |
-| `rom/minimal_bootloader`  | Not supported                     | Works out of the box                                               |
-| `rom/os1`                 | Not supported                     | Works out of the box                                               |
+| Program                  | Execution notes                                                |
+| ------------------------ | -------------------------------------------------------------- |
+| `rom/nop_fill`           | Works out of the box, slow clock and bus analyzer recommended  |
+| `rom/blink_s`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
+| `rom/blink_c`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
+| `rom/blink_test`         | Works out of the box                                           |
+| `rom/lcd_test`           | Works out of the box, attach LCD to VIA2, needs slow clock     |
+| `rom/keyboard_test`      | Works out of the box                                           |
+| `rom/serial_test`        | Works out of the box with R6551, WDC65C51 needs slow clock     |
+| `rom/serial_wdc`         | Works out of the box                                           |
+| `rom/serial_wdc_irq`     | Works out of the box                                           |
+| `rom/serial_load_test`   | Works out of the box                                           |
+| `rom/modem_test`         | Works out of the box                                           |
+| `rom/microsoft_basic`    | Works out of the box                                           |
+| `rom/minimal_bootloader` | Works out of the box                                           |
+| `rom/os1`                | Works out of the box                                           |
 
 ### BASIC on the SD card
 
@@ -497,31 +483,14 @@ prints `SD not initialized` wherever the cursor happens to be.
 
 ### Loadable programs in `load` folder
 
-All the programs in the `load` folder are to be uploaded to the 6502 computer over serial port with XMODEM protocol and require ROM to be flashed with software capable of receiving them. Currently this is `rom/22_modem_test` and `rom/minimal_bootloader`. Following list describes them in more detail:
+All the programs in the `load` folder are to be uploaded to the 6502 computer over serial port with XMODEM protocol and require ROM to be flashed with software capable of receiving them. Currently this is `rom/modem_test` and `rom/minimal_bootloader`. Following list describes them in more detail:
 
-- `load/01_blink_test` - simple program that blinks onboard LED 10 times, provided to illustrate loadable module build process. This one has been copied to `rom/23_blink_test` to illustrate differences between the two models,
-- `load/02_hello_world` - "Hello World" example in a loadable module version,
-- `load/03_string_test` - small program written to test string handling library functions,
-- `load/04_blink_large` - presents different model of linking loadable code (with included common modules),
-- `load/05_simple_shell` - simple shell program later moved to `os1` image,
-- `load/06_memdump` - initial implementation of simple memory monitor (dumps contents of the memory area used to load programs to verify load operation),
-- `load/07_keyboard_test` - modified version of the ROM keyboard test application, implemented mostly to test new key binding (CTRL+X) and required changes in the keyboard controller firmware,
-- `load/08_system_break_test` - very simple application: when started, it runs infinite loop. That's all. It was created to demonstrate new OS/1 feature - system break,
-- `load/09_monitor` - work in progress implementation of the monitor program (moved to OS/1 image),
-- `load/10_menu` - simple application used to test drive common menu library (now included in OS/1 image),
-- `load/11_disasm` - simple disassembler application, now included in OS/1 monitor application,
-- `load/12_custom_chars` - simple program that defines custom characters for LCD screen,
-- `load/13_custom_chars_c` - the same as above, but written using C library bindings,
-- `load/14_offset_math` - program written to test offset math operations (used to troubleshoot disassembly issues with relative addressing),
-- `load/15_menu_in_c` - another program to illustrate C bindings for OS/1 library functions,
-- `load/16_microchess` - original KIM-1 microchess program, ported to work in OS/1 environment, and with slightly improved user interface,
-- `load/17_basic` - my own implementation of BASIC interpreter, incomplete and still in progress. Might never be completed (see program `22_msbasic` below),
-- `load/18_hello_world` - simple program to illustrate difference between assembly and C code,
-- `load/19_hello_world_c` - as above, but written in C,
-- `load/20_lcd_bug` - program used to troubleshoot issues with LCD interface running at 8MHz clock,
-- `load/21_sysinfo` - simple program to display system information, now embedded in OS/1 image,
-- `load/22_msbasic` - port of original Microsoft BASIC code, updated to work as OS/1 loadable module. When all the bugs are solved, it will be embedded in OS/1 image,
-- `load/23_t1_test` - simple program demonstrating WDC 65C22 VIA timer operation.
+- `load/d_pad_test` - exercises the D-pad through the common `dpad` library and reports what it reads on the onboard LCD,
+- `load/hello_world` - simple program to illustrate difference between assembly and C code,
+- `load/hello_world_c` - as above, but written in C,
+- `load/monitor` - work in progress implementation of the monitor program (moved to OS/1 image),
+- `load/play_song` - plays a tune on the SN76489 through the common `sound` library,
+- `load/sysinfo` - simple program to display system information, now embedded in OS/1 image.
 
 As for software compatibility - all the loadable modules require bootloader, and this one, in turn, requires ACIA for operation, so by design these are not compatible with vanilla BE6502.
 
@@ -529,9 +498,20 @@ As for software compatibility - all the loadable modules require bootloader, and
 
 There is one thing important to consider when working with loadable modules. The idea behind them is to have the possibility to run the same code from RAM and ROM, preferably preserving the former if possible and reducing the loadable file size. The idea is to be able to execute common functions stored in ROM from the code running in RAM.
 
-There are two examples in the code repository demonstrating alternative approaches. Naive one, that assumes that all the code to be executed is included in the loadable module is available in `load/04_blink_large` folder. When built, you will notice it contains all the functions required: `_blink_init`, `_blink_led` and `_delay_ms` compiled and bundled. The only difference between this program and `rom/23_blink_test` is the value of `BUILD_TYPE=` flag in `makefile` resulting in different addressing model being used for code storage.
+The naive approach is to bundle every function the module calls into the module
+itself. It works, and it is what you get without doing anything special, but the
+binary then carries its own copy of code that already sits in ROM, and a ROM
+update leaves that copy behind.
 
-Now, the second example, provided in `load/01_blink_test` is much more interesting. The binary file is smaller (admittably, not by much, due to inclusion of the loadlib vector array!), but none of the code of the common functions (`_blink_init`, `_blink_led` and `_delay_ms`) is actually bundled in the binary. All these references are provided by stub functions, defined in `common/source/loadlib.s` - each of these functions really contains jump to vector defined in dedicated vector range in ROM (0xf800-0xfff9). This indirection layer enables updates to ROM without needing to recompile all the loadable modules. The only requirement is to keep the order of the calls intact and adding new functions to `common/source/syscalls.s` at the end so to keep previously defined addresses unchanged.
+The alternative is what `load/hello_world` does. It calls `writeln_tty`, so it
+uses `_tty_writeln` from the common library - and the whole binary is 286 bytes,
+nowhere near enough to contain it. None of the common code is bundled. The
+references are satisfied by stub functions defined in `common/source/loadlib.s`,
+each of which is a jump through a vector in the dedicated range in ROM
+(0xf800-0xfff9). This indirection layer enables updates to ROM without needing
+to recompile all the loadable modules. The only requirement is to keep the order
+of the calls intact and to add new functions to `common/source/syscalls.s` at the
+end, so that previously defined addresses stay where they are.
 
 Defining new shared function requires the following:
 
@@ -539,6 +519,6 @@ Defining new shared function requires the following:
 - implementation of the interface include in `common/include` folder,
 - adding this new function to `common/source/syscalls.s` module,
 - adding stub function to `common/source/loadlib.s` module,
-- adding new objects to `rom/minimal_bootloader/makefile` and `rom/22_modem_test/makefile`.
+- adding new objects to `rom/minimal_bootloader/makefile` and `rom/modem_test/makefile`.
 
 The list above should help you understand how this code reusability has been achieved.
