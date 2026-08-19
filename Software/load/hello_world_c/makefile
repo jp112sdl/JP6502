@@ -1,4 +1,4 @@
-PROJECT_NAME=19_hello_world_c
+PROJECT_NAME=hello_world_c
 BUILD_TYPE=load
 
 ASM_SOURCES=

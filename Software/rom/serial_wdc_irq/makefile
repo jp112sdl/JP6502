@@ -1,4 +1,4 @@
-PROJECT_NAME=25_serial_wdc_irq
+PROJECT_NAME=serial_wdc_irq
 BUILD_TYPE=rom
 
 ASM_SOURCES=serial_wdc_irq.s

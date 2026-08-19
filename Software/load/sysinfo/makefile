@@ -1,4 +1,4 @@
-PROJECT_NAME=21_sysinfo
+PROJECT_NAME=sysinfo
 BUILD_TYPE=load
 
 ASM_SOURCES=sysinfo.s

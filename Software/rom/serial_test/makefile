@@ -1,4 +1,4 @@
-PROJECT_NAME=09_serial_test
+PROJECT_NAME=serial_test
 BUILD_TYPE=rom
 
 ASM_SOURCES=serial_test.s

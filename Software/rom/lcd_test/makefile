@@ -1,4 +1,4 @@
-PROJECT_NAME=06_lcd_test
+PROJECT_NAME=lcd_test
 BUILD_TYPE=rom
 
 ASM_SOURCES=lcd_test.s

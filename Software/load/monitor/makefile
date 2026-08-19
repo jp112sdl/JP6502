@@ -1,4 +1,4 @@
-PROJECT_NAME=09_monitor
+PROJECT_NAME=monitor
 BUILD_TYPE=load
 
 ASM_SOURCES=monitor.s

@@ -1,4 +1,4 @@
-PROJECT_NAME=19_keyboard_test
+PROJECT_NAME=keyboard_test
 BUILD_TYPE=rom
 
 ASM_SOURCES=keyboard_test.s

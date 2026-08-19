@@ -1,4 +1,4 @@
-PROJECT_NAME=21_serial_load_test
+PROJECT_NAME=serial_load_test
 BUILD_TYPE=rom
 
 ASM_SOURCES=main.s

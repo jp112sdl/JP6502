@@ -1,4 +1,4 @@
-PROJECT_NAME=22_modem_test
+PROJECT_NAME=modem_test
 BUILD_TYPE=rom
 
 ASM_SOURCES=modem_test.s

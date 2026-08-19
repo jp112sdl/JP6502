@@ -1,4 +1,4 @@
-PROJECT_NAME=18_hello_world
+PROJECT_NAME=hello_world
 BUILD_TYPE=load
 
 ASM_SOURCES=hello_world.s

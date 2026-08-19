@@ -1,4 +1,4 @@
-PROJECT_NAME=24_serial_wdc
+PROJECT_NAME=serial_wdc
 BUILD_TYPE=rom
 
 ASM_SOURCES=serial_wdc.s

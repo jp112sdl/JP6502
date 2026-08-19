@@ -1,4 +1,4 @@
-PROJECT_NAME=10_blink_c
+PROJECT_NAME=blink_c
 BUILD_TYPE=rom
 
 ASM_SOURCES=start.s
