@@ -13,6 +13,7 @@
         .include "tty.inc"
         .include "lcd.inc"
         .include "syscalls.inc"
+        .include "banner.inc"
 
         .import _start_msbasic
 
@@ -46,4 +47,4 @@ reset:
         .segment "RODATA"
 
 ms_basic:
-        .asciiz "Microsoft BASIC"
+        .byte BASIC_BANNER, $00

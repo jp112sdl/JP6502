@@ -1318,7 +1318,7 @@ sd_msgtable:
 sd_lcddir:
         .byte "LOAD $", $00
 sd_lcdbanner:
-        .byte "MICROSOFT BASIC", $00
+        .byte BASIC_BANNER, $00
 sd_lcdready:
         .byte "SD READY", $00
 sd_lcdnocard:

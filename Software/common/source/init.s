@@ -530,8 +530,9 @@ QT_BYTES_FREE:
   .endif
 QT_BASIC:
   .ifdef DB6502
-; The two DB6502 builds sign on differently - see BASIC_BANNER in
-; defines_db6502.s. Everything else in this file is shared between them.
+; One of three places that emit the machine name; the text itself is in
+; common/include/banner.inc. Everything else in this file is shared with the
+; other targets.
         .byte   BASIC_BANNER
   .endif
   .ifdef OSI
