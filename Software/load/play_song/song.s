@@ -62,6 +62,14 @@ init:
       sta VIA2_DDRB
   ;    lda #%11111111
   ;    sta VIA2_PORTB
+      ; The SN76489 hangs off port A, and after a reset the 6522 leaves DDRA at
+      ; $00 - every pin an input. sn_send below would then write the output
+      ; latch without a single pin driving it and the chip would never see a
+      ; byte. As a loadable module this went unnoticed because _system_init had
+      ; already run sound_init, which sets the same direction; as a ROM there is
+      ; nothing in front of us to do it.
+      lda #%11111111
+      sta VIA2_DDRA
       pla
 play_a_song:
     ; Play Mary Had a Little Lamb located
