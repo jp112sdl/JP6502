@@ -278,6 +278,38 @@ EEPROM-Brand als Erklärung ausgeschlossen.
   gegen `rom/<projekt>/reference.ext.bin`; `make romfreeze` setzt die Referenz
   neu, und zwar erst, nachdem das Image auf der Platine lief.
 
+### 5.2.2 Nachtrag 2026-08-21: verschobener Code läuft
+
+Der `SOUND`-Befehl war das erste Image seit dem VDP-Fix, bei dem tatsächlich Code
+an neue Adressen gewandert ist: der `sd.o`-Anteil am Ende von `EXTCODE` um 76 Bytes,
+dazu `BAS_KEY` und `BAS_ERR`. Auf der Platine geflasht und getestet — **Bild kommt,
+`SOUND` spielt, `LOAD` und `SAVE` funktionieren weiter.**
+
+Damit ist die Regel in ihrer absoluten Form widerlegt. Verschieben allein tötet den
+Bildschirm nicht.
+
+**Warum die alte Diagnose trotzdem so aussah.** Sämtliche Belege für 5.2 und 5.2.1
+stammen vom 10. und 16.08. Der VDP-Kaltstart war zu diesem Zeitpunkt unabhängig
+davon kaputt: das Flipflop am Kontrollport wurde nie gelöscht und die Zugriffe lagen
+unter den ~8 µs, die der TMS9918A braucht. Das Fehlerbild war entsprechend
+sprunghaft — Zeichensalat, nichts, oder der korrekte Schirm aus demselben Image,
+und ein ROM, das ohne jede Änderung von schwarz auf laufend umsprang. Bei einem
+sporadischen Fehler liefert eine Handvoll Brenn-und-Schau-Durchgänge mühelos ein
+überzeugendes, aber falsches Muster. Der Fix kam am 19.08. (`3e44b4c`), drei Tage
+nach der Schlussfolgerung — die beiden wurden nie gegeneinander geprüft.
+
+**Was damit noch nicht geprüft ist.** Dieser Test hat `CODE` nicht angefasst:
+Segment gleich lang, gleiche Adresse, nur 34 geänderte Immediates. Der Ausfall vom
+16.08. entstand dagegen dadurch, dass `CODE` schrumpfte und **jedes Bibliotheksmodul
+darin** weiterrückte. Das ist die deutlich größere Verschiebung, und sie steht
+weiterhin aus. Wer es wissen will: ein ROM aus unveränderten Quellen plus ein paar
+hundert toten Füllbytes am Anfang von `CODE`, brennen, hinsehen.
+
+**Konsequenz für die Arbeitsregel oben.** Sie bleibt als Vorsichtsmaßnahme sinnvoll,
+aber nicht mehr als Naturgesetz: Byte-Stabilität ist billig zu haben und `romcheck`
+macht Abweichungen sichtbar, also lohnt sie weiter. Ein Feature deswegen zu
+verkleinern oder wegzulassen ist dagegen nicht mehr begründet.
+
 **Platz, Stand 2026-08-21.** Beide Offset-Blöcke sind praktisch voll: `EXTCODE`
 hat noch 24 freie Bytes, `SDCODE` noch 74 bis `SYSCALLS` bei `$F800`. Die 76
 Bytes des `SOUND`-Befehls waren die letzte Erweiterung, die ohne neuen Block
