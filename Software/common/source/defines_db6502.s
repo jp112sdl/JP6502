@@ -19,7 +19,7 @@ CONFIG_NO_INIT_PROMPTS := 1
 
 ; Sign-on line, emitted at QT_BASIC in init.s. The loadable build in
 ; load/22_msbasic shares that file and sets its own banner here.
-.define BASIC_BANNER "MICROSOFT BASIC"
+.define BASIC_BANNER "Microsoft BASIC"
 
 ; zero page
 ZP_START1 = $00
