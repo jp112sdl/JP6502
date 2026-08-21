@@ -227,9 +227,15 @@ $(COMMON_LOAD_LIBRARY): $(COMMON_LOAD_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
 	$(AR65_BINARY) $(AR65_FLAGS) $(COMMON_LOAD_LIBRARY) $^
 
+# none.lib ships its own zeropage.o holding the whole cc65 runtime zero page.
+# This project defines that page itself, in zeropage.s and crt0.s, so the
+# library copy is never the one we want - and if ld65 ever did reach for it the
+# link would stop with "Duplicate external identifier: 'tmp4'". Drop it from the
+# working copy so it cannot be picked up by accident.
 $(COMMON_C_LIBRARY): $(COMMON_C_LIB_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
 	$(CP_BINARY) $(CP_FLAGS) $(BASE_LIBRARY) $@
+	@$(AR65_BINARY) d $@ zeropage.o
 	$(AR65_BINARY) $(AR65_FLAGS) $(COMMON_C_LIBRARY) $^
 
 # Standard build. The empty recipe keeps make from announcing "Nothing to be
