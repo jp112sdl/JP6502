@@ -29,6 +29,9 @@
     .export startup_sound
     .export play_a_song
     .export beep
+; The SOUND statement in db6502_extra.s drives the chip through this. Exporting
+; a label costs no bytes in the object, so sound.o keeps the size it has.
+    .export sn_send
 
 
     .include "sound.inc"

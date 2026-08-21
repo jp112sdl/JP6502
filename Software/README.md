@@ -460,6 +460,45 @@ as it takes and returns clusters, instead of marking it unknown; `fsck_msdos` co
 number afterwards. A card that arrives without a usable count is told apart from one with a
 real zero: the line then reads `??? BLOCKS FREE`.
 
+### The `SOUND` statement
+
+`rom/microsoft_basic` adds one statement to the interpreter beyond `LOAD`, `SAVE` and `EXIT`:
+
+```basic
+SOUND frequency, duration
+```
+
+`frequency` is in Hz, `duration` in hundredths of a second. The note plays on channel 1 of the
+SN76489 at full volume, and `SOUND` returns once it has finished, so notes queue up naturally:
+
+```basic
+10 FOR N=1 TO 8
+20 READ F
+30 SOUND F,25
+40 NEXT N
+50 DATA 262,294,330,349,392,440,494,523
+```
+
+The chip is not given a frequency but a 10 bit divider, and the note it produces is
+`clock / (32 * divider)`. The part on this board runs at 2 MHz, so the divider is `62500 /
+frequency`, which `SOUND` works out for you. That puts the usable range at **62 Hz to about
+4 kHz** - a divider outside 1..1023 is `ILLEGAL QUANTITY`, and towards the top end the steps
+between neighbouring dividers get audible.
+
+The port directions are set up by `sound_init` during `_system_init`, long before the `OK`
+prompt, so nothing has to be prepared first. Every `SOUND` mutes the channel again when it
+returns.
+
+Channels 2 and 3 and the noise generator are not reachable from BASIC. They are one `POKE` away
+though - `PORTA` at 34817 carries the data bus and `PORTB` at 34816 the write strobe:
+
+```basic
+900 POKE 34817,B : POKE 34816,2 : POKE 34816,0 : POKE 34816,2 : RETURN
+```
+
+Add 32 for channel 2, 64 for channel 3 and 96 for noise to both the latch byte
+(`128 + (N AND 15)`) and the volume byte (`144` for full, `159` for off).
+
 ### The panel
 
 The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the

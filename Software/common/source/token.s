@@ -81,6 +81,13 @@
 		keyword_rts "PRT", PRT
 .endif
 		keyword_rts "NEW", NEW
+.ifdef DB6502
+; Appended after the last statement so that every token already in use keeps
+; its number. The function and operator tokens counted after this point do move
+; up by one, but those are immediates in the interpreter, not stored in
+; programs - a listing saved on the SD card still reads back correctly.
+		keyword_rts "SOUND", SOUND
+.endif
 
 		count_tokens
 

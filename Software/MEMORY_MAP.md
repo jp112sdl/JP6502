@@ -204,18 +204,18 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E495` | 398 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
-| `$E496` | `$E4FF` | 106 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E49C` | 405 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$E49D` | `$E4FF` | 99 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E700` | `$EB9B` | 1180 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte |
-| `$EB9C` | `$EBFF` | 100 | frei |
+| `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
+| `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7B5` | 2998 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7B6` | `$F7FF` | 74 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$FFF9` | 1880 | frei — auf dieser Platine noch nie belegt, siehe 5.2.1 |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 2160 Bytes von 24576.
+ROM frei gesamt 2077 Bytes von 24576.
 
 ### 5.2 Warum `SDCODE` ein eigener Block ist
 
@@ -278,13 +278,32 @@ EEPROM-Brand als Erklärung ausgeschlossen.
   gegen `rom/<projekt>/reference.ext.bin`; `make romfreeze` setzt die Referenz
   neu, und zwar erst, nachdem das Image auf der Platine lief.
 
-**Platz, Stand 2026-08-19.** Beide Offset-Blöcke sind inzwischen weitgehend
-belegt: `EXTCODE` hat noch etwa 100 freie Bytes, `SDCODE` noch etwa 74 bis
-`SYSCALLS` bei `$F800`. Der nächste größere Zuwachs passt in keinen von beiden.
-Frei wäre dann nur noch `$F8A2`–`$FFF9` — ein Bereich, der auf dieser Platine
-noch nie belegt war. Bei `EXTCODE` (Abschnitt 5.2, Ende) ließ sich das nur
-durch Benutzen herausfinden; für einen neuen Block dort gilt dasselbe, also
-bewusst mit einer kleinen, gut sichtbaren Funktion anfangen.
+**Platz, Stand 2026-08-21.** Beide Offset-Blöcke sind praktisch voll: `EXTCODE`
+hat noch 24 freie Bytes, `SDCODE` noch 74 bis `SYSCALLS` bei `$F800`. Die 76
+Bytes des `SOUND`-Befehls waren die letzte Erweiterung, die ohne neuen Block
+unterzubringen war. Frei ist danach nur noch `$F8A2`–`$FFF9` — ein Bereich, der
+auf dieser Platine noch nie belegt war. Bei `EXTCODE` (Abschnitt 5.2, Ende)
+ließ sich das nur durch Benutzen herausfinden; für einen neuen Block dort gilt
+dasselbe, also bewusst mit einer kleinen, gut sichtbaren Funktion anfangen.
+
+**Was `SOUND` am Image verändert hat.** Ein neues Statement lässt sich nicht
+adressneutral einbauen, aber der Schaden bleibt eng begrenzt. Das Keyword wächst
+`BAS_KEY` um 5 Bytes, der Sprungvektor `BAS_VEC` um 2; `BAS_ERR` rückt dadurch
+nach, bleibt aber innerhalb des Vorlaufs vor dem Page-Alignment von `RODATA_PA`.
+Damit stehen `RODATA_PA`, `SDCODE`, `SYSCALLS` und `VECTORS` unverändert, und
+`CODE` behält seine Länge — dort ändern sich nur 34 Bytes, die Immediates der
+Funktions-Tokens, die hinter dem neuen Statement um eins hochrücken. Bewegt hat
+sich einzig der `sd.o`-Anteil am Ende von `EXTCODE`, um die 76 Bytes der neuen
+Routine. Der `romcheck`-Lauf dazu:
+
+```
+CODE       $A003-$DC0B    34  operands only
+EXTCODE    $E700-$EBE7   326  resized +76 (pinned)
+BAS_VEC    $E308-$E38F    67  RESIZED +2
+BAS_KEY    $E38E -> $E390       MOVED
+BAS_ERR    $E474 -> $E47B       MOVED
+RODATA_PA / SDCODE / SYSCALLS / VECTORS   identisch bzw. nur Operanden
+```
 
 Das ist auch der Grund, warum der allozierende Schreibpfad (Datei anlegen, Cluster
 vergeben) am Ende von `libfat32.s` in einem eigenen `.segment "SDCODE"` steht und
