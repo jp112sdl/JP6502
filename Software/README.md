@@ -334,12 +334,14 @@ In the `rom` folder you will find the following ROM images:
 - `blink_c` - modification of `blink_s`, but mixing low-level ASM code for hardware handling and C code for "business logic", shows how to use software stack to write code in C,
 - `blink_test` - another blink program, but this one drives the onboard LED through the common library functions instead of touching the VIA directly. The same source is also built as a loadable module, so it doubles as an illustration of what the `BUILD_TYPE=` flag in the `makefile` changes,
 - `lcd_test` - modified version of Ben Eater's first LCD program. Modification involves using loops, but runs without RAM, only ROM is used. This program will work only on slow clock (not 1MHz), and will not work with onboard LCD connector. To execute this one, you need to connect LCD via breadboard to VIA2 connectors on the PCB,
+- `d_pad_test` - reads the D-pad through the common `dpad` library and reports each direction on the onboard LCD. Built from the same source as `load/d_pad_test`, which is why the folder holds only a `makefile`,
 - `keyboard_test` - more complex program presenting integration with onboard keyboard controller, with IRQ driven data transmission, hardware state change detection and pretty interface on the onboard LCD port,
 - `serial_test` - simplest possible ACIA/serial testing program, using blocking send/receive operation to send simple message in response to each input on serial terminal,
 - `serial_wdc` - ACIA test using polled send and receive, prints "Hello from WDC65C51, press any key...",
 - `serial_wdc_irq` - the same test driven by interrupts, prints "Hello from WDC65C51 (irq), press any key...",
 - `serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
 - `modem_test` - barebone modem testing application, sort of bootloader without user interface,
+- `play_song` - plays "Mary Had a Little Lamb" on the SN76489, driving the chip directly rather than through the common `sound` library. Shares its source with `load/play_song`,
 - `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection. Loads and saves programs on the SD card - see [BASIC on the SD card](#basic-on-the-sd-card) below,
 - `minimal_bootloader` - simplest possible bootloader application that can be used to simplify software development thanks to making ROM flashing unnecessary for each code change,
 - `os1` - **work in progress** - basic operating system.
@@ -354,6 +356,7 @@ which the build no longer supports.
 | `rom/blink_s`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
 | `rom/blink_c`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
 | `rom/blink_test`         | Works out of the box                                           |
+| `rom/d_pad_test`         | Works out of the box                                           |
 | `rom/lcd_test`           | Works out of the box, attach LCD to VIA2, needs slow clock     |
 | `rom/keyboard_test`      | Works out of the box                                           |
 | `rom/serial_test`        | Works out of the box with R6551, WDC65C51 needs slow clock     |
@@ -361,6 +364,7 @@ which the build no longer supports.
 | `rom/serial_wdc_irq`     | Works out of the box                                           |
 | `rom/serial_load_test`   | Works out of the box                                           |
 | `rom/modem_test`         | Works out of the box                                           |
+| `rom/play_song`          | Works out of the box, needs the SN76489 fitted                 |
 | `rom/microsoft_basic`    | Works out of the box                                           |
 | `rom/minimal_bootloader` | Works out of the box                                           |
 | `rom/os1`                | Works out of the box                                           |
@@ -485,11 +489,11 @@ prints `SD not initialized` wherever the cursor happens to be.
 
 All the programs in the `load` folder are to be uploaded to the 6502 computer over serial port with XMODEM protocol and require ROM to be flashed with software capable of receiving them. Currently this is `rom/modem_test` and `rom/minimal_bootloader`. Following list describes them in more detail:
 
-- `load/d_pad_test` - exercises the D-pad through the common `dpad` library and reports what it reads on the onboard LCD,
+- `load/d_pad_test` - exercises the D-pad through the common `dpad` library and reports what it reads on the onboard LCD. Also built as a ROM image by `rom/d_pad_test` from this same source,
 - `load/hello_world` - simple program to illustrate difference between assembly and C code,
 - `load/hello_world_c` - as above, but written in C,
 - `load/monitor` - work in progress implementation of the monitor program (moved to OS/1 image),
-- `load/play_song` - plays a tune on the SN76489 through the common `sound` library,
+- `load/play_song` - plays "Mary Had a Little Lamb" on the SN76489. It talks to the chip itself and only takes the bit definitions from `sound.inc`, so it does not depend on the common `sound` library. Also built as a ROM image by `rom/play_song`,
 - `load/sysinfo` - simple program to display system information, now embedded in OS/1 image.
 
 As for software compatibility - all the loadable modules require bootloader, and this one, in turn, requires ACIA for operation, so by design these are not compatible with vanilla BE6502.

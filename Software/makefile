@@ -16,6 +16,7 @@ ADDRESS_MODE=ext
 FIRMWARE_PROJECTS = blink_c				\
 					blink_s				\
 					blink_test			\
+					d_pad_test			\
 					keyboard_test		\
 					lcd_test			\
 					microsoft_basic		\
@@ -23,6 +24,7 @@ FIRMWARE_PROJECTS = blink_c				\
 					modem_test			\
 					nop_fill			\
 					os1					\
+					play_song			\
 					serial_load_test	\
 					serial_test			\
 					serial_wdc			\
