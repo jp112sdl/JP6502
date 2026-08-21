@@ -502,19 +502,36 @@ Add 32 for channel 2, 64 for channel 3 and 96 for noise to both the latch byte
 ### Example programs in the `basic` folder
 
 `basic/HANOI.BAS` is plain text in the format `LOAD` expects, so it goes onto the card as it
-is. It solves the Towers of Hanoi for 1 to 7 disks, optionally drawing the three pegs after
-every move, and clicks the SN76489 as each disk lands - lower disks get a lower note.
+is. Towers of Hanoi for 3 to 7 disks: pick `P` and you move the disks yourself, pick `W` and
+the machine solves it in front of you. The pegs are drawn after every move and the SN76489
+clicks as each disk lands, lower disks on a lower note.
 
-The interesting part for anyone writing BASIC on this machine is that it has no recursion.
-`GOSUB` has no arguments and no locals, so the program carries its own call stack in five
-arrays (`SN`/`SA`/`SC`/`SB`/`ST`) and a stage number per frame, which is what a recursive
-`hanoi(n, from, to, via)` compiles down to anyway. `ST` says how far the frame has got: 0 means
-the disks above still have to be cleared away, 1 that the big disk can move now, 2 that the
-frame is finished.
+```
+   |       |       |
+  ***      |       |
+ *****     |       *
+------- ------- -------
+   1       2       3
+
+ 1 MOVES SO FAR, 7 IS THE BEST
+FROM,TO (0,0 GIVES UP)? 1,3
+A DISK CANNOT SIT ON A SMALLER ONE.
+```
+
+Two things in it are worth reading if you write BASIC on this machine.
+
+The watch mode has no recursion to work with - `GOSUB` takes no arguments and keeps no locals -
+so the frames of the usual `hanoi(k, from, to, via)` live in five arrays (`SN`/`SA`/`SC`/`SB`)
+with a stage number `ST` per frame: 0 means the disks above still have to be cleared away, 1
+that the big disk can move now, 2 that the frame is done.
+
+The move checker tests one thing per line and leaves as soon as something is wrong, rather than
+writing the conditions as one expression. `AND` here does not short-circuit, so a typed `4,1`
+in `IF ER=0 AND H(FP)=0` would still evaluate `H(4)` and stop the program with `?BS ERROR`.
 
 Nothing in it needs anything this BASIC does not have. `CONFIG_SMALL` removes `GET`, there is
-no `ELSE` and no `STRING$`, so the padding strings are built with `FOR` loops and every branch
-is a line number.
+no `ELSE` and no `STRING$`, so input is line-based, every branch is a line number and the
+padding strings are built with `FOR` loops.
 
 ### The panel
 
