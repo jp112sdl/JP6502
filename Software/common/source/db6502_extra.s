@@ -6,6 +6,10 @@
       .include "sys_const.inc"
       .include "sound.inc"
       .include "utils.inc"
+      ; tty.inc is already pulled in by inline.s, and these headers carry no
+      ; include guards - pulling it a second time is a pile of "already
+      ; defined" errors, not a no-op.
+      .include "vdp_text_mode.inc"
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
@@ -190,6 +194,49 @@ SOUND_RANGE:
 ; 62500 = 0.95367431640625 * 2^16 -> $90, and $F42400 with bit 7 cleared.
 SOUND_CLOCK:
         .byte   $90,$74,$24,$00
+
+.segment "SDCODE"
+
+; ----------------------------------------------------------------------------
+; "CLS" STATEMENT
+;
+; Clears the screen and puts the cursor back in the top left corner. Takes no
+; arguments, so there is nothing to parse.
+;
+; tty_config can have several outputs on at once, and each one needs its own
+; treatment: the VDP has a routine for it, a serial terminal has to be told in
+; ANSI. The escape sequence deliberately does not go through
+; _tty_send_character - that would push the bracket and the letters onto the
+; VDP as text as well.
+;
+; The LCD is left alone. It is the panel, not a console, and _tty_init in
+; standalone.s does not put BASIC's output there in the first place.
+;
+; This sits in SDCODE rather than next to SOUND in EXTCODE for room only:
+; EXTCODE was down to 24 free bytes, see MEMORY_MAP.md section 5.2.
+; ----------------------------------------------------------------------------
+CLS:
+        lda     tty_config
+        and     #(TTY_CONFIG_OUTPUT_VDP)
+        beq     CLS_SERIAL
+        jsr     vdp_clear_text_screen
+CLS_SERIAL:
+        lda     tty_config
+        and     #(TTY_CONFIG_OUTPUT_SERIAL)
+        beq     CLS_DONE
+        ldx     #$00
+CLS_LOOP:
+        lda     CLS_ANSI,x
+        beq     CLS_DONE
+        jsr     _acia_write_byte
+        inx
+        bne     CLS_LOOP
+CLS_DONE:
+        rts
+
+; Erase the whole display, then home the cursor
+CLS_ANSI:
+        .byte   $1b,"[2J",$1b,"[H",$00
 
 .segment "STARTUP"
   jmp init

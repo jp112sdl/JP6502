@@ -87,6 +87,7 @@
 ; up by one, but those are immediates in the interpreter, not stored in
 ; programs - a listing saved on the SD card still reads back correctly.
 		keyword_rts "SOUND", SOUND
+		keyword_rts "CLS", CLS
 .endif
 
 		count_tokens

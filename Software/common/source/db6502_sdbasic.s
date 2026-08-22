@@ -869,8 +869,8 @@ sd_dirtext:
 ; repainted at every direct mode prompt, the card line whenever the card is
 ; mounted, and the status line as a transfer runs.
 LCD_BANNER_ROW  = 0
-LCD_CARD_ROW    = 1
-LCD_FREE_ROW    = 2
+LCD_FREE_ROW    = 1
+LCD_CARD_ROW    = 2
 LCD_STATUS_ROW  = LCD_ROWS-1
 
 LCD_OP_WIDTH    = 5             ; "LOAD " / "SAVE "

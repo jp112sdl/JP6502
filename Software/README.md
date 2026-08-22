@@ -533,15 +533,30 @@ Nothing in it needs anything this BASIC does not have. `CONFIG_SMALL` removes `G
 no `ELSE` and no `STRING$`, so input is line-based, every branch is a line number and the
 padding strings are built with `FOR` loops.
 
+### The `CLS` statement
+
+`CLS` clears the screen and puts the cursor in the top left corner. It takes no arguments.
+
+It is not what `CLEAR` does. `CLEAR` is stock MS-BASIC and has nothing to do with the display:
+it throws away every variable and array, hands the whole of string space back, resets the
+`DATA` pointer and unwinds the `FOR` and `GOSUB` stacks. The program text survives. Reach for
+it when a program has filled memory with strings, not when the screen is untidy.
+
+`tty_config` can have more than one output switched on, so `CLS` treats each one on its own
+terms: the VDP has a routine for it, and a serial terminal is sent `ESC[2J ESC[H`. That escape
+sequence goes straight to the ACIA rather than through the console writer, which would put the
+bracket and the letters on the VDP as text as well. The LCD is left alone - it is the panel,
+not a console.
+
 ### The panel
 
 The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the
 card is in use, out again when the command finished, still lit if it did not:
 
 ```text
-MICROSOFT BASIC
-SD READY
+Microsoft BASIC
 21817 BYTES FREE
+SD READY
 SAVE PROG.BAS   120
 ```
 
