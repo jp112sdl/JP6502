@@ -548,6 +548,32 @@ sequence goes straight to the ACIA rather than through the console writer, which
 bracket and the letters on the VDP as text as well. The LCD is left alone - it is the panel,
 not a console.
 
+### The `COLOR` statement
+
+```basic
+COLOR foreground, background
+```
+
+Both are 0 to 15 out of the TMS9918A palette. Text mode has no colour table, so the background
+is the backdrop and these two are the only colours on the screen. Anything above 15 wraps.
+
+| | | | |
+|---|---|---|---|
+| 0 transparent | 4 dark blue | 8 medium red | 12 dark green |
+| 1 black | 5 light blue | 9 light red | 13 magenta |
+| 2 medium green | 6 dark red | 10 dark yellow | 14 gray |
+| 3 light green | 7 cyan | 11 light yellow | 15 white |
+
+`COLOR 15,4` is what the machine starts with.
+
+**This is one of the few things `POKE` cannot do.** Both halves of a VDP register write go to
+the same control port at 32897, so `POKE 32897,246 : POKE 32897,135` looks like it should set
+register 7 - and it does nothing at all, without an error. `POKE` assembles to
+`sta (LINNUM),y`, and the dummy read that addressing mode performs on the target one cycle
+before the write is itself a VDP access. The chip wants about 8 µs between two, so the write
+is lost and the pair never completes. It is the same access time that used to leave the screen
+dark at cold start. `COLOR` goes through `vdp_write_register`, which waits between the halves.
+
 ### The panel
 
 The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the

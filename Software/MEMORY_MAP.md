@@ -204,18 +204,18 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4A1` | 410 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
-| `$E4A2` | `$E4FF` | 94 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4A8` | 417 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$E4A9` | `$E4FF` | 87 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, `COLOR`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$FFF9` | 1880 | frei — auf dieser Platine noch nie belegt, siehe 5.2.1 |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 2035 Bytes von 24576.
+ROM frei gesamt 2003 Bytes von 24576.
 
 ### 5.2 Warum `SDCODE` ein eigener Block ist
 
@@ -311,10 +311,11 @@ macht Abweichungen sichtbar, also lohnt sie weiter. Ein Feature deswegen zu
 verkleinern oder wegzulassen ist dagegen nicht mehr begründet.
 
 **Platz, Stand 2026-08-21.** Beide Offset-Blöcke sind praktisch voll: `EXTCODE`
-hat noch 24 freie Bytes, `SDCODE` noch 37 bis `SYSCALLS` bei `$F800`. `SOUND`
-(76 Bytes, `EXTCODE`) und `CLS` (37 Bytes, `SDCODE` — in `EXTCODE` war kein
-Platz mehr) waren die letzten Erweiterungen, die ohne neuen Block
-unterzubringen waren. Frei ist danach nur noch `$F8A2`–`$FFF9` — ein Bereich, der
+hat noch 24 freie Bytes, `SDCODE` noch 12 bis `SYSCALLS` bei `$F800`. `SOUND`
+(76 Bytes, `EXTCODE`), `CLS` (37) und `COLOR` (25, beide `SDCODE` — in
+`EXTCODE` war kein Platz mehr) waren die letzten Erweiterungen, die ohne neuen
+Block unterzubringen waren. Damit ist Schluss: der nächste Befehl braucht
+`$F8A2`–`$FFF9`. Frei ist danach nur noch `$F8A2`–`$FFF9` — ein Bereich, der
 auf dieser Platine noch nie belegt war. Bei `EXTCODE` (Abschnitt 5.2, Ende)
 ließ sich das nur durch Benutzen herausfinden; für einen neuen Block dort gilt
 dasselbe, also bewusst mit einer kleinen, gut sichtbaren Funktion anfangen.

@@ -18,6 +18,7 @@
 
     .export vdp_wait
     .export vdp_write_address
+    .export vdp_write_register
     .export vdp_boot_registers
     .export vdp_boot_patterns
     .export vdp_boot_clear

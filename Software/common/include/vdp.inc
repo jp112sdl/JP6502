@@ -7,6 +7,7 @@
     .import vdp_init_text_mode
     .import vdp_wait
     .import vdp_write_address
+    .import vdp_write_register
     .import vdp_boot_registers
     .import vdp_boot_patterns
     .import vdp_boot_clear

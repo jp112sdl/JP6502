@@ -88,6 +88,7 @@
 ; programs - a listing saved on the SD card still reads back correctly.
 		keyword_rts "SOUND", SOUND
 		keyword_rts "CLS", CLS
+		keyword_rts "COLOR", COLOR
 .endif
 
 		count_tokens

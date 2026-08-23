@@ -10,6 +10,7 @@
       ; include guards - pulling it a second time is a pile of "already
       ; defined" errors, not a no-op.
       .include "vdp_text_mode.inc"
+      .include "vdp.inc"
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
@@ -237,6 +238,41 @@ CLS_DONE:
 ; Erase the whole display, then home the cursor
 CLS_ANSI:
         .byte   $1b,"[2J",$1b,"[H",$00
+
+; ----------------------------------------------------------------------------
+; "COLOR" STATEMENT
+;
+;   COLOR foreground, background
+;
+; Both 0 to 15 out of the TMS9918A palette - 1 black, 4 dark blue, 6 dark red,
+; 7 cyan, 15 white and so on, the full list is in vdp_const.inc. Text mode has
+; no colour table, so the background is the backdrop and these two are the only
+; colours on the screen. Anything above 15 wraps.
+;
+; POKE cannot do this, which is worth knowing before someone tries: both halves
+; of a register write go to the same control port, and POKE assembles to
+; "sta (LINNUM),y". The dummy read that addressing mode performs on the target
+; one cycle before the write is itself an access, and the chip wants about 8 us
+; between two - so the write is lost and the pair never completes. It is the
+; same access time that used to leave the screen dark at cold start, see
+; vdp_boot_init. vdp_write_register gives both halves the wait they need.
+; ----------------------------------------------------------------------------
+COLOR:
+        jsr     GETBYT              ; foreground -> X
+        txa
+        asl     a
+        asl     a
+        asl     a
+        asl     a                   ; up into the high nibble
+        pha
+        jsr     COMBYTE             ; background -> X
+        txa
+        and     #$0f
+        tsx                         ; reach the byte pushed above without
+        ora     $0101,x             ; needing a variable to hold it
+        plx                         ; and drop it again
+        ldx     #$07                ; register 7 carries both colours
+        jmp     vdp_write_register
 
 .segment "STARTUP"
   jmp init
