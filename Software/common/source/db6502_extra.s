@@ -239,6 +239,13 @@ CLS_DONE:
 CLS_ANSI:
         .byte   $1b,"[2J",$1b,"[H",$00
 
+; COLOR lives in EXTCODE2 rather than next to CLS in SDCODE. Twenty-five bytes
+; here would push every module behind it in SDCODE to a new address, and on
+; this board that is the one change that has twice come back as a screen full
+; of the wrong glyphs - see MEMORY_MAP.md 5.1.1 and 5.2.1. EXTCODE2 is 1.6 KB
+; of empty ROM behind SYSCALLS, so a statement put here moves nothing at all.
+.segment "EXTCODE2"
+
 ; ----------------------------------------------------------------------------
 ; "COLOR" STATEMENT
 ;

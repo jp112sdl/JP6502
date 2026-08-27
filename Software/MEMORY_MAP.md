@@ -190,7 +190,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
 | `$F37E` | `$F7FF` | 1154 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
-| `$F8A2` | `$FFF9` | 1880 | frei |
+| `$F8A2` | `$FFF9` | 1880 | frei (`EXTCODE2` ist hier unbelegt) |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
 ROM frei gesamt 5212 Bytes von 24576.
@@ -209,13 +209,77 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, `COLOR`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
-| `$F8A2` | `$FFF9` | 1880 | frei — auf dieser Platine noch nie belegt, siehe 5.2.1 |
+| `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
+| `$F900` | `$F918` | 25 | `EXTCODE2` — `COLOR`, siehe 5.1.1 |
+| `$F919` | `$FFF9` | 1761 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 2003 Bytes von 24576.
+ROM frei gesamt 2075 Bytes von 24576.
+
+#### 5.1.1 `EXTCODE2` — der dritte Codeblock
+
+`EXTCODE2` liegt mit `offset=$5900` fest hinter `SYSCALLS` und ist die erste
+Belegung des Bereichs `$F8A2`–`$FFF9`, der auf dieser Platine bis dahin nie
+benutzt wurde. Die 94 Bytes zwischen `SYSCALLS` und `$F900` bleiben absichtlich
+frei: `SYSCALLS` ist eine feste Sprungtabelle, an der Loadables hängen, und die
+darf wachsen können, ohne dass etwas dahinter umzieht.
+
+Erster Bewohner ist `COLOR`, und der Grund dafür ist kein Platzmangel, sondern
+der Befund vom 24.08.2026.
+
+**Der Befund.** Mit `COLOR` in `SDCODE` kam die Maschine mit Zeichenschrott
+hoch: die richtigen Zeichencodes durch die falschen Glyphen, dauerhaft, und ein
+gelöschter Bildschirm 960 Kopien dessen, was auf Pattern-Index `$20` lag.
+Dasselbe ROM ohne `COLOR` läuft einwandfrei. Das Image auf dem Chip war Byte
+für Byte das gebaute, der Zeichensatz im ROM unverändert.
+
+**Was ausgeschlossen ist.** Zwei Runden Raten haben zwei neue Fehler erzeugt
+und keinen alten behoben. Erst die Messung hat etwas gebracht, und weil der
+Bildschirm selbst das defekte Bauteil ist, ging sie auf das LCD: `rom/vdp_diag`
+fährt den Kaltstart Schritt für Schritt, druckt danach Text über genau die
+Routinen, die BASIC benutzt, und meldet nach jedem Abschnitt, ob die
+Pattern-Tabelle im VRAM noch zum ROM passt.
+
+```
+PRB 5A A5  ST E2      VRAM nimmt und gibt zurueck, Chip liefert Bilder
+M1 FFFF ENB FFFF      Kaltkopie fehlerfrei, auch nach Display-Ein
+TXT FFFF  SH 0000     20 Zeilen Text: Zeichensatz unberuehrt
+SCR FFFF              40 Zeilen mit Scrollen: unberuehrt
+```
+
+Damit sind erledigt: der VDP als Bauteil, die Kaltkopie, die Zugriffszeit des
+Steuerports, das Flip-Flop, die Textausgabe und der Scroll-Pfad. Zwei Fixe, die
+auf diese Verdachte gebaut waren — Rücklese-Prüfung des Kaltstarts und Taktung
+jedes Adresspaares — sind wieder zurückgenommen; sie haben nichts geändert und
+die Taktung kostete das Fünffache an Ausgabezeit.
+
+**Was übrig bleibt.** `COLOR` verändert am Image genau zwei Dinge: 25 Bytes in
+`SDCODE`, die alles dahinter verschieben, und ein Token mehr, wodurch jedes
+Funktions- und Operator-Token um eins hochrückt. Sonst nichts — `RODATA` und
+der Zeichensatz sind identisch, der Code von `COLOR` läuft beim Start nie.
+
+Der Umzug nach `EXTCODE2` trennt die beiden. Gegen das ROM, das nachweislich
+läuft, unterscheidet sich der Stand jetzt in:
+
+```
+CODE            34  nur Immediates, Länge unverändert
+BAS_VEC/KEY/ERR 341 die Tokentabelle mit COLOR
+EXTCODE2        25  COLOR, in vorher leerem ROM
+SDCODE           0  nichts verschoben
+alles andere     0
+```
+
+**Es läuft.** Damit ist es die Verschiebung und nicht die Tokentabelle — siehe
+Abschnitt 5.2.3.
+
+**Arbeitsregel, die daraus folgt:** neue Statements und neue Routinen kommen
+nach `EXTCODE2`. Der Block liegt hinter allem, was sonst im Image steht, also
+verschiebt eine Ergänzung dort nichts. `SDCODE` und `EXTCODE` sind ab jetzt
+gesperrt für Einschübe; wer dort etwas ändern muss, hält die Länge des Moduls
+konstant.
 
 ### 5.2 Warum `SDCODE` ein eigener Block ist
 
@@ -314,11 +378,12 @@ verkleinern oder wegzulassen ist dagegen nicht mehr begründet.
 hat noch 24 freie Bytes, `SDCODE` noch 12 bis `SYSCALLS` bei `$F800`. `SOUND`
 (76 Bytes, `EXTCODE`), `CLS` (37) und `COLOR` (25, beide `SDCODE` — in
 `EXTCODE` war kein Platz mehr) waren die letzten Erweiterungen, die ohne neuen
-Block unterzubringen waren. Damit ist Schluss: der nächste Befehl braucht
-`$F8A2`–`$FFF9`. Frei ist danach nur noch `$F8A2`–`$FFF9` — ein Bereich, der
-auf dieser Platine noch nie belegt war. Bei `EXTCODE` (Abschnitt 5.2, Ende)
-ließ sich das nur durch Benutzen herausfinden; für einen neuen Block dort gilt
-dasselbe, also bewusst mit einer kleinen, gut sichtbaren Funktion anfangen.
+Block unterzubringen waren. `SDCODE` hat seitdem nur noch 5 freie Bytes.
+
+**Nachtrag 2026-08-24.** Der neue Block ist da: `EXTCODE2` auf `$F900`, siehe
+Abschnitt 5.1.1. Genau wie vorgeschlagen mit einer kleinen, gut sichtbaren
+Funktion angefangen. Damit ist der Bereich `$F8A2`–`$FFF9` nicht länger
+unerprobt, und es sind noch 1603 Bytes frei.
 
 **Was `SOUND` am Image verändert hat.** Ein neues Statement lässt sich nicht
 adressneutral einbauen, aber der Schaden bleibt eng begrenzt. Das Keyword wächst
@@ -360,6 +425,46 @@ herausfinden; deshalb kam er bewusst zuerst mit einer kleinen, gut sichtbaren Fu
 die Reihe. Auf der Hardware bestätigt am 10.08.2026: Bild bleibt, Statuszeile erscheint.
 
 ---
+
+### 5.2.3 Nachtrag 2026-08-25: es ist doch die Verschiebung — und sie ist adressabhängig
+
+Der `COLOR`-Befehl hat die Regel wieder aufgerichtet, diesmal mit der saubersten
+Kontrolle, die es bisher dazu gab.
+
+**Der Versuch.** Ein ROM mit `COLOR` in `SDCODE` zeigt Zeichenschrott. Dasselbe
+ROM mit `COLOR` in `EXTCODE2` läuft. Gegen die Fassung, die auf der Platine
+bestätigt lief, unterscheiden sich die 25 Bytes in vorher leerem ROM, 34
+Immediates in `CODE` bei unveränderter Länge und die Tokentabelle. `SDCODE`,
+`EXTCODE`, `RODATA`, `RODATA_PA`, `SYSCALLS` und `VECTORS`: **null abweichende
+Bytes.** Eine Variable, und sie entscheidet.
+
+**Was vorher ausgeschlossen wurde**, damit dieser Schluss trägt — alles auf der
+Hardware gemessen, nicht simuliert, mit `rom/vdp_diag` über das LCD, weil der
+Bildschirm selbst das defekte Bauteil ist: der VDP als Bauteil, die Kaltkopie
+des Zeichensatzes, die Zugriffszeit des Steuerports, das Flip-Flop, die
+Textausgabe und der Scroll-Pfad. Alle vier Prüfpunkte `FFFF`, Verschiebung
+`0000`, siehe 5.1.1.
+
+**Und der Zusatzbefund, der die Sache erst interessant macht.** Es ist nicht
+"jede Verschiebung tötet den Bildschirm":
+
+| Änderung | Verschiebung des `SDCODE`-Rumpfs | Ergebnis |
+|---|---|---|
+| `SOUND` (2026-08-21) | 0 (nur `EXTCODE`-Ende, 76 Bytes) | läuft |
+| `CLS` | +37 | läuft |
+| `CLS` + `COLOR` | +62 | Zeichenschrott |
+| `CLS`, `COLOR` in `EXTCODE2` | +37 | läuft |
+
++37 ist harmlos, +62 nicht. Der Effekt ist also **adressabhängig, nicht
+größenabhängig** — irgendetwas landet bei +62 auf einer Adresse, die es bei +37
+nicht tut. Damit sind auch 5.2.2 und dieser Abschnitt kein Widerspruch: der
+`SOUND`-Umzug betraf `EXTCODE`, nicht den Rumpf von `SDCODE`.
+
+**Die Ursache ist weiterhin unbekannt.** Was feststeht, ist eine reproduzierbare
+empirische Regel, keine Erklärung. Wer sie knacken will, hat jetzt einen
+billigen Aufhänger: dasselbe ROM mit Füllbytes am **Anfang** von `SDCODE`, in
+Schritten zwischen +37 und +62, und schauen, wo genau es kippt. Die Schwelle
+verrät die Adresse, und die Adresse verrät den Mechanismus.
 
 ## 6. Kollisionen — Status
 

@@ -440,11 +440,21 @@ of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
 instead of into `CODE`, and their variables into `BASBUF` instead of `BSS`. Growing `CODE` past
 roughly `$dc50` moves every library module behind `msbasic.o` to a new address, and on this
 board that alone kills the VDP picture - a ROM built from unchanged sources plus 1110 dead
-filler bytes reproduces it. That is a hardware-level effect, not a bug in this code, so new code
-belongs in `SDCODE` (305 bytes left) or in another fixed-offset block. `EXTCODE` at `$e700` is
-exactly that: an additional block in what used to be filler, holding the panel, the drive light,
-the error texts, the free space bookkeeping and the `BLOCKS FREE` line, with 118 bytes still
-free. It has been confirmed working on the hardware.
+filler bytes reproduces it. That is a hardware-level effect, not a bug in this code.
+
+**Put new code in `EXTCODE2` at `$f900`, and nowhere else.** `SDCODE` and `EXTCODE` are both
+full in practice and, more to the point, inserting into either pushes everything behind it to a
+new address - which on this board is the failure above. `EXTCODE2` sits behind every other
+segment in the image, so an addition there moves nothing at all. It has 1761 bytes free and
+`COLOR` is its first tenant, confirmed on the hardware.
+
+That is not a style preference. `COLOR` was first written into `SDCODE`, where its 25 bytes
+push the rest of the block up: the machine comes up drawing the right characters through the
+wrong glyphs, permanently, and never recovers. The same statement in `EXTCODE2` runs. The
+effect is address-dependent rather than size-dependent - `CLS` shifting the same block by 37
+bytes is harmless, 62 bytes is not - so there is no safe amount to insert. Sections 5.1.1 and
+5.2.3 of MEMORY_MAP.md have the measurements, including what has already been ruled out on the
+hardware so it does not get chased again.
 
 `LOAD "$"` ends the way a C64 directory does, with a line saying how much room is left:
 
