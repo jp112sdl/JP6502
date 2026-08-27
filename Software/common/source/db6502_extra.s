@@ -34,30 +34,18 @@ _start_msbasic:
       stz sd_loadmode
       stz sd_savemode
 
-; Display startup message
-ShowStartMsg:
-      writeln_tty #StartupMessage
+      ; Ask the cold/warm question only when there is something to ask about -
+      ; start_select in EXTCODE2 decides. The jump keeps this call site the
+      ; length the prompt had, because CODE must not change size:
+      ; MEMORY_MAP.md section 5.2.3.
+      jmp start_select
 
-; Wait for a cold/warm start selection
-WaitForKeypress:
- ;   SEC
-	JSR	MONRDKEY
-	BCC	WaitForKeypress
-	
-	AND	#$DF			; Make upper case
-	CMP	#'W'			; compare with [W]arm start
-	BEQ	WarmStart
-
-	CMP	#'C'			; compare with [C]old start
-;	BNE	ShowStartMsg
-    BNE WaitForKeypress
-;    BEQ COLD_START
-
-	JMP	sd_coldstart	; BASIC cold start, with the busy light on
-;    JMP WaitForKeypress
-
-WarmStart:
-	JMP	RESTART		; BASIC warm start
+      ; The 29 bytes the prompt used to occupy here. Never executed; they are
+      ; kept so that every library module behind msbasic.o stays on the address
+      ; the working ROM has.
+      .repeat 29
+      nop
+      .endrepeat
 
 MONCOUT:
     ; Every character BASIC prints goes through here, which is what makes SAVE
@@ -280,6 +268,70 @@ COLOR:
         plx                         ; and drop it again
         ldx     #$07                ; register 7 carries both colours
         jmp     vdp_write_register
+
+; ----------------------------------------------------------------------------
+; COLD OR WARM START
+;
+; The choice only means something when the RAM still holds a BASIC program, and
+; after a power-on it does not - it holds whatever the SRAM came up with, and a
+; warm start into that goes nowhere good. So the question is only worth asking
+; when the RAM demonstrably survived, and that is what the signature below is
+; for: it is stamped on the way into the first cold start and never cleared
+; again, so finding it a second time means the machine was reset rather than
+; switched on. It lives in BASBUF because nothing zeroes that page at boot -
+; the same reason sd_loadmode and sd_savemode have to be forced idle by hand in
+; _start_msbasic.
+;
+; Six bytes rather than two, and letters rather than a bit pattern: an SRAM does
+; not come up uniformly random, it comes up in patterns, and a short signature
+; made of the kind of bytes an SRAM likes is exactly the one that turns up by
+; accident.
+;
+; In EXTCODE2 because inserting into CODE moves every library module behind
+; msbasic.o, which on this board kills the picture - MEMORY_MAP.md 5.2.3.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+START_MAGIC_LEN = 6
+
+start_select:
+        ldx     #START_MAGIC_LEN-1
+@test:
+        lda     start_magic,x
+        cmp     start_magic_value,x
+        bne     start_poweron
+        dex
+        bpl     @test
+
+        ; RAM came through, so there may be a program in it worth keeping
+        writeln_tty #StartupMessage
+@wait:
+        jsr     MONRDKEY
+        bcc     @wait
+        and     #$DF                ; make upper case
+        cmp     #'W'
+        beq     @warm
+        cmp     #'C'
+        bne     @wait
+        jmp     sd_coldstart        ; cold start, with the busy light on
+@warm:
+        jmp     RESTART
+
+; Nothing in RAM to lose, so no question either
+start_poweron:
+        ldx     #START_MAGIC_LEN-1
+@stamp:
+        lda     start_magic_value,x
+        sta     start_magic,x
+        dex
+        bpl     @stamp
+        jmp     sd_coldstart
+
+start_magic_value:
+        .byte   "DB6502"
+
+.segment "BASBUF"
+start_magic:    .res START_MAGIC_LEN
 
 .segment "STARTUP"
   jmp init

@@ -131,8 +131,8 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E32` | 51 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) |
-| `$0E33` | `$0E68` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E00` | `$0E38` | 57 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) sowie `start_magic` |
+| `$0E39` | `$0E6E` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
 | `$0E69` | `$0EFB` | 147 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$F918` | 25 | `EXTCODE2` — `COLOR`, siehe 5.1.1 |
-| `$F919` | `$FFF9` | 1761 | frei |
+| `$F900` | `$F959` | 90 | `EXTCODE2` — `COLOR`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
+| `$F95A` | `$FFF9` | 1696 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 2075 Bytes von 24576.
+ROM frei gesamt 2010 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

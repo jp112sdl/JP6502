@@ -586,6 +586,31 @@ before the write is itself a VDP access. The chip wants about 8 µs between two,
 is lost and the pair never completes. It is the same access time that used to leave the screen
 dark at cold start. `COLOR` goes through `vdp_write_register`, which waits between the halves.
 
+### Cold start and warm start
+
+After a **power-on** the machine goes straight into a cold start. There is nothing else it
+could sensibly do: the SRAM comes up holding whatever it feels like, so there is no program to
+keep and no prompt worth showing.
+
+After a **reset** the RAM still holds the program that was in it, and there the choice matters,
+so the question comes back:
+
+```text
+Cold start [C] or warm [W] start?
+```
+
+`C` clears the program and starts fresh, `W` keeps it and returns to the `OK` prompt.
+
+The two cases are told apart by a six-byte signature in `BASBUF`, stamped on the way into the
+first cold start and never cleared afterwards. Finding it again means the RAM survived, which
+means this was a reset. `BASBUF` works for this because nothing zeroes that page at boot - the
+same property that forces `_start_msbasic` to set `sd_loadmode` and `sd_savemode` by hand.
+
+Six bytes of ASCII rather than a two-byte bit pattern on purpose: an SRAM does not come up
+uniformly random, it comes up in patterns, and a short signature built from the kind of bytes
+an SRAM likes is exactly the one that appears by accident and sends the machine into a warm
+start over garbage.
+
 ### The panel
 
 The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the
