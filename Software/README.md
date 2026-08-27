@@ -342,6 +342,7 @@ In the `rom` folder you will find the following ROM images:
 - `serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
 - `modem_test` - barebone modem testing application, sort of bootloader without user interface,
 - `play_song` - plays "Mary Had a Little Lamb" on the SN76489, driving the chip directly rather than through the common `sound` library. Shares its source with `load/play_song`,
+- `vdp_diag` - reports what the VDP actually does at a cold start, on the **LCD** rather than the screen, because the screen is the part under suspicion. Runs the cold start step by step, then prints text through the same routines BASIC uses, and after each stage checks whether the pattern table in VRAM still matches the ROM. Reach for it before theorising about a bad picture,
 - `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection. Loads and saves programs on the SD card - see [BASIC on the SD card](#basic-on-the-sd-card) below,
 - `minimal_bootloader` - simplest possible bootloader application that can be used to simplify software development thanks to making ROM flashing unnecessary for each code change,
 - `os1` - **work in progress** - basic operating system.
@@ -365,6 +366,7 @@ which the build no longer supports.
 | `rom/serial_load_test`   | Works out of the box                                           |
 | `rom/modem_test`         | Works out of the box                                           |
 | `rom/play_song`          | Works out of the box, needs the SN76489 fitted                 |
+| `rom/vdp_diag`           | Works out of the box, reports on the LCD                       |
 | `rom/microsoft_basic`    | Works out of the box                                           |
 | `rom/minimal_bootloader` | Works out of the box                                           |
 | `rom/os1`                | Works out of the box                                           |
