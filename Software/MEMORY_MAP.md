@@ -217,7 +217,7 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F95A` | `$FFF9` | 1696 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 2010 Bytes von 24576.
+ROM frei gesamt 1938 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
