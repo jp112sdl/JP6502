@@ -451,7 +451,9 @@ no_writechar_carry:
 ; code executes cycle for cycle identically and only A8..A15 differ.
       .segment "SDCODE"
 
-SDCODE_VDP_HOLE = $E7                   ; vdp.o $83 + vdp_text_mode.o $64
+; vdp.o $83 + vdp_text_mode.o $64 = $E7, less the 25 bytes that db6502_extra.s
+; puts in front of the BASIC SD statements for the experiment described there
+SDCODE_VDP_HOLE = $E7 - 25
       .res SDCODE_VDP_HOLE, $EA
 
       .segment "VDPCODE"

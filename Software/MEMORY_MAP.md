@@ -208,15 +208,15 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$E447` | `$E6FF` | 697 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
-| `$EC00` | `$F37D` | 1918 | `SDCODE` — 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F37E` | `$F7FF` | 1154 | frei |
+| `$EC00` | `$F364` | 1893 | `SDCODE` — 206 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F365` | `$F7FF` | 1179 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$F90B` | 12 | `EXTCODE2` — `gtx_stub.s`, die vier Durchreichen für ROMs ohne Bitmap |
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4969 Bytes von 24576.
+ROM frei gesamt 4994 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -233,7 +233,7 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$E447` | `$E6FF` | 697 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — 25 Bytes Füller, Rumpf von `db6502_sdbasic.s`, `CLS`, 206 Bytes Füller anstelle des VDP-Kaltstarts (beides Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -864,13 +864,62 @@ Block zeigen auf `RODATA`, das unbewegt ist, also ändert sich auch dort nichts.
 Der gesamte Unterschied zum funktionierenden ROM ist **ein Takt auf dem Pfad,
 auf dem `vdp_boot_init` den Bildschirm für gut erklärt.**
 
-* **Zeichenschrott** → der Takt ist es, an dieser einen Stelle. Dann ist der
-  Fehler nach Monaten auf einen Befehl eingegrenzt, und die Abhilfe steht
-  daneben: den Pfad so bauen, dass er die Taktzahl nicht von der Adresse
-  bezieht.
-* **sauberes Bild** → die Korrelation war Zufall. Dann bleiben `+$050`, `+$056`
-  und `+$0A6` als Kandidaten, und dieselbe Rechnung liefert für jeden davon eine
-  Basisadresse, die ihn allein herausgreift.
+Gebrannt, kalt gestartet: **sauberes Bild.** Die Korrelation war Zufall.
+
+#### Was damit alles hinfällig ist
+
+Mit fünf Brennvorgängen bleibt von der Verzweigungstheorie nichts übrig. Keine
+der elf Verzweigungen hat einen Zustand, der in allen laufenden ROMs gleich und
+in allen kaputten anders ist:
+
+| Verzweigung | `$F05D` | `$F076` | `$FEB7` | `$E45D` | `$E360` |
+|---|---|---|---|---|---|
+| | **gut** | **kaputt** | **kaputt** | **gut** | **gut** |
+| `+$050`, `+$056` | — | — | kreuzt | — | — |
+| `+$09E` | kreuzt | — | — | kreuzt | — |
+| `+$0A6` | kreuzt | kreuzt | — | kreuzt | kreuzt |
+| übrige 7 | — | — | — | — | — |
+
+Und mit ihr fällt der Satz, den dieser Abschnitt zwei Brennvorgänge lang
+behauptet hat. **„Die VDP-Routinen dürfen sich nicht bewegen" ist widerlegt.**
+Sie sind zweimal umgezogen, nach `$E45D` und nach `$E360`, und beide Male lief
+das Bild sauber. Was tatsächlich gemessen ist, ist enger:
+
+| Was verschoben wurde | Ergebnis |
+|---|---|
+| alle vier Bewohner von `SDCODE` um 25 Bytes | kaputt |
+| nur die VDP-Routinen, nach `$FEB7` | kaputt |
+| nur die VDP-Routinen, nach `$E45D` | gut |
+| nur die VDP-Routinen, nach `$E360` | gut |
+| nur `libfat32`, um 25 Bytes | gut |
+
+Zwei kaputte Konfigurationen, keine davon erklärt. Was `$FEB7` von `$E360` und
+`$E45D` unterscheidet, ist offen; die Taktzahlen sind es nicht.
+
+#### Der letzte ungetestete Bewohner
+
+Der erste Fehlschlag hat vier Bewohner gleichzeitig bewegt. `libfat32` ist
+freigesprochen, die VDP-Routinen inzwischen auch — bleibt der Rumpf von
+`db6502_sdbasic.s` samt `CLS`, der als einziger noch nie allein umgezogen ist.
+
+25 Bytes Füller ganz vorn in `SDCODE`, und das Loch in `vdp.s` wird um dieselben
+25 Bytes kleiner. Damit rückt der BASIC-SD-Rumpf von `$EC00` auf `$EC19`,
+`libfat32` bleibt auf `$F144`, die VDP-Routinen bleiben auf `$E360`, und
+`SDCODE` behält Anfang, Ende und Länge.
+
+`romcheck.py` meldet dabei zum ersten Mal `REWRITTEN` für `BAS_VEC`, und das ist
+in Ordnung: `BAS_VEC` ist die Sprungtabelle der Statements, keine
+Befehlsfolge. Die vier geänderten Bytes sind `$EBFF`→`$EC18`, `$4D`→`$66` und
+`$37`→`$50` — dreimal derselbe Versatz von 25, einmal mit Seitenübertrag, also
+genau die Adressen der mitgewanderten Statements. Das Werkzeug kann eine
+Adresstabelle nicht von Code unterscheiden; hier ist es von Hand geprüft.
+
+* **Zeichenschrott** → der erste Fehlschlag ist erklärt, und die Regel heißt
+  nicht mehr „`SDCODE` nicht anfassen", sondern „diesen einen Rumpf nicht
+  verschieben".
+* **sauberes Bild** → dann bewegt sich jeder Bewohner einzeln gefahrlos, und der
+  erste Fehlschlag lag daran, dass mehrere es gleichzeitig taten. Übrig bleibt
+  dann nur noch die Frage, was an `$FEB7` besonders ist.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
