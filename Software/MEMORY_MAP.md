@@ -229,12 +229,12 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, `COLOR`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FE9D` | 1438 | `EXTCODE2` — `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FE9E` | `$FFF9` | 348 | frei |
+| `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
 ROM frei gesamt 1492 Bytes von 24576.
@@ -653,30 +653,50 @@ einer Marge von einer Mikrosekunde entscheidet das, welche der grenzwertigen
 Zugriffe diesmal durchfallen. Deshalb sah es adressabhängig aus, deshalb war es
 nicht größenabhängig, und deshalb ließ es sich nie auf eine Schwelle festnageln.
 
-#### Was damit noch nicht bewiesen ist
+#### Was die Mikrosekunde nicht erklärt
 
-Der `SDCODE`-Befund aus 5.2.3 — `COLOR` dort eingefügt zerstört den Zeichensatz,
-in `EXTCODE2` nicht — ist mit dieser Erklärung **verträglich**, aber nicht
-nachgemessen. Der Test dafür ist billig und naheliegend: `COLOR` zurück nach
-`SDCODE`, mit der getakteten Adresse an Bord. Läuft es dann, ist die Regel „nie
-in `SDCODE` einschieben" hinfällig und war immer nur ein Symptom.
+Der Verdacht lag nahe, dass auch der `SDCODE`-Befund aus 5.2.3 nur ein Gesicht
+derselben Sache ist: ein verschobenes Flipflop legt Zeichen in die
+Pattern-Tabelle, und das *ist* ein zerstörter Zeichensatz. Nachgemessen am
+25.08.2026, und die Antwort ist **nein**.
 
-Ebenfalls aus demselben Holz: das Makro `vdp_set_vram_addr` ließ rund **zwei**
-Mikrosekunden zwischen den Hälften — die schlechteste verbliebene Stelle im
-Baum. Erreicht wird es nur von `vdp_clear_screen`, also von `CLS`.
+`COLOR` zurück nach `SDCODE`, mit jedem VDP-Zugriff getaktet — `CODE` und
+`RODATA` byteidentisch, `SDCODE` endet wieder auf `$F7F3`, also exakt auf der
+Adresse des Images, das damals ausfiel. Ergebnis: **derselbe Fehler, derselbe
+erste Start.** Zeichensatz zerstört, `CLS` füllt den Schirm mit einem falschen
+Glyph, `SCREEN 0` holt ihn nicht zurück. `COLOR` selbst funktionierte, wie
+immer, weil `vdp_write_register` seine Wartezeit schon hatte.
 
-#### Beide Enden in einem Image, 25.08.2026
+Das Makro kann es nicht gewesen sein: `vdp_set_vram_addr` wird nur von
+`vdp_clear_screen` erreicht, also von `CLS`, und der Schrott stand schon beim
+Einschalten da.
 
-Das Makro läuft jetzt über `vdp_write_address`, und `COLOR` ist zurück in
-`SDCODE`. `SDCODE` endet damit wieder auf **`$F7F3`** — genau der Adresse des
-Images, das seinerzeit den Zeichensatz zerstört hat, also der bestmögliche
-Vergleich.
+**Also zwei verschiedene Fehler, nicht einer.**
 
-Die beiden Änderungen sind unabhängig genug, dass ein Fehlschlag zuzuordnen
-wäre: zerstörter Zeichensatz spricht für die `SDCODE`-Regel, ein kaputtes `CLS`
-für das Makro. `CODE` und `RODATA` bleiben byteidentisch — die zwei Bytes, die
-das Makro einspart, stehen als Füller hinter `vdp_enable_display`, damit dieser
-Brand genau zwei Variablen hat und keine dritte.
+* Die Mikrosekunde ist echt und behoben. Sie erklärt fehlende und versetzte
+  Einzelzeichen, und das Image ohne XMODEM läuft seitdem.
+* Der `SDCODE`-Einschub ist echt, unabhängig davon, und **zum zweiten Mal
+  überführt** — beim zweiten Mal mit einem Codestand, der sich vom ersten in
+  fast allem unterscheidet. Der Mechanismus bleibt unbekannt.
+
+Damit steht auch fest: `CODE`-Relokation ist harmlos (5.4), `SDCODE`-Einschub
+nicht. Es ist also keine Frage der Verschiebung an sich, sondern etwas an
+*diesem einen Block*. Der nächste Versuch hätte einen sehr engen Korridor:
+dieselben 25 Bytes einmal am Anfang von `SDCODE` und einmal als Füller am
+**Ende**. Bleibt der Rumpf dabei liegen und es läuft, liegt es am Verschieben
+des Rumpfes; läuft es auch dann nicht, liegt es an der Länge des Blocks.
+
+**Arbeitsregel, unverändert:** neue Statements nach `EXTCODE2`. `SDCODE` und
+`EXTCODE` sind für Einschübe gesperrt.
+
+#### Das Makro, allein
+
+`vdp_set_vram_addr` läuft jetzt über `vdp_write_address`. Zusammen mit dem
+`SDCODE`-Versuch gebrannt hat es nichts über sich selbst verraten — der
+Zeichensatz war schon beim Einschalten hin, `CLS` damit nicht beurteilbar. Es
+geht deshalb noch einmal allein aufs Image: gegen das zuletzt laufende ROM sind
+`RODATA`, `BAS_*`, `SDCODE`, `EXTCODE`, `EXTCODE2`, `SYSCALLS` und `VECTORS`
+byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ## 6. Kollisionen — Status
 

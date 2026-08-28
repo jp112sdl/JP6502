@@ -236,14 +236,15 @@ CLS_DONE:
 CLS_ANSI:
         .byte   $1b,"[2J",$1b,"[H",$00
 
-; COLOR is back next to CLS in SDCODE, and that is deliberate. Putting it here
-; is what used to come back as a screen full of the wrong glyphs, which is why
-; it was moved to EXTCODE2 in the first place - but that was before the one
-; microsecond on the VRAM address pair was found, and a shifted control port
-; flip-flop puts characters into the pattern table, which is exactly what a
-; ruined font is. If this runs, the rule against inserting into SDCODE was a
-; symptom of that all along. See MEMORY_MAP.md 5.5.
-.segment "SDCODE"
+; COLOR lives in EXTCODE2 rather than next to CLS in SDCODE, and it has now
+; earned that place twice. Twenty-five bytes here push every module behind it in
+; SDCODE to a new address, and on this board that comes back as a screen full of
+; the wrong glyphs. It was tried again on 25.08.2026 with every VDP access
+; paced, on the theory that the ruined font was the one microsecond on the
+; address pair showing itself - it was not. Same fault, same first boot.
+; EXTCODE2 sits behind everything else, so a statement put there moves nothing.
+; See MEMORY_MAP.md 5.5.
+.segment "EXTCODE2"
 
 ; ----------------------------------------------------------------------------
 ; "COLOR" STATEMENT
