@@ -603,6 +603,69 @@ sie als offene Frage fest. Läuft dieses Image, ist die Frage beantwortet und
 die Regel gilt nur noch für `SDCODE`; läuft es nicht, ist sie bestätigt und
 gilt für `CODE` genauso.
 
+### 5.5 Aufgelöst: es ist eine Mikrosekunde, nicht die Adresse
+
+Der Versuch aus 5.4 ist durch, und er hat **zwei** Antworten geliefert.
+
+**Erstens: `CODE`-Relokation ist überlebbar.** Elf Bibliotheksmodule auf neue
+Adressen, `CODE` 345 Bytes kürzer, `RODATA` und `BAS_*` verschoben, 6158
+abweichende Bytes — die Maschine läuft. Die offene Frage aus 5.2.1 ist damit
+beantwortet, und zwar mit *nein*.
+
+**Zweitens, und das ist das eigentliche Ergebnis:** die Verschiebung hat
+trotzdem etwas kaputtgemacht, und das Fehlerbild war diesmal fein genug, um die
+Ursache zu zeigen. Nicht schwarzer Schirm, nicht zerstörter Zeichensatz,
+sondern **einzelne Zeichen, die fehlen oder um ein paar Spalten versetzt
+sitzen**, bei ansonsten korrekter Zeile und richtig stehendem Prompt.
+
+Das ist kein Adressierungsfehler. Das ist ein verlorener Buszugriff.
+
+```asm
+      sta VDP_REG                ; Zugriff im 4. Zyklus
+      lda vdp_vram_address+1     ; 3
+      ora #VDP_WRITE_VRAM_SELECT ; 2
+      sta VDP_REG                ; Zugriff im 4. Zyklus
+```
+
+Neun Zyklen zwischen den beiden Zugriffen bei 1 MHz. Der TMS9918A verlangt
+acht. **Eine Mikrosekunde Marge** — in `load_vram_char_position`, also auf dem
+heißesten Pfad der Maschine, und für jedes einzelne ausgegebene Zeichen neu.
+Über `vdp_write_address` getaktet sind es sechzehn, und das Bild steht.
+
+#### Was das für 5.2, 5.2.1 und 5.2.3 bedeutet
+
+Es gibt jetzt einen **Mechanismus**, und er erklärt die ganze Familie von
+Symptomen aus einer Wurzel:
+
+* Geht die zweite Hälfte eines Adresspaares verloren, bleibt das Flipflop am
+  Steuerport mitten im Paar stehen. Ab da wird jedes Paar versetzt gelesen, die
+  Zieladresse springt irgendwohin im VRAM — **auch in die Pattern-Tabelle**.
+  Zeichen, die auf den Schirm sollten, überschreiben den Zeichensatz. Das ist
+  „Zeichenschrott" aus 5.1.1, exakt.
+* Geht ein Datenschreibzugriff verloren, fehlt ein Zeichen und der Rest der
+  Zeile stimmt weiter. Das ist das Bild von heute.
+* Bleibt das Display-Enable-Register auf der Strecke, ist der Schirm schwarz.
+  Das ist 5.2.
+
+Relokation war demnach nie die Ursache, sondern die **Störung**: sie verschiebt
+Code über Seitengrenzen, ändert Sprungziele und damit einzelne Zyklen — und bei
+einer Marge von einer Mikrosekunde entscheidet das, welche der grenzwertigen
+Zugriffe diesmal durchfallen. Deshalb sah es adressabhängig aus, deshalb war es
+nicht größenabhängig, und deshalb ließ es sich nie auf eine Schwelle festnageln.
+
+#### Was damit noch nicht bewiesen ist
+
+Der `SDCODE`-Befund aus 5.2.3 — `COLOR` dort eingefügt zerstört den Zeichensatz,
+in `EXTCODE2` nicht — ist mit dieser Erklärung **verträglich**, aber nicht
+nachgemessen. Der Test dafür ist billig und naheliegend: `COLOR` zurück nach
+`SDCODE`, mit der getakteten Adresse an Bord. Läuft es dann, ist die Regel „nie
+in `SDCODE` einschieben" hinfällig und war immer nur ein Symptom.
+
+Ebenfalls offen und aus demselben Holz: das Makro `vdp_set_vram_addr` lässt rund
+**zwei** Mikrosekunden zwischen den Hälften. Erreicht wird es nur von
+`vdp_clear_screen`, also von `CLS` und sonst nichts, aber es ist die schlechteste
+Stelle im Baum.
+
 ## 6. Kollisionen — Status
 
 Behoben in Phase 1 (Build `rom/microsoft_basic`, verifiziert gegen die Mapfiles):
