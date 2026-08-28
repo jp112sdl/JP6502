@@ -13,6 +13,8 @@
       .include "vdp.inc"
       .include "vdp_const.inc"
       .import _tty_init
+      ; Test of 25.08.2026, see common/source/sdcode_pad.s - remove with it
+      .forceimport sdcode_pad
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA

@@ -689,6 +689,36 @@ des Rumpfes; läuft es auch dann nicht, liegt es an der Länge des Blocks.
 **Arbeitsregel, unverändert:** neue Statements nach `EXTCODE2`. `SDCODE` und
 `EXTCODE` sind für Einschübe gesperrt.
 
+#### Der Trennversuch, 25.08.2026
+
+`COLOR` vorn in `SDCODE` tut zwei Dinge auf einmal: der Rumpf des Blocks rückt
+um 25 Bytes hoch, **und** der Block wird 25 Bytes länger. `common/source/sdcode_pad.s`
+trennt das. Dieselben 25 Bytes gehen als toter Füller **hinter** alles andere in
+`SDCODE` — es ist ein Bibliotheksmodul, das nur das BASIC-ROM per
+`.forceimport` zieht, und es steht hinter `sd.s` in `COMMON_SOURCES`, also am
+Ende des Blocks.
+
+`romcheck` gegen das laufende ROM:
+
+```
+SDCODE   $EC00-$F7DA -> $EC00-$F7F3   0 abweichende Bytes, resized +25
+alle anderen Segmente                 identisch
+```
+
+Null. Der Block endet auf `$F7F3`, exakt wie beim Ausfall, und **kein einziges
+Byte seines Inhalts hat sich bewegt**. Eine Variable, und es ist genau die
+strittige.
+
+* **Läuft es** → es ist das Verschieben des Rumpfes. Dann wäre auch klar, warum
+  `CODE`-Relokation harmlos ist und diese nicht: es liegt an dem, was in
+  `SDCODE` steht, nicht an seiner Länge.
+* **Läuft es nicht** → es ist die Länge des Blocks beziehungsweise die Adressen,
+  die sein Ende erreicht. Dann hat der Inhalt nie eine Rolle gespielt und die
+  Suche geht bei `$F7DB`–`$F7F3` weiter.
+
+Danach fliegen `sdcode_pad.s`, die Zeile in `common/makefile` und der
+`.forceimport` wieder raus.
+
 #### Die vollständige Liste der Zugriffspaare
 
 Nachdem das Scrollen als letztes umkippte — Text lief sauber bis zum unteren

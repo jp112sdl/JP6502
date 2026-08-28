@@ -133,7 +133,8 @@ COMMON_SOURCES=syscalls.s	\
 							gtx_stub.s    \
 							parse.s       \
 							menu.s        \
-							sd.s
+							sd.s          \
+							sdcode_pad.s
 
 
 COMMON_OBJECTS=$(COMMON_SOURCES:%.s=$(COMMON_BUILD_FOLDER)/%.o)
