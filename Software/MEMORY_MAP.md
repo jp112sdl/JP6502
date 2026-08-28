@@ -203,20 +203,18 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E35F` | 96 | frei |
-| `$E360` | `$E446` | 231 | `VDPCODE` — die VDP-Routinen, um genau einen Takt verschoben (Versuch, siehe 5.5) |
-| `$E447` | `$E6FF` | 697 | frei |
+| `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
-| `$EC00` | `$F364` | 1893 | `SDCODE` — 206 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F365` | `$F7FF` | 1179 | frei |
+| `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F37E` | `$F7FF` | 1154 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$F90B` | 12 | `EXTCODE2` — `gtx_stub.s`, die vier Durchreichen für ROMs ohne Bitmap |
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4994 Bytes von 24576.
+ROM frei gesamt 5200 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -228,20 +226,18 @@ ROM frei gesamt 4994 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E35F` | 86 | frei — hier lag `RODATA_PA`, siehe 5.4 |
-| `$E360` | `$E446` | 231 | `VDPCODE` — die VDP-Routinen, um genau einen Takt verschoben (Versuch, siehe 5.5) |
-| `$E447` | `$E6FF` | 697 | frei |
+| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — 25 Bytes Füller, Rumpf von `db6502_sdbasic.s`, `CLS`, 206 Bytes Füller anstelle des VDP-Kaltstarts (beides Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 25 Bytes Füller (Versuch, siehe 5.5), getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1261 Bytes von 24576.
+ROM frei gesamt 1467 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -914,12 +910,49 @@ Befehlsfolge. Die vier geänderten Bytes sind `$EBFF`→`$EC18`, `$4D`→`$66` u
 genau die Adressen der mitgewanderten Statements. Das Werkzeug kann eine
 Adresstabelle nicht von Code unterscheiden; hier ist es von Hand geprüft.
 
-* **Zeichenschrott** → der erste Fehlschlag ist erklärt, und die Regel heißt
-  nicht mehr „`SDCODE` nicht anfassen", sondern „diesen einen Rumpf nicht
-  verschieben".
-* **sauberes Bild** → dann bewegt sich jeder Bewohner einzeln gefahrlos, und der
-  erste Fehlschlag lag daran, dass mehrere es gleichzeitig taten. Übrig bleibt
-  dann nur noch die Frage, was an `$FEB7` besonders ist.
+Gebrannt, viermal kalt gestartet: **sauberes Bild.**
+
+#### Alle Bewohner sind einzeln unbedenklich
+
+| Verschoben | Ergebnis |
+|---|---|
+| alle vier Bewohner um 25 Bytes | **kaputt** |
+| nur die VDP-Routinen, nach `$FEB7` | **kaputt** |
+| nur die VDP-Routinen, nach `$E45D` | gut |
+| nur die VDP-Routinen, nach `$E360` | gut |
+| nur `libfat32`, um 25 Bytes | gut |
+| nur der BASIC-SD-Rumpf, um 25 Bytes | gut |
+
+Damit ist die Aufteilung nach Bewohnern zu Ende erzählt, ohne etwas erklärt zu
+haben. Kein einzelner Umzug schadet. Zwei Konfigurationen schaden trotzdem.
+
+Was auffällt, wenn man die fünf Adressen des VDP-Blocks nach dem niederwertigen
+Byte sortiert — und es ist nicht mehr als eine Auffälligkeit bei fünf Punkten:
+
+| Basis | nied. Byte | Seitengrenze bei Blockoffset | Ergebnis |
+|---|---|---|---|
+| `$F05D` | `$5D` | `+$0A3` | gut |
+| `$E45D` | `$5D` | `+$0A3` | gut |
+| `$E360` | `$60` | `+$0A0` | gut |
+| `$F076` | `$76` | `+$08A` | **kaputt** |
+| `$FEB7` | `$B7` | `+$049` | **kaputt** |
+
+#### Der Brand, der den ersten Fehlschlag erklärt oder umwirft
+
+`$F076` ist die Adresse, die die VDP-Routinen im allerersten Fehlschlag hatten,
+und sie sind dort nie allein gewesen. Genau das holt dieser Brand nach: 25 Bytes
+Füller ans *Ende* des msbasic-Anteils, also zwischen den BASIC-SD-Rumpf und die
+VDP-Routinen. Der SD-Rumpf bleibt damit auf `$EC00` — von 1117 Bytes ändern sich
+vier, alle in einem absoluten Operanden —, die VDP-Routinen landen auf `$F076`,
+und `libfat32` rückt 25 Bytes hoch, was nachweislich harmlos ist.
+
+* **Zeichenschrott** → der erste Fehlschlag ist erklärt: es waren die
+  VDP-Routinen auf `$F076`, nicht das gleichzeitige Verschieben. Dann gibt es
+  gute und schlechte Adressen für diesen Block, und die Tabelle oben ist die
+  Spur, der man mit weiteren Basisadressen nachgeht.
+* **sauberes Bild** → dann schadet keine der beiden Zutaten für sich, und der
+  erste Fehlschlag lag am Zusammenspiel. Übrig bliebe allein `$FEB7`, und die
+  Frage wäre, was an dieser einen Adresse anders ist als an `$E360` und `$E45D`.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf

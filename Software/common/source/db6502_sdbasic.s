@@ -91,13 +91,6 @@ sd_decbuf32:    .res 10         ; sd_dec32 renders here
 ; same way. See MEMORY_MAP.md, section "SDCODE".
         .segment "SDCODE"
 
-; EXPERIMENT, not a permanent arrangement - MEMORY_MAP.md 5.5. Of the four
-; tenants of SDCODE this one - the BASIC SD statements and CLS - is the only
-; one that has never been moved on its own. These 25 bytes move it, and the
-; hole in vdp.s is 25 bytes smaller to match, so that libfat32 behind it keeps
-; its address and the VDP routines stay out at $E360.
-        .res    25, $EA
-
 ; ---------------------------------------------------------------------------
 ; "LOAD" statement
 ; ---------------------------------------------------------------------------
