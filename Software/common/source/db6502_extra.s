@@ -290,10 +290,13 @@ COLOR:
 ;   $2000-$37FF  colour        6144    foreground/background per 8x1 group
 ;   $3800-$3AFF  name           768    filled 0..255 three times, so that each
 ;                                      cell maps to its own pattern
-;   $3B00-$3B7F  sprite attributes
-;   $3C00-$3FFF  sprite patterns
+;   $3B00-$3B7F  sprite attributes, first Y byte set to $D0 so none are shown
+;   $1800-$1FFF  free, and the only 2 KB hole a sprite pattern table can use
 ;
-; That is 16 KB exactly, so sprites are still on the table later.
+; Sprite patterns have to start on a 2 KB boundary, which rules out the space
+; behind the name table: $3C00 is not a legal base and register 6 would round it
+; down to $3800, on top of the name table. The gap between the bitmap and the
+; colour table is the one that fits.
 ;
 ; Setting it up writes 13056 bytes into VRAM, about 260 ms. The wait between
 ; accesses is not optional - see vdp_write_address in vdp.s.
@@ -349,6 +352,19 @@ screen_gfx:
         bne     @byte
         dex
         bne     @pass
+
+        ; No sprites. The attribute table sits above everything filled above, so
+        ; without this it holds whatever the VRAM came up with and the chip
+        ; cheerfully displays 32 of them at random positions out of whatever the
+        ; pattern base points at - which is what a black screen covered in
+        ; debris looks like. $D0 in the first sprite's Y byte ends the list and
+        ; turns all of them off.
+        ldy     #$00
+        lda     #$3B | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        lda     #$D0
+        sta     VDP_VRAM
+        jsr     vdp_wait
 
         ; Filling takes about a quarter of a second, and the register table
         ; above leaves the screen blanked so that quarter second is not spent
@@ -414,7 +430,7 @@ gfx_register_inits:
         .byte   $FF                     ; colour table $2000, nothing masked
         .byte   $03                     ; bitmap $0000, nothing masked
         .byte   $76                     ; sprite attributes $3B00
-        .byte   $07                     ; sprite patterns $3C00
+        .byte   $03                     ; sprite patterns $1800
         .byte   $01                     ; black backdrop
 gfx_register_inits_end:
 

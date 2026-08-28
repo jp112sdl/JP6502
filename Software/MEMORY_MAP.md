@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FA9C` | 413 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
-| `$FA9D` | `$FFF9` | 1373 | frei |
+| `$F900` | `$FAAB` | 428 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
+| `$FAAC` | `$FFF9` | 1358 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1601 Bytes von 24576.
+ROM frei gesamt 1586 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

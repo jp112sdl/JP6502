@@ -623,9 +623,13 @@ example above draws in about a fifteenth of a second and filling the whole scree
 would take ten. `SCREEN 1` itself writes 13056 bytes and takes about a quarter of a second,
 with the screen blanked while it does.
 
-The VRAM layout is the usual full-screen bitmap: 6144 bytes for the bitmap, 6144 for the
-colour table, 768 for the name table, and the sprite tables still fit in what is left of the
-16 KB.
+The VRAM layout is the usual full-screen bitmap: 6144 bytes for the bitmap at $0000, 6144 for
+the colour table at $2000, 768 for the name table at $3800. Sprites are switched off by putting
+$D0 in the first sprite's Y byte - the attribute table is not part of what `SCREEN 1` fills, and
+an uninitialised one has the chip drawing 32 sprites out of whatever the VRAM came up with. The
+2 KB hole between the bitmap and the colour table, $1800-$1FFF, is where a sprite pattern table
+would have to go: those need a 2 KB boundary, so the space behind the name table cannot hold
+one.
 
 ### Cold start and warm start
 
