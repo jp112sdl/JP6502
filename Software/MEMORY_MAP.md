@@ -946,13 +946,82 @@ VDP-Routinen. Der SD-Rumpf bleibt damit auf `$EC00` — von 1117 Bytes ändern s
 vier, alle in einem absoluten Operanden —, die VDP-Routinen landen auf `$F076`,
 und `libfat32` rückt 25 Bytes hoch, was nachweislich harmlos ist.
 
-* **Zeichenschrott** → der erste Fehlschlag ist erklärt: es waren die
-  VDP-Routinen auf `$F076`, nicht das gleichzeitige Verschieben. Dann gibt es
-  gute und schlechte Adressen für diesen Block, und die Tabelle oben ist die
-  Spur, der man mit weiteren Basisadressen nachgeht.
-* **sauberes Bild** → dann schadet keine der beiden Zutaten für sich, und der
-  erste Fehlschlag lag am Zusammenspiel. Übrig bliebe allein `$FEB7`, und die
-  Frage wäre, was an dieser einen Adresse anders ist als an `$E360` und `$E45D`.
+Gebrannt, viermal kalt gestartet: **viermal Zeichenschrott.**
+
+Der erste Fehlschlag ist damit erklärt, und zwar durch die Adresse allein. Es
+gibt gute und schlechte Adressen für diesen Block:
+
+| Adresse des VDP-Blocks | Ergebnis |
+|---|---|
+| `$F05D` | gut |
+| `$E45D` | gut |
+| `$E360` | gut |
+| `$F076` | **kaputt** |
+| `$FEB7` | **kaputt** |
+
+#### Was das über den Adressdekoder sagt — und was nicht
+
+Die naheliegende Vermutung ist ein falsch aufgebauter Dekoder: irgendein
+ROM-Bereich, der nebenbei auch den VDP selektiert, so dass allein das Holen von
+Befehlen dort Zugriffe auslöst, die niemand programmiert hat. Das passt zur
+Beobachtung — und wird von ihr trotzdem ausgeschlossen. Die laufende Lage
+`$F05D`–`$F143` und die kaputte `$F076`–`$F15C` **teilen sich 206 ihrer 231
+Bytes**. Dieselben Adressen, entgegengesetztes Ergebnis. Es kann also nicht
+sein, dass diese Adressen an sich vergiftet sind; es kommt darauf an, welcher
+Befehl auf welcher Adresse liegt.
+
+Was davon übrig bleibt, ist die dynamische Variante, und die ist gut möglich.
+Der 6502 legt in dem Takt nach einem Schreibzugriff bereits die Adresse des
+nächsten Befehls auf den Bus. Wird die Auswahl für `$8080` allein aus Gattern
+gebildet und nicht sauber mit φ2 verriegelt, kann dieser Übergang einen kurzen
+Störimpuls auf der Auswahl erzeugen — einen Zugriff, den niemand programmiert
+hat. Ob er entsteht, hängt vom Bitmuster der als Nächstes geholten Adresse ab,
+also davon, wo der Code liegt. Genau das Verhalten, das gemessen wurde.
+
+Am Aufbau nachzusehen wäre demnach:
+
+1. Ist die Auswahl des VDP mit φ2 (oder einem daraus gebildeten Strobe)
+   verriegelt, oder hängt sie nur an Adressleitungen?
+2. Wie vollständig ist dekodiert? Eine Teil-Dekodierung über wenige Gatter
+   lässt breitere Störfenster zu als eine vollständige.
+3. Woraus entstehen `CSR`/`CSW`, und wie breit ist der Impuls?
+4. Laufzeit der Dekodierkette gegen die Adress-Vorhaltezeit des 6502.
+
+#### `rom/vdp_alias` — die Messung dazu
+
+Ein Oszilloskop ist dafür nicht nötig. Ein Störzugriff verstellt den
+VRAM-Zeiger, und das ist sichtbar: 256 bekannte Bytes aus einer Probe an einer
+bestimmten ROM-Adresse in den VDP schreiben, zurücklesen, zählen wie viele
+falsch ankommen. Verschiebt sich der Zeiger unterwegs, stimmt ab dort nichts
+mehr.
+
+Dieselbe 14 Byte lange Probe wird fünfmal gebunden, auf genau die fünf
+Adressen aus der Tabelle. Sie ist absichtlich in sich geschlossen: nach dem
+Schreibzugriff holt der Prozessor jedes weitere Byte aus der Probe selbst, so
+dass die einzige geprüfte Adresse ihre eigene ist. Vier `nop` geben dem Chip 19
+Takte zwischen zwei Schreibzugriffen — mehr als das Doppelte des Verlangten,
+denn um die acht Mikrosekunden geht es hier nicht.
+
+Die LCD-Ausgabe:
+
+```
+PRB 5A A5
+F05D 00 F076 00
+E360 00 E45D 00
+FEB7 00
+```
+
+`PRB 5A A5` heißt, dass der VRAM-Pfad überhaupt trägt; steht dort etwas
+anderes, ist der Rest wertlos. Danach fünf Zählerstände:
+
+* **überall `00`** → die Adresse des schreibenden Befehls ist es nicht, und der
+  Mechanismus sitzt woanders, als diese Messung reicht.
+* **`00` bei `$F05D`, `$E360`, `$E45D` und etwas anderes bei `$F076` und
+  `$FEB7`** → gefunden. Dann erzeugt der Aufbau Störzugriffe in Abhängigkeit
+  davon, welche Adresse als Nächstes geholt wird, und die Suche wandert von der
+  Software auf die Platine.
+* **überall ungleich `00`** → auch der Rücklesepfad ist betroffen; dann taugt
+  die Messung so nicht und braucht einen Zähler, der ohne VRAM auskommt.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf

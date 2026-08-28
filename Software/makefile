@@ -29,6 +29,7 @@ FIRMWARE_PROJECTS = blink_c				\
 					serial_test			\
 					serial_wdc			\
 					serial_wdc_irq		\
+					vdp_alias			\
 					vdp_diag			\
 
 LOADABLE_PROJECTS = d_pad_test			\
