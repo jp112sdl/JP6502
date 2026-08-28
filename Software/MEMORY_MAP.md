@@ -229,12 +229,12 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, `COLOR`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FEB7` | `$FFF9` | 323 | frei |
+| `$F900` | `$FE9D` | 1438 | `EXTCODE2` — `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FE9E` | `$FFF9` | 348 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
 ROM frei gesamt 1492 Bytes von 24576.
@@ -661,10 +661,22 @@ nachgemessen. Der Test dafür ist billig und naheliegend: `COLOR` zurück nach
 `SDCODE`, mit der getakteten Adresse an Bord. Läuft es dann, ist die Regel „nie
 in `SDCODE` einschieben" hinfällig und war immer nur ein Symptom.
 
-Ebenfalls offen und aus demselben Holz: das Makro `vdp_set_vram_addr` lässt rund
-**zwei** Mikrosekunden zwischen den Hälften. Erreicht wird es nur von
-`vdp_clear_screen`, also von `CLS` und sonst nichts, aber es ist die schlechteste
-Stelle im Baum.
+Ebenfalls aus demselben Holz: das Makro `vdp_set_vram_addr` ließ rund **zwei**
+Mikrosekunden zwischen den Hälften — die schlechteste verbliebene Stelle im
+Baum. Erreicht wird es nur von `vdp_clear_screen`, also von `CLS`.
+
+#### Beide Enden in einem Image, 25.08.2026
+
+Das Makro läuft jetzt über `vdp_write_address`, und `COLOR` ist zurück in
+`SDCODE`. `SDCODE` endet damit wieder auf **`$F7F3`** — genau der Adresse des
+Images, das seinerzeit den Zeichensatz zerstört hat, also der bestmögliche
+Vergleich.
+
+Die beiden Änderungen sind unabhängig genug, dass ein Fehlschlag zuzuordnen
+wäre: zerstörter Zeichensatz spricht für die `SDCODE`-Regel, ein kaputtes `CLS`
+für das Makro. `CODE` und `RODATA` bleiben byteidentisch — die zwei Bytes, die
+das Makro einspart, stehen als Füller hinter `vdp_enable_display`, damit dieser
+Brand genau zwei Variablen hat und keine dritte.
 
 ## 6. Kollisionen — Status
 

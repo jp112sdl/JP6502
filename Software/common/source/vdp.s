@@ -301,6 +301,12 @@ vdp_enable_display:
   pla
   rts
 
+; Filler for the two bytes vdp_set_vram_addr gave back when it went through the
+; paced write path. Keeping CODE the length it had leaves the image with exactly
+; the two changes the burn is meant to test. Never executed.
+  nop
+  nop
+
 
 ;------------------------------------------------------------------------------
 ;
