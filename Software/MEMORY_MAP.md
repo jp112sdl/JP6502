@@ -203,9 +203,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E45C` | 349 | frei |
-| `$E45D` | `$E543` | 231 | `VDPCODE` — die VDP-Routinen, seitenweise verschoben (Versuch, siehe 5.5) |
-| `$E544` | `$E6FF` | 444 | frei |
+| `$E300` | `$E35F` | 96 | frei |
+| `$E360` | `$E446` | 231 | `VDPCODE` — die VDP-Routinen, um genau einen Takt verschoben (Versuch, siehe 5.5) |
+| `$E447` | `$E6FF` | 697 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
@@ -228,9 +228,9 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E45C` | 339 | frei — hier lag `RODATA_PA`, siehe 5.4 |
-| `$E45D` | `$E543` | 231 | `VDPCODE` — die VDP-Routinen, seitenweise verschoben (Versuch, siehe 5.5) |
-| `$E544` | `$E6FF` | 444 | frei |
+| `$E30A` | `$E35F` | 86 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E360` | `$E446` | 231 | `VDPCODE` — die VDP-Routinen, um genau einen Takt verschoben (Versuch, siehe 5.5) |
+| `$E447` | `$E6FF` | 697 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
@@ -825,14 +825,52 @@ sich genau 20, und alle zwanzig sind ein hochwertiges Operandenbyte, das um
 `EXTCODE2` 33 statt 66 — die niederwertigen Hälften aller `jsr`-Operanden
 bleiben, wie sie waren.
 
-Die Lesart:
+Gebrannt, kalt gestartet: **sauberes Bild.**
 
-* **sauberes Bild** → das Zeitverhalten ist es. Der Code läuft hier Takt für
-  Takt wie im laufenden ROM, also kann nur das der Unterschied gewesen sein,
-  und die Suche geht zurück in die Zugriffspaare unten in diesem Abschnitt.
-* **Zeichenschrott** → das Zeitverhalten ist es *nicht*, denn es hat sich nicht
-  geändert. Dann hängt der 9918 an den Adressen selbst, und das ist eine Frage
-  an die Platine, nicht an den Assembler.
+Damit ist die zweite Familie erledigt. Der 9918 hängt nicht an den Adressen —
+er hängt an den Takten. Verschieben ist nur deshalb gefährlich, weil es die
+Taktzahl ändert.
+
+#### Welcher Takt
+
+Ein 6502 zahlt einen Takt extra für eine *genommene* Verzweigung über eine
+Seitengrenze. Im verschobenen Block stehen elf Verzweigungen, und für jede lässt
+sich ausrechnen, ob sie an einer gegebenen Basisadresse eine Seitengrenze
+kreuzt. Vier Basisadressen sind gebrannt, zwei liefen und zwei nicht:
+
+| Offset | Befehl | `$F05D` | `$F076` | `$FEB7` | `$E45D` |
+|---|---|---|---|---|---|
+| | | **gut** | **kaputt** | **kaputt** | **gut** |
+| `+$050` | `bne` | — | — | kreuzt | — |
+| `+$056` | `bne` | — | — | kreuzt | — |
+| `+$09E` | `bcc` | **kreuzt** | — | — | **kreuzt** |
+| `+$0A6` | `bne` | kreuzt | kreuzt | — | kreuzt |
+| übrige 7 | | — | — | — | — |
+
+Genau eine Zeile passt auf gut/kaputt/kaputt/gut, und es ist `+$09E`. Der Befehl
+dort ist `bcc @up` in `vdp_boot_init`, der Sprung, der genommen wird, wenn
+`vdp_alive` durchgekommen ist. In beiden laufenden ROMs kreuzt er eine
+Seitengrenze und kostet einen Takt mehr, in beiden kaputten tut er das nicht.
+
+Das ist ein Verdacht, keine Messung — elf Verzweigungen, vier Datenpunkte, eine
+passende Zeile kann Zufall sein. Also wird er geprüft.
+
+#### Der Test: eine einzige Verzweigung, ein einziger Takt
+
+`VDPCODE` liegt jetzt auf `$E360`. Diese Adresse ist so gewählt, dass von den elf
+Verzweigungen **genau eine** ihr Verhalten gegenüber dem laufenden ROM ändert,
+nämlich `+$09E`, und alle anderen ihre Taktzahl behalten. Tabellenzugriffe im
+Block zeigen auf `RODATA`, das unbewegt ist, also ändert sich auch dort nichts.
+Der gesamte Unterschied zum funktionierenden ROM ist **ein Takt auf dem Pfad,
+auf dem `vdp_boot_init` den Bildschirm für gut erklärt.**
+
+* **Zeichenschrott** → der Takt ist es, an dieser einen Stelle. Dann ist der
+  Fehler nach Monaten auf einen Befehl eingegrenzt, und die Abhilfe steht
+  daneben: den Pfad so bauen, dass er die Taktzahl nicht von der Adresse
+  bezieht.
+* **sauberes Bild** → die Korrelation war Zufall. Dann bleiben `+$050`, `+$056`
+  und `+$0A6` als Kandidaten, und dieselbe Rechnung liefert für jeden davon eine
+  Basisadresse, die ihn allein herausgreift.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
