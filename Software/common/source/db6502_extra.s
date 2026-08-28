@@ -1309,20 +1309,27 @@ gtx_write_string:
         ldx     vdp_buffer_address+1
         jmp     vdp_write_string
 @graphics:
+        phy                             ; the caller's index, same as above
         ldy     #$00
 @next:
         lda     (vdp_buffer_address),y
         beq     @done
-        phy
         jsr     gtx_write_char
-        ply
         iny
         bne     @next
 @done:
+        ply
         rts
 
-; Draws A into the cell at gtx_col/gtx_row without moving the cursor
+; Draws A into the cell at gtx_col/gtx_row without moving the cursor.
+;
+; Y has to come back untouched. tty_write_byte saves X around the echo and not
+; Y, and tty_read_line is sitting there with its buffer index in Y - the
+; routines this layer replaced happened to leave Y alone, so nothing ever said
+; so out loud. Getting it wrong corrupts the line as it is typed and every
+; input comes back as ?SN ERROR.
 gtx_render:
+        phy
         and     #$7f                    ; the font holds 128 shapes
         sta     gtx_src                 ; character * 8 into the font
         stz     gtx_src+1
@@ -1372,6 +1379,7 @@ gtx_render:
         jsr     vdp_wait
         dey
         bne     @colour
+        ply
         rts
 
 .zeropage

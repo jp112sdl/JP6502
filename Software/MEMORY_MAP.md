@@ -215,11 +215,11 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FEAC` | 1453 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FEAD` | `$FFF9` | 333 | frei |
+| `$F900` | `$FEAE` | 1455 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FEAF` | `$FFF9` | 331 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 527 Bytes von 24576.
+ROM frei gesamt 525 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
