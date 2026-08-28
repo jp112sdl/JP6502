@@ -204,8 +204,8 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4BC` | 437 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
-| `$E4BD` | `$E4FF` | 67 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4B6` | 431 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` ist bei 253 von maximal 256 Bytes, siehe 5.3 |
+| `$E4B7` | `$E4FF` | 73 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
@@ -217,7 +217,7 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$FB8C` | `$FFF9` | 1134 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1356 Bytes von 24576.
+ROM frei gesamt 1362 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -465,6 +465,50 @@ empirische Regel, keine Erklärung. Wer sie knacken will, hat jetzt einen
 billigen Aufhänger: dasselbe ROM mit Füllbytes am **Anfang** von `SDCODE`, in
 Schritten zwischen +37 und +62, und schauen, wo genau es kippt. Die Schwelle
 verrät die Adresse, und die Adresse verrät den Mechanismus.
+
+### 5.3 Die harte Grenze: `BAS_KEY` darf nicht über 256 Bytes
+
+Nicht der Platz im ROM ist das knappste Budget für neue Befehle, sondern die
+Schlüsselworttabelle. `program.s` läuft sie an zwei Stellen mit einem **8-Bit-Y**
+ab — der Vergleich bei `L2498` und der Sprung über das gerade gescheiterte
+Schlüsselwort bei `L24DB`. Jedes Byte der Tabelle muss also mit einem
+Indexregister von `TOKEN_NAME_TABLE` aus erreichbar sein, **die abschließende
+Null eingeschlossen**.
+
+Bei 257 Bytes liegt diese Null auf Offset 256. Y läuft auf null über, der Scan
+beginnt wieder beim ersten Schlüsselwort und findet nie ein Ende: die Maschine
+hängt beim **ersten ENTER**, weil das der erste Moment ist, in dem überhaupt
+etwas tokenisiert wird. Bis dahin läuft alles normal, inklusive Startbild und
+LCD-Panel — das Fehlerbild sieht deshalb nach allem Möglichen aus, nur nicht
+nach einer Tabelle, die ein Byte zu lang ist.
+
+Genau das ist am 25.08.2026 mit `LINE` passiert. Die Tabelle stand auf 257.
+
+**Was dagegen jetzt im Build steht:**
+
+```ca65
+.import __BAS_KEY_SIZE__
+.assert __BAS_KEY_SIZE__ <= 256, lderror, "BAS_KEY is past 256 bytes ..."
+```
+
+Ein Verstoß ist damit ein Linkfehler und keine hängende Maschine mehr. Geprüft,
+indem ein Wegwerf-Schlüsselwort eingefügt und der Build zum Scheitern gebracht
+wurde.
+
+**Woher der Platz kam.** `NULL` ist aus der Tabelle geflogen, `CONFIG_NULL`
+bleibt aber definiert, damit die Routine ihren Platz in `CODE` behält — genau
+die Konstruktion, die `flow1.s` für CBM1 schon beschreibt. `NULL n` bestimmte,
+wie viele Nullbytes nach jedem Wagenrücklauf gesendet werden, eine Krücke für
+mechanische Fernschreiber. Sechs Bytes einer Tabelle, die keine mehr hatte.
+
+Dass Tokennummern sich dabei verschieben, ist folgenlos: `SAVE` schreibt ein
+Listing im Klartext auf die Karte und `LOAD` tokenisiert es neu.
+
+**Stand: 253 von 256 Bytes.** Drei Bytes. Der nächste Befehl passt nicht mehr —
+`CIRCLE` allein bräuchte acht. Wer weitermachen will, muss vorher die drei
+Indizierungen in `program.s` auf 16 Bit bringen, und das ist Chirurgie am
+empfindlichsten Code im ROM: `CODE` darf dabei seine Länge nicht ändern, siehe
+5.2.3.
 
 ## 6. Kollisionen — Status
 

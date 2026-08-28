@@ -434,6 +434,13 @@ reads the BPB again for the fields the boot-time init does not keep.
 Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 `?DIRECTORY FULL`, `?WRITE ERROR`, `?CARD ERROR`.
 
+**Adding a statement is capped by the keyword table, not by ROM space.** `program.s` walks it
+with an 8-bit index, so it cannot exceed 256 bytes including its terminator - at 257 the
+terminator becomes unreachable, the scan runs forever and the machine hangs on the first ENTER,
+with everything up to that point looking perfectly healthy. It stands at 253. A linker assert
+now fails the build rather than letting it reach a chip. Section 5.3 of MEMORY_MAP.md has the
+details and what would have to be done to lift the limit.
+
 **If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
 of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
 `common/source/libfat32.s` are deliberately linked into their own ROM block `SDCODE` at `$ec00`

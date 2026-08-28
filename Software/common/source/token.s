@@ -31,9 +31,12 @@
 .endif
 		keyword_rts "STOP", STOP
 		keyword_rts "ON", ON
-.ifdef CONFIG_NULL
-		keyword_rts "NULL", NULL
-.endif
+; NULL is deliberately not in the table any more, while CONFIG_NULL stays
+; defined so its routine keeps its place in CODE - the arrangement flow1.s
+; already describes for CBM1. It set the count of null bytes sent after every
+; carriage return, a timing crutch for mechanical teletypes, and it was costing
+; six bytes of a table that had run out of them. See the assert at the end of
+; this file.
 .ifdef KBD
 		keyword_rts "PLOD", PLOD
 		keyword_rts "PSAV", PSAV
@@ -201,6 +204,17 @@ UNFNC_ATN:
 .else
         .segment "BAS_VEC"
 .endif
+; The tokenizer walks this table with an 8-bit Y - the compare at L2498 in
+; program.s and the scan at L24DB that steps over the keyword it just failed on.
+; Every byte of it therefore has to be reachable from TOKEN_NAME_TABLE through
+; one index register, the terminating zero included. At 257 bytes that zero sits
+; at offset 256, Y wraps round to nought, the scan starts over from the first
+; keyword and never finds an end: the machine hangs on the first ENTER. That is
+; what adding LINE did on 2026-08-25, and nothing in the build said a word about
+; it, so now something does.
+.import __BAS_KEY_SIZE__
+.assert __BAS_KEY_SIZE__ <= 256, lderror, "BAS_KEY is past 256 bytes and the tokenizer cannot index it - shorten or drop a keyword"
+
 MATHTBL:
         .byte   $79
         .word   FADDT-1
