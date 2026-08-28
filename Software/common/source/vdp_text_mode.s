@@ -188,6 +188,7 @@ load_vram_char_position:
       .scope
       pha
       phx
+      phy
 
       lda #0
       sta vdp_vram_address+1
@@ -207,12 +208,23 @@ no_carry:
       bne next_line
 
 done:
-      sta VDP_REG
-  
+      ; Through the paced path rather than two stores at the control port. Those
+      ; put the two halves of the address nine cycles apart and the chip asks
+      ; for eight - one microsecond of margin, on the hottest path in the
+      ; machine, and it is set up again for every single character. When the
+      ; second half is not taken the character lands somewhere else, and when a
+      ; data write is not taken it does not land at all: single letters missing
+      ; or displaced out of an otherwise correct line. vdp_write_address leaves
+      ; sixteen microseconds.
+      ;
+      ; The three bytes this costs come out of the two stores it replaces, so
+      ; CODE keeps its length - MEMORY_MAP.md 5.2.3.
+      tay
       lda vdp_vram_address+1
-      ora #VDP_WRITE_VRAM_SELECT      
-      sta VDP_REG
+      ora #VDP_WRITE_VRAM_SELECT
+      jsr vdp_write_address
 
+      ply
       plx
       pla
       rts
