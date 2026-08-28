@@ -306,14 +306,22 @@ COLOR:
 GFX_BITMAP_HI   = $00                   ; bitmap at $0000
 GFX_COLOR_HI    = $20                   ; colour table at $2000
 GFX_NAME_HI     = $38                   ; name table at $3800
+GFX_SPRATTR_HI  = $3B                   ; sprite attributes at $3B00
+GFX_SPRPAT_HI   = $18                   ; sprite patterns at $1800
+SPRITE_COUNT    = 32
+SPRITE_PARKED_Y = $D1                   ; off the bottom without ending the list
+SPRITE_END_Y    = $D0                   ; the value that would end it
 GFX_DEFAULT_COL = $F1                   ; white on black, the whole screen
 
 SCREEN:
         jsr     GETBYT                  ; mode -> X
         cpx     #$02
-        bcs     SCREEN_RANGE
+        bcc     @mode_ok
+        jmp     IQERR
+@mode_ok:
         txa
-        beq     screen_text
+        bne     screen_gfx
+        jmp     screen_text
 
 ; --- graphics ---------------------------------------------------------------
 screen_gfx:
@@ -326,15 +334,28 @@ screen_gfx:
         bne     @regs
 
         ; bitmap: every pixel off
+        lda     #$18                    ; 6144 bytes
+        sta     gfx_count+1
         ldy     #$00
         lda     #GFX_BITMAP_HI | VDP_WRITE_VRAM_SELECT
         ldx     #$00
         jsr     gfx_fill
 
         ; colour: every group white on black
+        lda     #$18
+        sta     gfx_count+1
         ldy     #$00
         lda     #GFX_COLOR_HI | VDP_WRITE_VRAM_SELECT
         ldx     #GFX_DEFAULT_COL
+        jsr     gfx_fill
+
+        ; sprite patterns: blank, so a sprite placed before its shape has been
+        ; defined shows nothing rather than whatever the VRAM came up with
+        lda     #$08                    ; 2048 bytes
+        sta     gfx_count+1
+        ldy     #$00
+        lda     #GFX_SPRPAT_HI | VDP_WRITE_VRAM_SELECT
+        ldx     #$00
         jsr     gfx_fill
 
         ; name: 0..255, three times over, so each cell has its own pattern
@@ -353,18 +374,33 @@ screen_gfx:
         dex
         bne     @pass
 
-        ; No sprites. The attribute table sits above everything filled above, so
-        ; without this it holds whatever the VRAM came up with and the chip
-        ; cheerfully displays 32 of them at random positions out of whatever the
-        ; pattern base points at - which is what a black screen covered in
-        ; debris looks like. $D0 in the first sprite's Y byte ends the list and
-        ; turns all of them off.
+        ; Every sprite parked off the bottom of the screen. The attribute table
+        ; is above everything filled above, so left alone it holds whatever the
+        ; VRAM came up with and the chip cheerfully draws 32 sprites at random
+        ; positions - a black screen covered in debris, which is exactly how
+        ; this looked before it was written.
+        ;
+        ; Parked, not ended. A Y of $D0 stops the chip reading any further down
+        ; the table, so putting one in the first entry would turn every sprite
+        ; off for good and SPRITE 5 would do nothing. $D1 is one line lower:
+        ; off-screen, and the list carries on.
         ldy     #$00
-        lda     #$3B | VDP_WRITE_VRAM_SELECT
+        lda     #GFX_SPRATTR_HI | VDP_WRITE_VRAM_SELECT
         jsr     vdp_write_address
-        lda     #$D0
+        ldx     #SPRITE_COUNT
+@park:
+        lda     #SPRITE_PARKED_Y
         sta     VDP_VRAM
         jsr     vdp_wait
+        lda     #$00
+        sta     VDP_VRAM                ; x
+        jsr     vdp_wait
+        sta     VDP_VRAM                ; pattern
+        jsr     vdp_wait
+        sta     VDP_VRAM                ; colour
+        jsr     vdp_wait
+        dex
+        bne     @park
 
         ; Filling takes about a quarter of a second, and the register table
         ; above leaves the screen blanked so that quarter second is not spent
@@ -401,18 +437,13 @@ screen_text:
         stz     vdp_char_pos
         rts
 
-SCREEN_RANGE:
-        jmp     IQERR
-
-; Y/A = start address including the write select, X = value.
-; 6144 bytes - the count is the same idiom vdp_boot_clear uses, where the low
-; byte runs out first and 0 means a full 256.
+; Y/A = start address including the write select, X = value, gfx_count+1 = how
+; many 256 byte pages to write. The count is the idiom vdp_boot_clear uses,
+; where the low byte runs out first and zero means a full 256.
 gfx_fill:
         stx     gfx_value
         jsr     vdp_write_address
         stz     gfx_count
-        lda     #$18
-        sta     gfx_count+1
 @loop:
         lda     gfx_value
         sta     VDP_VRAM
@@ -1055,6 +1086,109 @@ circle_four:
         cmp     #$04
         bne     @combination
         rts
+
+; ----------------------------------------------------------------------------
+; "SPRITE" AND "VPOKE" STATEMENTS
+;
+;   SPRITE n, x, y, pattern, colour
+;   VPOKE address, value
+;
+; Sprites are 8x8 and unmagnified, which gives 256 patterns in the 2 KB at
+; $1800 and keeps a shape down to eight bytes - few enough to type by hand.
+; Register 1 bit 1 would make them 16x16 and bit 0 would double them in size;
+; both cost four patterns per sprite instead of one, so that is a decision for
+; whoever wants it rather than a default.
+;
+; n is 0 to 31, x and y are where the top left corner goes, pattern picks one of
+; the 256 shapes and colour is the same palette COLOR uses. A y of 192 or more
+; parks the sprite off the screen, which is how one is hidden.
+;
+; Two details of the chip leak through and are handled here rather than left to
+; the caller. A sprite appears one line below the y in its attribute entry, so
+; the stored value is one less than what was asked for - and y = 0 storing $FF
+; is not a wraparound but the correct way to show a sprite hanging off the top.
+; And a stored y of $D0 does not park a sprite, it tells the chip to stop
+; reading the table there, which would silently turn off every sprite after it;
+; that one value is pushed on by one.
+;
+; Only four sprites can share a scanline. The fifth and beyond simply are not
+; drawn, and no amount of software here changes that.
+;
+; VPOKE is the way shapes get into VRAM at all: POKE cannot reach it, for the
+; reason written up under COLOR. It writes one byte anywhere in the 16 KB, so it
+; also reaches the bitmap, the colour table and the attributes - useful, and
+; entirely capable of taking the display apart, exactly like POKE.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+SPRITE:
+        jsr     GETBYT                  ; which sprite
+        cpx     #SPRITE_COUNT
+        bcc     @n_ok
+        jmp     IQERR
+@n_ok:
+        stx     spr_n
+        jsr     COMBYTE                 ; x
+        stx     spr_x
+        jsr     COMBYTE                 ; y
+        stx     spr_y
+        jsr     COMBYTE                 ; pattern
+        stx     spr_pat
+        jsr     COMBYTE                 ; colour
+        txa
+        and     #$0f
+        sta     spr_col
+
+        lda     spr_n                   ; four bytes per entry
+        asl     a
+        asl     a
+        tay
+        lda     #GFX_SPRATTR_HI | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+
+        sec                             ; the chip draws a sprite one line down
+        lda     spr_y
+        sbc     #$01
+        cmp     #SPRITE_END_Y           ; and this one value ends the table
+        bne     @y_ok
+        lda     #SPRITE_END_Y+1
+@y_ok:
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        lda     spr_x
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        lda     spr_pat
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        lda     spr_col
+        sta     VDP_VRAM
+        jmp     vdp_wait
+
+VPOKE:
+        jsr     FRMNUM                  ; address, 0 to 16383
+        jsr     GETADR
+        jsr     COMBYTE                 ; value
+        stx     vpoke_value
+        lda     LINNUM+1
+        cmp     #$40                    ; past the end of the VRAM
+        bcc     @addr_ok
+        jmp     IQERR
+@addr_ok:
+        ldy     LINNUM
+        ora     #VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        lda     vpoke_value
+        sta     VDP_VRAM
+        jmp     vdp_wait
+
+.segment "BASBUF"
+spr_n:          .res 1
+spr_x:          .res 1
+spr_y:          .res 1
+spr_pat:        .res 1
+spr_col:        .res 1
+vpoke_value:    .res 1
 
 .segment "BASBUF"
 circle_cx:      .res 1

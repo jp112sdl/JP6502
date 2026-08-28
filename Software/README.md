@@ -439,7 +439,7 @@ Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 scan looped forever and the machine hung on the first ENTER, with everything up to that point
 looking perfectly healthy. The seven places that read it now carry a page alongside the index,
 so the cap is gone; section 5.3 of MEMORY_MAP.md has the mechanism. What is left as the real
-limit on new statements is the run-up to `RODATA_PA`, 59 bytes at the time of writing.
+limit on new statements is the run-up to `RODATA_PA`, 44 bytes at the time of writing.
 
 **If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
 of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
@@ -602,6 +602,9 @@ SCREEN 1            graphics, 256x192
 PLOT x, y, colour
 LINE x1, y1, x2, y2, colour
 CIRCLE x, y, radius, colour
+
+SPRITE n, x, y, pattern, colour
+VPOKE address, value
 ```
 
 `x` is 0 to 255, `y` is 0 to 191, `colour` is 0 to 15 out of the palette listed under
@@ -619,6 +622,36 @@ each horizontal run of eight pixels, not for each pixel. Plotting a red dot ther
 whatever else is already lit in the same group of eight. There is no way around it short of a
 full off-screen copy of the screen, and this machine has no 6 KB of RAM to spare for one. The
 background stays black, the way `SCREEN 1` leaves it.
+
+**Sprites** are 8x8 and unmagnified, which leaves 256 shapes in the 2 KB at $1800 and keeps one
+shape down to eight bytes. `n` is 0 to 31; `y` of 192 or more parks a sprite off the screen,
+which is how one is hidden. `SCREEN 1` parks all 32 and blanks the shapes, so nothing appears
+until you put it there.
+
+Shapes go in with `VPOKE`, one byte at a time, because `POKE` cannot reach VRAM at all - the
+reason is under `COLOR` above. Pattern `p` lives at `6144 + p*8`:
+
+```basic
+10 SCREEN 1
+20 FOR I=0 TO 7
+30 READ B : VPOKE 6144+I, B
+40 NEXT I
+50 DATA 60,126,219,255,189,195,102,0
+60 FOR X=0 TO 248
+70 SPRITE 0, X, 90, 0, 15
+80 NEXT X
+```
+
+`VPOKE` writes anywhere in the 16 KB of VRAM, so it also reaches the bitmap, the colour table
+and the sprite attributes. That is useful and it will take the display apart just as readily as
+`POKE` takes the machine apart.
+
+Two details of the chip are dealt with rather than passed on: a sprite appears one line below
+the `y` in its attribute entry, so the stored value is one less than you asked for; and a stored
+`y` of 208 tells the chip to stop reading the table there, which would silently switch off every
+sprite after it, so that one value is nudged by a line. What is not dealt with, because it
+cannot be, is that only four sprites are drawn on any one scanline. The fifth simply is not
+there.
 
 **The text console goes away while graphics is on.** The bitmap occupies the VRAM the font
 lives in, so the two cannot both exist. `SCREEN 1` takes the VDP out of the tty configuration

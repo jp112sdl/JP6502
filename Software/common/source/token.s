@@ -98,6 +98,8 @@
 		keyword_rts "PLOT", PLOT
 		keyword_rts "LINE", LINE
 		keyword_rts "CIRCLE", CIRCLE
+		keyword_rts "SPRITE", SPRITE
+		keyword_rts "VPOKE", VPOKE
 .endif
 
 		count_tokens
