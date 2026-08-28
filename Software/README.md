@@ -439,7 +439,7 @@ Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 scan looped forever and the machine hung on the first ENTER, with everything up to that point
 looking perfectly healthy. The seven places that read it now carry a page alongside the index,
 so the cap is gone; section 5.3 of MEMORY_MAP.md has the mechanism. What is left as the real
-limit on new statements is the run-up to `RODATA_PA`, 67 bytes at the time of writing.
+limit on new statements is the run-up to `RODATA_PA`, 59 bytes at the time of writing.
 
 **If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
 of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
@@ -601,6 +601,7 @@ SCREEN 1            graphics, 256x192
 
 PLOT x, y, colour
 LINE x1, y1, x2, y2, colour
+CIRCLE x, y, radius, colour
 ```
 
 `x` is 0 to 255, `y` is 0 to 191, `colour` is 0 to 15 out of the palette listed under
@@ -626,7 +627,18 @@ switches it back on. `SCREEN 0` typed blind is the way back, and so is the reset
 a power-on or a reset the console is always restored.
 
 `LINE` takes both endpoints inclusive and is Bresenham, so it never strays more than half a
-pixel from the true line. It costs the same per pixel as `PLOT`.
+pixel from the true line. `CIRCLE` is the midpoint algorithm and holds to the same half pixel.
+Both cost what `PLOT` costs, per pixel drawn.
+
+A circle may sit anywhere, including partly off the screen - it is clipped point by point and
+drawn as far as it fits. `CIRCLE x, y, 0, c` is one dot.
+
+```basic
+10 SCREEN 1
+20 FOR R=8 TO 88 STEP 8
+30 CIRCLE 128, 96, R, 15
+40 NEXT R
+```
 
 **Speed.** A single `PLOT` is a read-modify-write of the bitmap byte plus a write to the colour
 table, three VRAM addresses in all, about 250 µs. That is roughly 4000 pixels a second, so the

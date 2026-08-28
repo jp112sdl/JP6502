@@ -131,8 +131,8 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E4B` | 76 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …), `start_magic`, Zustand von `SCREEN`/`PLOT`/`LINE` |
-| `$0E4C` | `$0E81` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E00` | `$0E59` | 90 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …), `start_magic`, Zustand von `SCREEN`/`PLOT`/`LINE`/`CIRCLE` |
+| `$0E5A` | `$0E8F` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
 | `$0E69` | `$0EFB` | 147 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
@@ -204,8 +204,8 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4BC` | 437 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 257 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E4BD` | `$E4FF` | 67 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4C4` | 445 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 263 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4C5` | `$E4FF` | 59 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FBDB` | 732 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FBDC` | `$FFF9` | 1054 | frei |
+| `$F900` | `$FD21` | 1058 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FD22` | `$FFF9` | 728 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1276 Bytes von 24576.
+ROM frei gesamt 942 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -528,7 +528,9 @@ Auf der Hardware zeigt sie sich aber nur, wenn die Tabelle 256 Bytes
 überschreitet. Deshalb ist `NULL` wieder in der Tabelle: es kostet nichts, es
 war nur wegen dieser Grenze geflogen, und es bringt sie auf **genau 257 Bytes**
 — die Größe, bei der die Maschine vorher beim ersten ENTER stehenblieb. Ein
-Startvorgang mit angenommener Eingabe ist damit der Test.
+Startvorgang mit angenommener Eingabe ist damit der Test; auf der Platine
+bestätigt am 25.08.2026, inklusive `LIST`, `LOAD "$"` und einem geladenen und
+gestarteten Programm. `CIRCLE` hat die Tabelle danach auf 263 Bytes gebracht.
 
 Kosten: rund 25 Zyklen je gelesenem Tabellenbyte, also einige zehn Millisekunden
 für eine ganze Eingabezeile, einmal beim Drücken von ENTER.

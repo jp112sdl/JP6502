@@ -97,6 +97,7 @@
 		keyword_rts "SCREEN", SCREEN
 		keyword_rts "PLOT", PLOT
 		keyword_rts "LINE", LINE
+		keyword_rts "CIRCLE", CIRCLE
 .endif
 
 		count_tokens

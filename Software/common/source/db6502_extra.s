@@ -876,6 +876,199 @@ keyptr:         .res 2
 keyptrm1:       .res 2
 keylasty:       .res 1
 
+; ----------------------------------------------------------------------------
+; "CIRCLE" STATEMENT
+;
+;   CIRCLE x, y, radius, colour
+;
+; Midpoint circle: start at the top, walk an eighth of the way round, and mirror
+; every step into the other seven eighths. The decision variable only ever needs
+; adding to - no multiplication and no square root anywhere - which is what
+; makes it worth doing on this machine. The eighth ends at the diagonal, where
+; x meets y. Radius 0 draws the centre point and nothing else.
+;
+; f, ddx and ddy are 16-bit signed: with a radius of 255, ddy starts at -510 and
+; f swings a few hundred either way, so a byte will not hold them. x and y stay
+; single bytes.
+;
+; Every point is clipped rather than the circle as a whole. One that runs off
+; the screen has to be drawn as far as it fits, and off-screen coordinates are
+; not merely invisible here: a y above 191 would put the colour byte up in the
+; name table and take the display apart.
+;
+; Appended after the keyword table helpers so that everything already in
+; EXTCODE2 keeps its address - MEMORY_MAP.md 5.3 says why that is deliberate.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+CIRCLE:
+        jsr     GETBYT                  ; centre x
+        stx     circle_cx
+        jsr     COMBYTE                 ; centre y
+        cpx     #192
+        bcc     @y_ok
+        jmp     IQERR
+@y_ok:
+        stx     circle_cy
+        jsr     COMBYTE                 ; radius
+        stx     circle_r
+        jsr     COMBYTE                 ; colour
+        txa
+        and     #$0f
+        sta     plot_col
+
+        sec                             ; f = 1 - r
+        lda     #$01
+        sbc     circle_r
+        sta     cir_f
+        lda     #$00
+        sbc     #$00
+        sta     cir_f+1
+
+        lda     #$01                    ; ddx = 1
+        sta     cir_ddx
+        stz     cir_ddx+1
+
+        lda     circle_r                ; ddy = -2r
+        asl     a
+        sta     cir_ddy
+        lda     #$00
+        rol     a
+        sta     cir_ddy+1
+        sec
+        lda     #$00
+        sbc     cir_ddy
+        sta     cir_ddy
+        lda     #$00
+        sbc     cir_ddy+1
+        sta     cir_ddy+1
+
+        stz     cir_x
+        lda     circle_r
+        sta     cir_y
+
+        stz     circle_ox               ; the four points on the axes
+        lda     circle_r
+        sta     circle_oy
+        jsr     circle_four
+        lda     circle_r
+        sta     circle_ox
+        stz     circle_oy
+        jsr     circle_four
+
+@step:
+        lda     cir_x
+        cmp     cir_y
+        bcs     @done                   ; reached the diagonal
+
+        lda     cir_f+1                 ; f >= 0 ?
+        bmi     @f_negative
+        dec     cir_y
+        clc                             ; ddy += 2
+        lda     cir_ddy
+        adc     #$02
+        sta     cir_ddy
+        lda     cir_ddy+1
+        adc     #$00
+        sta     cir_ddy+1
+        clc                             ; f += ddy
+        lda     cir_f
+        adc     cir_ddy
+        sta     cir_f
+        lda     cir_f+1
+        adc     cir_ddy+1
+        sta     cir_f+1
+@f_negative:
+        inc     cir_x
+        clc                             ; ddx += 2
+        lda     cir_ddx
+        adc     #$02
+        sta     cir_ddx
+        lda     cir_ddx+1
+        adc     #$00
+        sta     cir_ddx+1
+        clc                             ; f += ddx
+        lda     cir_f
+        adc     cir_ddx
+        sta     cir_f
+        lda     cir_f+1
+        adc     cir_ddx+1
+        sta     cir_f+1
+
+        lda     cir_x                   ; the eight mirrored points
+        sta     circle_ox
+        lda     cir_y
+        sta     circle_oy
+        jsr     circle_four
+        lda     cir_y
+        sta     circle_ox
+        lda     cir_x
+        sta     circle_oy
+        jsr     circle_four
+        bra     @step
+@done:
+        rts
+
+; Plots the centre offset by circle_ox/circle_oy in all four sign combinations,
+; dropping any that leaves the screen. With an offset of zero the same point
+; comes up twice, which costs a little time and does no harm.
+circle_four:
+        stz     circle_sign
+@combination:
+        lda     circle_sign
+        and     #$01
+        bne     @x_minus
+        clc
+        lda     circle_cx
+        adc     circle_ox
+        bcs     @next                   ; off the right edge
+        bra     @x_ok
+@x_minus:
+        sec
+        lda     circle_cx
+        sbc     circle_ox
+        bcc     @next                   ; off the left edge
+@x_ok:
+        sta     plot_x
+
+        lda     circle_sign
+        and     #$02
+        bne     @y_minus
+        clc
+        lda     circle_cy
+        adc     circle_oy
+        bcs     @next
+        bra     @y_ok
+@y_minus:
+        sec
+        lda     circle_cy
+        sbc     circle_oy
+        bcc     @next
+@y_ok:
+        cmp     #192                    ; below the bottom line
+        bcs     @next
+        sta     plot_y
+        jsr     plot_pixel
+@next:
+        inc     circle_sign
+        lda     circle_sign
+        cmp     #$04
+        bne     @combination
+        rts
+
+.segment "BASBUF"
+circle_cx:      .res 1
+circle_cy:      .res 1
+circle_r:       .res 1
+circle_ox:      .res 1
+circle_oy:      .res 1
+circle_sign:    .res 1
+cir_x:          .res 1
+cir_y:          .res 1
+cir_f:          .res 2
+cir_ddx:        .res 2
+cir_ddy:        .res 2
+
 
 .segment "BASBUF"
 start_magic:    .res START_MAGIC_LEN
