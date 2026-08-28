@@ -91,6 +91,7 @@
 		keyword_rts "COLOR", COLOR
 		keyword_rts "SCREEN", SCREEN
 		keyword_rts "PLOT", PLOT
+		keyword_rts "LINE", LINE
 .endif
 
 		count_tokens

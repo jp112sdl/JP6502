@@ -593,6 +593,7 @@ SCREEN 0            back to text, 40x24
 SCREEN 1            graphics, 256x192
 
 PLOT x, y, colour
+LINE x1, y1, x2, y2, colour
 ```
 
 `x` is 0 to 255, `y` is 0 to 191, `colour` is 0 to 15 out of the palette listed under
@@ -617,11 +618,20 @@ and leaves output going to the serial port and the LCD; `SCREEN 0` reloads the f
 switches it back on. `SCREEN 0` typed blind is the way back, and so is the reset button - after
 a power-on or a reset the console is always restored.
 
+`LINE` takes both endpoints inclusive and is Bresenham, so it never strays more than half a
+pixel from the true line. It costs the same per pixel as `PLOT`.
+
 **Speed.** A single `PLOT` is a read-modify-write of the bitmap byte plus a write to the colour
 table, three VRAM addresses in all, about 250 µs. That is roughly 4000 pixels a second, so the
-example above draws in about a fifteenth of a second and filling the whole screen dot by dot
-would take ten. `SCREEN 1` itself writes 13056 bytes and takes about a quarter of a second,
-with the screen blanked while it does.
+example above draws in about a fifteenth of a second, a full width `LINE` takes about 64 ms,
+and filling the whole screen dot by dot would take ten seconds. `SCREEN 1` itself writes 13056
+bytes and takes about a quarter of a second, with the screen blanked while it does.
+
+Runs of eight pixels that fall inside one byte could be written whole - two VRAM addresses
+instead of twenty-four, worth roughly a factor of thirteen on horizontal lines. That is not
+implemented. It is not as simple as it sounds: in this mode consecutive bytes are eight
+addresses apart rather than adjacent, so it does not fall out of the VDP's auto-increment and
+needs its own path with masked ends.
 
 The VRAM layout is the usual full-screen bitmap: 6144 bytes for the bitmap at $0000, 6144 for
 the colour table at $2000, 768 for the name table at $3800. Sprites are switched off by putting

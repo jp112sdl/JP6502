@@ -471,6 +471,9 @@ PLOT:
         and     #$0f
         sta     plot_col
 
+; Draws the pixel at plot_x/plot_y in plot_col. LINE below drives this directly
+; with the coordinates already in place, which is why it is a label of its own.
+plot_pixel:
         lda     plot_y
         lsr     a
         lsr     a
@@ -537,7 +540,162 @@ PLOT:
 @done:
         rts
 
+; ----------------------------------------------------------------------------
+; "LINE" STATEMENT
+;
+;   LINE x1, y1, x2, y2, colour
+;
+; Same ranges and the same colour rules as PLOT, endpoints included.
+;
+; Bresenham, in the form that keeps the error term in one byte. The axis that
+; moves further becomes the one stepped every time round; the error starts at
+; half that distance and has the shorter distance taken off it each step,
+; borrowing a step on the other axis and adding the longer distance back
+; whenever it goes negative. Because the error never leaves 0..dmajor and both
+; distances fit in a byte, none of it needs 16-bit arithmetic.
+;
+; The two directions are written out separately rather than folded into one loop
+; through a pair of "which coordinate am I stepping" variables. It costs about
+; forty bytes and removes the indirection that would otherwise sit in the middle
+; of the hot loop.
+;
+; Speed is whatever PLOT costs, once per pixel: about 250 us, so a full width
+; line takes around 64 ms. Runs of eight pixels that fall inside one byte could
+; be written whole - two VRAM addresses instead of twenty-four - which would be
+; worth roughly a factor of thirteen on horizontal lines. That is not in here;
+; the addresses of consecutive bytes in this mode are eight apart rather than
+; adjacent, so it does not fall out of the auto-increment and needs its own
+; path with masked ends.
+; ----------------------------------------------------------------------------
+
+LINE:
+        jsr     GETBYT                  ; x1
+        stx     plot_x
+        jsr     COMBYTE                 ; y1
+        cpx     #192
+        bcc     @y1_ok
+        jmp     IQERR
+@y1_ok:
+        stx     plot_y
+        jsr     COMBYTE                 ; x2
+        stx     line_x2
+        jsr     COMBYTE                 ; y2
+        cpx     #192
+        bcc     @y2_ok
+        jmp     IQERR
+@y2_ok:
+        stx     line_y2
+        jsr     COMBYTE                 ; colour
+        txa
+        and     #$0f
+        sta     plot_col
+
+        sec                             ; dx and the direction to walk it
+        lda     line_x2
+        sbc     plot_x
+        bcs     @x_forward
+        eor     #$ff                    ; borrowed, so negate for the distance
+        adc     #$01                    ; carry is clear here, this adds one
+        ldy     #$ff
+        bra     @x_done
+@x_forward:
+        ldy     #$01
+@x_done:
+        sta     line_dx
+        sty     line_sx
+
+        sec                             ; and the same for y
+        lda     line_y2
+        sbc     plot_y
+        bcs     @y_forward
+        eor     #$ff
+        adc     #$01
+        ldy     #$ff
+        bra     @y_done
+@y_forward:
+        ldy     #$01
+@y_done:
+        sta     line_dy
+        sty     line_sy
+
+        lda     line_dx
+        cmp     line_dy
+        bcc     line_steep
+
+; --- flatter than 45 degrees: x moves every step ----------------------------
+        sta     line_count
+        lsr     a
+        sta     line_err
+@shallow:
+        jsr     plot_pixel
+        lda     line_count
+        beq     @shallow_done
+        dec     line_count
+
+        lda     line_err
+        sec
+        sbc     line_dy
+        bcs     @no_y_step
+        adc     line_dx                 ; carry clear, so this is plus dx
+        pha
+        lda     plot_y
+        clc
+        adc     line_sy
+        sta     plot_y
+        pla
+@no_y_step:
+        sta     line_err
+        lda     plot_x
+        clc
+        adc     line_sx
+        sta     plot_x
+        bra     @shallow
+@shallow_done:
+        rts
+
+; --- steeper than 45 degrees: y moves every step ----------------------------
+line_steep:
+        lda     line_dy
+        sta     line_count
+        lsr     a
+        sta     line_err
+@steep:
+        jsr     plot_pixel
+        lda     line_count
+        beq     @steep_done
+        dec     line_count
+
+        lda     line_err
+        sec
+        sbc     line_dx
+        bcs     @no_x_step
+        adc     line_dy
+        pha
+        lda     plot_x
+        clc
+        adc     line_sx
+        sta     plot_x
+        pla
+@no_x_step:
+        sta     line_err
+        lda     plot_y
+        clc
+        adc     line_sy
+        sta     plot_y
+        bra     @steep
+@steep_done:
+        rts
+
 .segment "BASBUF"
+line_x2:        .res 1
+line_y2:        .res 1
+line_dx:        .res 1
+line_dy:        .res 1
+line_sx:        .res 1
+line_sy:        .res 1
+line_err:       .res 1
+line_count:     .res 1
+
 gfx_tty_saved:  .res 1                  ; tty_config as it was before SCREEN 1
 gfx_value:      .res 1
 gfx_count:      .res 2
