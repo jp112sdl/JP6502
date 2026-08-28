@@ -16,6 +16,7 @@
         .include "banner.inc"
 
         .import _start_msbasic
+        .import gtx_tty_init
 
         .segment "VECTORS"
 
@@ -37,7 +38,10 @@ reset:
         ; banner on the VDP that the previous standalone ROM printed
         write_lcd #ms_basic
         lda #(TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_VDP)
-        jsr _tty_init
+        ; gtx_tty_init is _tty_init with the graphics-text flag cleared first.
+        ; Same three bytes at this call site, because standalone.o sits ahead of
+        ; every library module and must not change length - MEMORY_MAP.md 5.2.3
+        jsr gtx_tty_init
         writeln_tty #ms_basic
         ; Enter BASIC. It returns when the EXIT command is used; without an
         ; operating system to return to, start over.

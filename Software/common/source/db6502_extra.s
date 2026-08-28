@@ -12,11 +12,13 @@
       .include "vdp_text_mode.inc"
       .include "vdp.inc"
       .include "vdp_const.inc"
+      .import _tty_init
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
 ;      .import ACIA_STATUS_RX_FULL
       .export _start_msbasic
+      .export gtx_tty_init
       .export gtx_write_char
       .export gtx_write_string
       .export gtx_newline
@@ -1245,6 +1247,23 @@ KEYFN:
 GTX_COLUMNS     = 32
 GTX_ROWS        = 24
 GTX_COLOUR      = GFX_DEFAULT_COL       ; white on black, as SCREEN 1 leaves it
+
+; Called in place of _tty_init from standalone.s, which is the last moment
+; before anything is printed.
+;
+; BASBUF is deliberately never zeroed - that is the whole reason start_magic can
+; tell a reset from a power-on - so gtx_active holds whatever the SRAM came up
+; with until something writes it, and in 255 cases out of 256 that is "graphics
+; is on". The sign-on banner then went through the bitmap renderer while the
+; machine was in text mode, straight across the font at $0800, and the first
+; thing on the screen after a power-on was rubbish. SCREEN 1 followed by
+; SCREEN 0 reloaded the font and cleared the flag, which is why it cured itself
+; and stayed cured.
+;
+; start_select clears it too, but that runs after the banner.
+gtx_tty_init:
+        stz     gtx_active
+        jmp     _tty_init
 
 ; A = character
 gtx_write_char:

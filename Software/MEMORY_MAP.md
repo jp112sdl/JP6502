@@ -150,6 +150,25 @@ und alles, was dort hinzukommt, verschiebt die Variablen von `sd.s` — womit si
 Operanden im bereits verifizierten `CODE` ändern würden. `db6502_sdbasic.s` prüft per
 `.assert`, dass `BASBUF` nicht über `INPUTBUFFER-4` hinauswächst.
 
+**`BASBUF` wird nie genullt, und das ist Absicht.** Genau darauf beruht
+`start_magic`: eine Signatur, die einen Reset von einem Einschalten
+unterscheidet, funktioniert nur, wenn niemand die Seite beim Start löscht.
+Der Preis ist, dass **jede** neue Variable hier nach dem Einschalten Zufall
+enthält, bis etwas sie schreibt — und eine Variable, die Verhalten steuert,
+steuert es dann in 255 von 256 Fällen falsch.
+
+Zweimal zugeschlagen: `_start_msbasic` setzt `sd_loadmode` und `sd_savemode`
+von Hand auf null, mit genau dieser Begründung im Kommentar. Und `gtx_active`,
+das entscheidet, ob Zeichen in die Bitmap gehen, wurde am 25.08.2026 zwar in
+`start_select` genullt — aber `standalone.s` druckt den Banner davor, und der
+lief damit quer über den Zeichensatz. Seitdem hängt das Nullen an
+`gtx_tty_init`, das anstelle von `_tty_init` gerufen wird, also vor dem ersten
+ausgegebenen Zeichen.
+
+Wer hier etwas anlegt, das gelesen wird, bevor es geschrieben wurde, muss sich
+überlegen, wo es initialisiert wird — und ob diese Stelle wirklich vor der
+ersten Benutzung liegt.
+
 ---
 
 ## 4. USERRAM / Ladebereich — `$1000`–`$7FFF`
@@ -215,11 +234,11 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FEAE` | 1455 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FEAF` | `$FFF9` | 331 | frei |
+| `$F900` | `$FEB4` | 1461 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FEB5` | `$FFF9` | 325 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 525 Bytes von 24576.
+ROM frei gesamt 519 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
