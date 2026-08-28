@@ -203,18 +203,20 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E6FF` | 1024 | frei |
+| `$E300` | `$E45C` | 349 | frei |
+| `$E45D` | `$E543` | 231 | `VDPCODE` — die VDP-Routinen, seitenweise verschoben (Versuch, siehe 5.5) |
+| `$E544` | `$E6FF` | 444 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
-| `$EC00` | `$F396` | 1943 | `SDCODE` — getakteter VDP-Kaltstart, 25 Bytes Füller (Gegenprobe, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F397` | `$F7FF` | 1129 | frei |
+| `$EC00` | `$F37D` | 1918 | `SDCODE` — 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F37E` | `$F7FF` | 1154 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$F90B` | 12 | `EXTCODE2` — `gtx_stub.s`, die vier Durchreichen für ROMs ohne Bitmap |
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5175 Bytes von 24576.
+ROM frei gesamt 4969 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -226,18 +228,20 @@ ROM frei gesamt 5175 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E30A` | `$E45C` | 339 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E45D` | `$E543` | 231 | `VDPCODE` — die VDP-Routinen, seitenweise verschoben (Versuch, siehe 5.5) |
+| `$E544` | `$E6FF` | 444 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, 25 Bytes Füller (Gegenprobe, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1467 Bytes von 24576.
+ROM frei gesamt 1261 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -781,17 +785,54 @@ Ton nichts zu tun. Ergebnis:
 * Nur der allozierende Schreibpfad aus `libfat32.s` rückt von `$F144` auf
   `$F15D`, und `EXTCODE` bekommt die vier zugehörigen Operanden.
 
+Gebrannt, kalt gestartet: **sauberes Bild.**
+
+Damit ist es abgeschlossen. `libfat32` darf sich bewegen, die VDP-Routinen
+dürfen es nicht, und es sind 231 Bytes, um die es geht:
+
+| Routine | Datei |
+|---|---|
+| `vdp_wait`, `vdp_write_address`, `vdp_write_register` | `vdp.s` |
+| `vdp_boot_registers`, `vdp_boot_patterns`, `vdp_boot_clear`, `vdp_boot_enable` | `vdp.s` |
+| `vdp_boot_init`, `vdp_alive` | `vdp_text_mode.s` |
+
+Alles, was den Bildschirm aufsetzt. Nichts sonst.
+
+#### Der Schnitt danach: seitenweise verschieben
+
+Die Frage ist jetzt nicht mehr *welcher* Code, sondern *warum überhaupt*. Zwei
+Familien von Erklärungen bleiben übrig, und ein einziger Brand trennt sie:
+
+* **Zeitverhalten.** Ein 6502 zahlt für einen genommenen Sprung über eine
+  Seitengrenze einen Takt extra, ebenso für indizierte Zugriffe über eine
+  Seitengrenze. Verschiebt man Code um einen beliebigen Betrag, ändert sich, wo
+  diese Grenzen fallen — und damit der Abstand zwischen zwei Zugriffen auf den
+  Steuerport.
+* **Adressen.** Irgendetwas an der Dekodierung oder an der Elektrik reagiert
+  darauf, welche Adressleitungen während der Befehlsholung wechseln, während
+  der 9918 selektiert ist oder gerade war.
+
+Verschiebt man die Routinen um **ganze Seiten**, bleibt die erste Familie
+unberührt: die niederwertigen Adressbytes sind dieselben, jede Verzweigung
+kreuzt genau die Seitengrenzen, die sie heute kreuzt, und der Code läuft Takt
+für Takt identisch. Nur `A8`–`A15` sind andere.
+
+Deshalb `VDPCODE` auf `$E45D` — dasselbe niederwertige Byte wie das heutige
+`$F05D`, exakt zwölf Seiten tiefer, in dem Loch, in dem früher `RODATA_PA` lag.
+Der Linker bestätigt die Absicht: von den 231 Bytes des Blocks unterscheiden
+sich genau 20, und alle zwanzig sind ein hochwertiges Operandenbyte, das um
+`$0C00` kleiner geworden ist. In `CODE` ändern sich 6 Bytes statt 12, in
+`EXTCODE2` 33 statt 66 — die niederwertigen Hälften aller `jsr`-Operanden
+bleiben, wie sie waren.
+
 Die Lesart:
 
-* **sauberes Bild** → bewiesen: es sind die VDP-Routinen und nur sie. Damit ist
-  die Frage nicht mehr „welcher Block", sondern „warum reagiert der 9918 auf
-  die Adresse von Code, den er gar nicht sieht" — und die Antwort liegt dann
-  eher im Zeitverhalten oder in der Elektrik als im Linker.
-* **wieder Zeichenschrott** → die Aufteilung nach Bewohnern führt in die Irre.
-  Dann ist es nicht *welcher* Code verschoben wird, sondern dass in `SDCODE`
-  überhaupt etwas an eine andere Adresse rückt, und der nächste Schritt wäre,
-  denselben Füller in `EXTCODE` und in `CODE` zu wiederholen, um zu sehen, ob
-  der Block wirklich etwas Besonderes ist.
+* **sauberes Bild** → das Zeitverhalten ist es. Der Code läuft hier Takt für
+  Takt wie im laufenden ROM, also kann nur das der Unterschied gewesen sein,
+  und die Suche geht zurück in die Zugriffspaare unten in diesem Abschnitt.
+* **Zeichenschrott** → das Zeitverhalten ist es *nicht*, denn es hat sich nicht
+  geändert. Dann hängt der 9918 an den Adressen selbst, und das ist eine Frage
+  an die Platine, nicht an den Assembler.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
