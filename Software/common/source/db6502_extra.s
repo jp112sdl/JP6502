@@ -1182,6 +1182,43 @@ VPOKE:
         sta     VDP_VRAM
         jmp     vdp_wait
 
+; ----------------------------------------------------------------------------
+; "KEY" FUNCTION
+;
+;   A = KEY(0)
+;
+; The code of a key if one is waiting, zero if none is. It does not wait, which
+; is the entire point: INPUT holds the machine until ENTER, so without this
+; nothing written in BASIC can steer a sprite, poll for a fire button or offer a
+; way out of a loop.
+;
+; The argument is required by the way MS-BASIC dispatches functions and is
+; ignored - KEY(0) reads the way RND(0) does.
+;
+; Upstream has GET for this, but CONFIG_SMALL leaves its routine out of the
+; build entirely, so bringing the keyword back would mean compiling the routine
+; and growing CODE - the one change this board does not survive, MEMORY_MAP.md
+; 5.2.3. MONRDKEY already returns carry clear when nothing is waiting, so doing
+; it here instead costs ten bytes.
+;
+; A function rather than a GET-style statement because assigning to a variable
+; needs PTRGET and the rest of the assignment path, which is a great deal more
+; code for no more capability.
+;
+; The keyword goes in before LEFT$ on purpose. UNARY tells the string functions
+; from the plain ones by whether the token is below TOKEN_LEFTSTR, so anything
+; added after MID$ would be dispatched as if it took three arguments.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+KEYFN:
+        jsr     MONRDKEY
+        bcs     @waiting
+        lda     #$00
+@waiting:
+        tay
+        jmp     SNGFLT                  ; Y into FAC as 0 to 255
+
 .segment "BASBUF"
 spr_n:          .res 1
 spr_x:          .res 1

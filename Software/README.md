@@ -439,7 +439,7 @@ Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 scan looped forever and the machine hung on the first ENTER, with everything up to that point
 looking perfectly healthy. The seven places that read it now carry a page alongside the index,
 so the cap is gone; section 5.3 of MEMORY_MAP.md has the mechanism. What is left as the real
-limit on new statements is the run-up to `RODATA_PA`, 44 bytes at the time of writing.
+limit on new statements is the run-up to `RODATA_PA`, 39 bytes at the time of writing.
 
 **If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
 of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
@@ -692,6 +692,32 @@ an uninitialised one has the chip drawing 32 sprites out of whatever the VRAM ca
 2 KB hole between the bitmap and the colour table, $1800-$1FFF, is where a sprite pattern table
 would have to go: those need a 2 KB boundary, so the space behind the name table cannot hold
 one.
+
+### The `KEY` function
+
+```basic
+A = KEY(0)
+```
+
+The code of a key if one is waiting, zero if none is. It does not wait, which is the whole
+point: `INPUT` holds the machine until ENTER, so without this nothing written in BASIC can
+steer a sprite, poll for a fire button, or offer a way out of a loop.
+
+The argument is required by the way MS-BASIC dispatches functions and is ignored, the same way
+`RND(0)` reads.
+
+Both the serial port and the PS/2 keyboard feed it. Print the codes to find out what your
+keyboard sends:
+
+```basic
+10 K=KEY(0)
+20 IF K>0 THEN PRINT K
+30 GOTO 10
+```
+
+Upstream MS-BASIC has `GET` for this, but `CONFIG_SMALL` leaves its routine out of the build
+entirely, so restoring the keyword would mean compiling the routine and growing `CODE` - see
+section 5.2.3 of MEMORY_MAP.md for why that is the one change to avoid.
 
 ### Cold start and warm start
 

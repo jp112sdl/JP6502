@@ -204,8 +204,8 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4D3` | 460 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 274 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E4D4` | `$E4FF` | 44 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4D8` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4D9` | `$E4FF` | 39 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FDD5` | 1238 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FDD6` | `$FFF9` | 548 | frei |
+| `$F900` | `$FDE0` | 1249 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FDE1` | `$FFF9` | 537 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 747 Bytes von 24576.
+ROM frei gesamt 731 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

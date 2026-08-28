@@ -191,6 +191,7 @@ UNFNC_ATN:
 		keyword_addr "VAL", VAL
 		keyword_addr "ASC", ASC
 		keyword_addr "CHR$", CHRSTR
+		keyword_addr "KEY", KEYFN
 		keyword_addr "LEFT$", LEFTSTR, TOKEN_LEFTSTR
 		keyword_addr "RIGHT$", RIGHTSTR
 		keyword_addr "MID$", MIDSTR
