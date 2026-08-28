@@ -287,6 +287,11 @@ vdp_name_table_loop:
 ;
 ; Enable Display
 ;
+; WARNING: the two control port writes below are two cycles apart and the chip
+; asks for eight. Nothing calls this - the boot and SCREEN 0 both go through
+; vdp_boot_enable, which is paced. Reaching for this one brings back the fault
+; of 25.08.2026, see MEMORY_MAP.md 5.5.
+;
 ;------------------------------------------------------------------------------
 vdp_enable_display:
   pha
@@ -301,11 +306,13 @@ vdp_enable_display:
   pla
   rts
 
-; Filler for the two bytes vdp_set_vram_addr gave back when it went through the
-; paced write path. Keeping CODE the length it had leaves the image with exactly
-; the two changes the burn is meant to test. Never executed.
+; Filler for the bytes the paced write path gave back - two from
+; vdp_set_vram_addr and two from each of the buffer routines above. Keeping CODE
+; the length it had is what lets romcheck show a change as operands rather than
+; as every library module moving. Never executed.
+  .repeat 6
   nop
-  nop
+  .endrepeat
 
 
 ;------------------------------------------------------------------------------
@@ -329,13 +336,13 @@ vdp_vram_read_buffer:
   bcc no_readaddress_carry
   inc vdp_vram_address+1 
 no_readaddress_carry:
-  sta VDP_REG                   ; Write LSB of address
-  
+  tay                           ; LSB of the address
+
   lda #>VDP_NAME_TABLE_BASE
   clc
   adc vdp_vram_address+1
   ora #VDP_READ_VRAM_SELECT
-  sta VDP_REG                   ; Write MSB of address
+  jsr vdp_write_address         ; paced - the two stores were nine cycles apart
 
   ldy #0                         ; starting read position
   ldx #0
@@ -381,13 +388,13 @@ vdp_vram_write_buffer:
   bcc no_carry
   inc vdp_vram_address+1 
 no_carry:
-  sta VDP_REG
-  
+  tay                           ; LSB of the address
+
   lda #>VDP_NAME_TABLE_BASE
   clc
   adc vdp_vram_address+1
   ora #VDP_WRITE_VRAM_SELECT
-  sta VDP_REG
+  jsr vdp_write_address         ; paced - see the read path above
 
   ldy #0                                    ; low byte
   ldx #0                                    ; high byte

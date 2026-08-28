@@ -689,6 +689,32 @@ des Rumpfes; läuft es auch dann nicht, liegt es an der Länge des Blocks.
 **Arbeitsregel, unverändert:** neue Statements nach `EXTCODE2`. `SDCODE` und
 `EXTCODE` sind für Einschübe gesperrt.
 
+#### Die vollständige Liste der Zugriffspaare
+
+Nachdem das Scrollen als letztes umkippte — Text lief sauber bis zum unteren
+Rand, dann nur noch Müll — ist der Baum einmal komplett durchgesehen. Jedes Paar
+von Schreibzugriffen auf den Steuerport `$8081`, mit dem Abstand zwischen den
+beiden Buszugriffen bei 1 MHz:
+
+| Stelle | vorher | Stand |
+|---|---|---|
+| `vdp_write_register` | 16 µs | getaktet, war immer so |
+| `vdp_write_address` | 16 µs | getaktet, war immer so |
+| `load_vram_char_position` | **9 µs** | getaktet 25.08. — jedes ausgegebene Zeichen |
+| `vdp_set_vram_addr` (Makro) | **2 µs** | getaktet 25.08. — nur `CLS` |
+| `vdp_vram_read_buffer` | **9 µs** | getaktet 25.08. — Scrollen |
+| `vdp_vram_write_buffer` | **9 µs** | getaktet 25.08. — Scrollen |
+| `vdp_init_text_mode` | 4 µs | tot, im Code gewarnt |
+| `vdp_enable_display` | 2 µs | tot, im Code gewarnt |
+
+Gefordert sind acht. Die beiden toten Routinen sind nur deshalb tot, weil der
+Kaltstart und `SCREEN 0` über `vdp_boot_registers` und `vdp_boot_enable` gehen,
+die von Anfang an getaktet waren — wer sie wieder anfasst, holt den Fehler
+zurück, und beide tragen jetzt einen Warnkommentar.
+
+Damit gibt es im Baum keinen ungetakteten Zugriff mehr, den irgendetwas
+aufruft.
+
 #### Das Makro, allein
 
 `vdp_set_vram_addr` läuft jetzt über `vdp_write_address`. Zusammen mit dem
