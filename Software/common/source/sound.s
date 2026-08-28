@@ -298,3 +298,21 @@ song:
     .byte C5_BYTE_1,C5_BYTE_2 ; snow
 
 ; .endif
+;------------------------------------------------------------------------------
+;
+; EXPERIMENT, not a permanent arrangement - MEMORY_MAP.md 5.5.
+;
+; This has nothing to do with sound. It is here because ld65 lays a segment out
+; in module order, and sound.o is the module directly behind vdp_text_mode.o
+; and in front of sd.o. Filler at this point therefore leaves the BASIC SD
+; statements and both VDP blocks byte for byte where they are, and moves the
+; allocating write path out of libfat32.s - and nothing else - 25 bytes up.
+;
+; That is the mirror image of the previous burn, which moved the VDP routines
+; and held libfat32 still. A clean screen here settles it.
+;
+;------------------------------------------------------------------------------
+
+      .segment "SDCODE"
+
+      .res 25, $EA

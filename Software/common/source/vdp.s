@@ -443,20 +443,7 @@ no_writechar_carry:
 ;
 ;------------------------------------------------------------------------------
 
-; EXPERIMENT, not a permanent arrangement. MEMORY_MAP.md 5.5 asks which tenant
-; of SDCODE is the one that must not move. This build moves the VDP routines -
-; the ones below plus vdp_boot_init and vdp_alive in vdp_text_mode.s - out to
-; the free tail of EXTCODE2, and leaves filler behind so that everything else
-; in SDCODE keeps the address it had. The BASIC SD statements at the front of
-; the block do not move, and libfat32 behind the filler does not move either.
-; If the screen comes up wrecked, the VDP routines are the sensitive tenant.
-; If it comes up clean, they are not, and libfat32 is the one left to test.
       .segment "SDCODE"
-
-SDCODE_VDP_HOLE = $E7                   ; vdp.o $83 + vdp_text_mode.o $64
-      .res SDCODE_VDP_HOLE, $EA
-
-      .segment "EXTCODE2"
 
 ; 16 cycles including the call, against the 8 us the chip asks for at 1 MHz
 vdp_wait:

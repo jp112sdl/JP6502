@@ -206,15 +206,15 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
-| `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
-| `$F37E` | `$F7FF` | 1154 | frei |
+| `$EC00` | `$F396` | 1943 | `SDCODE` — getakteter VDP-Kaltstart, 25 Bytes Füller (Gegenprobe, siehe 5.5) und der allozierende Schreibpfad aus `libfat32.s` |
+| `$F397` | `$F7FF` | 1129 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` (feste Sprungtabelle für Loadables) |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$F9F2` | 243 | `EXTCODE2` — `gtx_stub.s`, die vier Durchreichen für ROMs ohne Bitmap, dazu die VDP-Routinen aus dem Versuch in 5.5 |
-| `$F9F3` | `$FFF9` | 1543 | frei |
+| `$F900` | `$F90B` | 12 | `EXTCODE2` — `gtx_stub.s`, die vier Durchreichen für ROMs ohne Bitmap |
+| `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4969 Bytes von 24576.
+ROM frei gesamt 5175 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -229,15 +229,15 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, 25 Bytes Füller (Gegenprobe, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FF9D` | 1694 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, dazu die VDP-Routinen aus dem Versuch in 5.5, siehe 5.1.1 und 5.3 |
-| `$FF9E` | `$FFF9` | 92 | frei |
+| `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1261 Bytes von 24576.
+ROM frei gesamt 1467 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -749,17 +749,49 @@ Stelle in `SDCODE` bleiben 231 Bytes `.res` stehen. Ergebnis laut Linker:
 * `EXTCODE2` wächst um dieselben 231 Bytes, sein bisheriger Inhalt bleibt an
   Ort und Stelle (33 Operanden zeigen woanders hin).
 
-Damit bewegt dieser Brand als einziges die Routinen, die den Bildschirm
-aufsetzen. Die Lesart ist eindeutig:
+Damit bewegte dieser Brand als einziges die Routinen, die den Bildschirm
+aufsetzen. Gebrannt, kalt gestartet: **Zeichenschrott, und manchmal überhaupt
+kein Bild.**
 
-* **Zeichenschrott** → die VDP-Routinen sind der empfindliche Bewohner.
-* **sauberes Bild** → sie sind es nicht, und `libfat32` ist der letzte
-  Verdächtige, den derselbe Trick spiegelverkehrt prüft.
+Das ist mehr, als die bisherigen Fehlbilder gezeigt haben. Kein Bild heißt, dass
+`vdp_boot_init` seine zwanzig Versuche leer durchläuft: `vdp_alive` schreibt
+zwei Bytes nach `$3FFE`, liest sie zurück und prüft das Rahmen-Flag im
+Statusregister, und wenn das zwanzigmal nacheinander scheitert, gibt die Routine
+absichtlich auf und lässt den Schirm dunkel. Der Chip antwortet in diesen Fällen
+also gar nicht mehr, statt nur falsch zu zeichnen.
 
-Der Versuch steckt in `common/source/vdp.s` und `common/source/vdp_text_mode.s`,
-in beiden Fällen als getauschte `.segment`-Direktive plus dem `.res`-Loch, und
-ist mit einem `git revert` wieder weg. `EXTCODE2` hat danach nur noch 92 Bytes
-frei — solange der Versuch läuft, passt dort nichts Neues mehr hinein.
+**Die 231 Bytes VDP-Code allein genügen für den Fehler.** Nicht die 3035 Bytes
+des ganzen Blocks, nicht `libfat32`, nicht der SD-Rumpf von BASIC.
+
+#### Die Gegenprobe: nur `libfat32` wandert
+
+Ein Verdächtiger, der beim Verschieben kaputtgeht, ist erst dann einer, wenn die
+anderen es beim Verschieben nicht tun. Der Spiegelversuch ist billiger als der
+erste, weil `SDCODE` hinten 37 freie Bytes hat und deshalb wachsen darf:
+
+25 Bytes Füller kommen zwischen `vdp_text_mode.o` und `sd.o` zu liegen. `ld65`
+ordnet ein Segment in Modulreihenfolge, und `sound.o` ist genau das Modul
+dazwischen — deshalb steht der `.res` in `common/source/sound.s` und hat mit
+Ton nichts zu tun. Ergebnis:
+
+* `CODE`, `RODATA`, `BAS_*`, `EXTCODE2`, `SYSCALLS`, `VECTORS` — **identisch**.
+* `SDCODE` `$EC00`–`$F143` — **identisch**, bis auf vier `jsr`-Operanden, die
+  auf `libfat32` zeigen. Der SD-Rumpf von BASIC und **beide VDP-Blöcke stehen
+  Byte für Byte auf ihren alten Adressen**, `vdp_wait` weiterhin auf `$F05D`.
+* Nur der allozierende Schreibpfad aus `libfat32.s` rückt von `$F144` auf
+  `$F15D`, und `EXTCODE` bekommt die vier zugehörigen Operanden.
+
+Die Lesart:
+
+* **sauberes Bild** → bewiesen: es sind die VDP-Routinen und nur sie. Damit ist
+  die Frage nicht mehr „welcher Block", sondern „warum reagiert der 9918 auf
+  die Adresse von Code, den er gar nicht sieht" — und die Antwort liegt dann
+  eher im Zeitverhalten oder in der Elektrik als im Linker.
+* **wieder Zeichenschrott** → die Aufteilung nach Bewohnern führt in die Irre.
+  Dann ist es nicht *welcher* Code verschoben wird, sondern dass in `SDCODE`
+  überhaupt etwas an eine andere Adresse rückt, und der nächste Schritt wäre,
+  denselben Füller in `EXTCODE` und in `CODE` zu wiederholen, um zu sehen, ob
+  der Block wirklich etwas Besonderes ist.
 
 **Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
 zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
