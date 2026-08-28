@@ -6,6 +6,14 @@
         .include "utils.inc"
         .include "macros.inc"
         .include "vdp_text_mode.inc"
+        ; Every VDP output call goes through the gtx_* layer in db6502_extra.s,
+        ; which sends the character to the bitmap while SCREEN 1 is up and hands
+        ; it straight back to the routine named here otherwise. The call sites
+        ; keep their three bytes, so CODE keeps its length - MEMORY_MAP.md 5.2.3
+        .import gtx_write_char
+        .import gtx_write_string
+        .import gtx_newline
+        .import gtx_backspace
         .include "blink.inc"
 
         .export _tty_init
@@ -163,7 +171,7 @@ _tty_write:
         and #TTY_CONFIG_OUTPUT_VDP
         beq @skip_vdp
         tya
-        jsr vdp_write_string
+        jsr gtx_write_string
 
 @skip_vdp:
         ply
@@ -233,7 +241,7 @@ tty_write_byte:
         and #TTY_CONFIG_OUTPUT_VDP
         beq @skip_vdp
         txa
-        jsr vdp_write_char
+        jsr gtx_write_char
 
 @skip_vdp:
         ; either way, restore character
@@ -320,7 +328,7 @@ _tty_send_newline:
         lda tty_config
         and #TTY_CONFIG_OUTPUT_VDP
         beq @skip_vdp
-        jsr vdp_newline
+        jsr gtx_newline
 
 @skip_vdp:
         pla
@@ -366,7 +374,7 @@ _tty_send_character:
         and #TTY_CONFIG_OUTPUT_VDP
         beq @skip_vdp
         tya
-        jsr vdp_write_char
+        jsr gtx_write_char
 @skip_vdp:
         ply
         rts
@@ -405,7 +413,7 @@ tty_send_backspace:
         lda tty_config
         and #TTY_CONFIG_OUTPUT_VDP
         beq @skip_vdp
-        jsr vdp_backspace
+        jsr gtx_backspace
 
 @skip_vdp:
         pla

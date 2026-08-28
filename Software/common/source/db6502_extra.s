@@ -17,6 +17,10 @@
       .import ACIA_DATA
 ;      .import ACIA_STATUS_RX_FULL
       .export _start_msbasic
+      .export gtx_write_char
+      .export gtx_write_string
+      .export gtx_newline
+      .export gtx_backspace
 
 .segment "CODE"
 
@@ -409,26 +413,17 @@ screen_gfx:
         ldx     #VDP_REGISTER_1
         jsr     vdp_write_register
 
-        ; The console has nowhere to go now. gfx_tty_saved doubles as the flag
-        ; for "graphics is on", so a second SCREEN 1 must not overwrite the
-        ; setting it is holding with the one it already switched the VDP out of.
-        lda     gfx_tty_saved
-        bne     @already_saved
-        lda     tty_config
-        sta     gfx_tty_saved
-@already_saved:
-        lda     tty_config
-        and     #<~(TTY_CONFIG_OUTPUT_VDP)
-        sta     tty_config
+        ; The console stays on the VDP; gtx_write_char and its neighbours put
+        ; characters into the bitmap for as long as this flag is set.
+        lda     #$01
+        sta     gtx_active
+        stz     gtx_col
+        stz     gtx_row
         rts
 
 ; --- back to text -----------------------------------------------------------
 screen_text:
-        lda     gfx_tty_saved
-        beq     @nothing_saved
-        sta     tty_config
-        stz     gfx_tty_saved
-@nothing_saved:
+        stz     gtx_active
         jsr     vdp_boot_registers      ; the text mode register table
         jsr     vdp_boot_patterns       ; the font the bitmap overwrote
         jsr     vdp_boot_clear
@@ -727,7 +722,6 @@ line_sy:        .res 1
 line_err:       .res 1
 line_count:     .res 1
 
-gfx_tty_saved:  .res 1                  ; tty_config as it was before SCREEN 1
 gfx_value:      .res 1
 gfx_count:      .res 2
 plot_x:         .res 1
@@ -764,9 +758,9 @@ plot_nmask:     .res 1
 START_MAGIC_LEN = 6
 
 start_select:
-        ; BASBUF holds whatever the SRAM came up with, and SCREEN 0 would write
-        ; that straight into tty_config
-        stz     gfx_tty_saved
+        ; BASBUF holds whatever the SRAM came up with, and a stray value here
+        ; would have the console drawing into a bitmap that is not there
+        stz     gtx_active
 
         ldx     #START_MAGIC_LEN-1
 @test:
@@ -1218,6 +1212,175 @@ KEYFN:
 @waiting:
         tay
         jmp     SNGFLT                  ; Y into FAC as 0 to 255
+
+; ----------------------------------------------------------------------------
+; TEXT IN GRAPHICS MODE
+;
+; SCREEN 1 used to take the VDP out of tty_config, which left the machine
+; drawing pictures and typing blind. The bitmap occupies the VRAM the font lives
+; in, so the two cannot both be the screen - but the font is still in the ROM,
+; and drawing a character into the bitmap eight bytes at a time is cheap.
+;
+; The five places in tty.s that reached for the VDP now call in here. Each was a
+; three byte jsr and still is, so CODE keeps its length. While gtx_active is
+; clear every one of them hands straight back to the routine it used to call.
+;
+; A character cell falls out of the bitmap layout very neatly. The byte holding
+; pixel (x,y) is at high = y>>3, low = (x & $F8) | (y & 7), so for a cell at
+; column c and row r the eight rows are high = r, low = c*8 + 0..7 - eight
+; consecutive addresses. One address written, eight bytes out, and the colour
+; cell is the same offsets again with $20 added to the high byte.
+;
+; 32 columns by 24 rows, against 40 by 24 in text mode. The colour is written as
+; well as the shape, so text stays readable over whatever was drawn there; that
+; costs a second address and doubles the time, and it is worth it.
+;
+; What it does not do is scroll. Moving the bitmap up by a row means shifting
+; 23 rows of 256 bytes through the VRAM twice over, about half a second, and
+; paying that on every line at the prompt would be worse than the problem. The
+; cursor wraps to the top instead and overwrites, which is predictable and free.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+GTX_COLUMNS     = 32
+GTX_ROWS        = 24
+GTX_COLOUR      = GFX_DEFAULT_COL       ; white on black, as SCREEN 1 leaves it
+
+; A = character
+gtx_write_char:
+        pha
+        lda     gtx_active
+        bne     @graphics
+        pla
+        jmp     vdp_write_char
+@graphics:
+        pla
+        cmp     #$0d                    ; carriage return
+        beq     @carriage_return
+        cmp     #$0a                    ; line feed
+        beq     gtx_newline_active
+        jsr     gtx_render
+        ; and on to the next cell
+        inc     gtx_col
+        lda     gtx_col
+        cmp     #GTX_COLUMNS
+        bcc     @done
+@carriage_return:
+        stz     gtx_col
+@done:
+        rts
+
+; No arguments
+gtx_newline:
+        lda     gtx_active
+        bne     gtx_newline_active
+        jmp     vdp_newline
+gtx_newline_active:
+        stz     gtx_col
+        inc     gtx_row
+        lda     gtx_row
+        cmp     #GTX_ROWS
+        bcc     @done
+        stz     gtx_row                 ; back to the top rather than scrolling
+@done:
+        rts
+
+; No arguments
+gtx_backspace:
+        lda     gtx_active
+        bne     @graphics
+        jmp     vdp_backspace
+@graphics:
+        lda     gtx_col
+        beq     @done                   ; nothing to rub out on this row
+        dec     gtx_col
+        lda     #' '
+        jsr     gtx_render
+@done:
+        rts
+
+; A = low byte of the string, X = high byte
+gtx_write_string:
+        sta     vdp_buffer_address
+        stx     vdp_buffer_address+1
+        lda     gtx_active
+        bne     @graphics
+        lda     vdp_buffer_address
+        ldx     vdp_buffer_address+1
+        jmp     vdp_write_string
+@graphics:
+        ldy     #$00
+@next:
+        lda     (vdp_buffer_address),y
+        beq     @done
+        phy
+        jsr     gtx_write_char
+        ply
+        iny
+        bne     @next
+@done:
+        rts
+
+; Draws A into the cell at gtx_col/gtx_row without moving the cursor
+gtx_render:
+        and     #$7f                    ; the font holds 128 shapes
+        sta     gtx_src                 ; character * 8 into the font
+        stz     gtx_src+1
+        asl     gtx_src
+        rol     gtx_src+1
+        asl     gtx_src
+        rol     gtx_src+1
+        asl     gtx_src
+        rol     gtx_src+1
+        clc
+        lda     gtx_src
+        adc     #<VDP_TEXT_PATTERNS_START
+        sta     gtx_src
+        lda     gtx_src+1
+        adc     #>VDP_TEXT_PATTERNS_START
+        sta     gtx_src+1
+
+        lda     gtx_col                 ; the shape
+        asl     a
+        asl     a
+        asl     a
+        tay                             ; low byte is column * 8
+        lda     gtx_row                 ; high byte is the row itself
+        ora     #GFX_BITMAP_HI | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        ldy     #$00
+@shape:
+        lda     (gtx_src),y
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        iny
+        cpy     #$08
+        bne     @shape
+
+        lda     gtx_col                 ; and the colour, same offsets
+        asl     a
+        asl     a
+        asl     a
+        tay
+        lda     gtx_row
+        ora     #GFX_COLOR_HI | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        ldy     #$08
+@colour:
+        lda     #GTX_COLOUR
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        dey
+        bne     @colour
+        rts
+
+.zeropage
+gtx_src:        .res 2
+
+.segment "BASBUF"
+gtx_active:     .res 1                  ; non-zero while SCREEN 1 is up
+gtx_col:        .res 1
+gtx_row:        .res 1
 
 .segment "BASBUF"
 spr_n:          .res 1

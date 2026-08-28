@@ -623,6 +623,12 @@ whatever else is already lit in the same group of eight. There is no way around 
 full off-screen copy of the screen, and this machine has no 6 KB of RAM to spare for one. The
 background stays black, the way `SCREEN 1` leaves it.
 
+```basic
+10 SCREEN 1
+20 CIRCLE 128, 96, 60, 15
+30 PRINT "TEXT AND PICTURES AT ONCE"
+```
+
 **Sprites** are 8x8 and unmagnified, which leaves 256 shapes in the 2 KB at $1800 and keeps one
 shape down to eight bytes. `n` is 0 to 31; `y` of 192 or more parks a sprite off the screen,
 which is how one is hidden. `SCREEN 1` parks all 32 and blanks the shapes, so nothing appears
@@ -653,11 +659,23 @@ sprite after it, so that one value is nudged by a line. What is not dealt with, 
 cannot be, is that only four sprites are drawn on any one scanline. The fifth simply is not
 there.
 
-**The text console goes away while graphics is on.** The bitmap occupies the VRAM the font
-lives in, so the two cannot both exist. `SCREEN 1` takes the VDP out of the tty configuration
-and leaves output going to the serial port and the LCD; `SCREEN 0` reloads the font and
-switches it back on. `SCREEN 0` typed blind is the way back, and so is the reset button - after
-a power-on or a reset the console is always restored.
+**The console keeps working in graphics mode.** The bitmap occupies the VRAM the font lives in,
+so the two cannot both be the screen - but the font is still in the ROM, and characters are
+drawn into the bitmap instead, eight bytes at a time. `PRINT` works, and so does seeing what
+you type.
+
+The cell layout falls out of the bitmap addressing: for a character at column `c` and row `r`
+the eight rows of pixels are eight consecutive VRAM addresses, so one address gets written and
+eight bytes go out. The colour is written too, so text stays readable over whatever was drawn
+underneath.
+
+32 columns by 24 rows, against 40 by 24 in text mode. **It does not scroll.** Moving the bitmap
+up one row means shifting 23 rows of 256 bytes through VRAM twice over, about half a second,
+and paying that on every line at the prompt would be worse than the problem it solved. The
+cursor wraps to the top and overwrites instead.
+
+`SCREEN 0` reloads the font and goes back to the 40 column text screen; so does the reset
+button, and after a power-on the console is always the text one.
 
 `LINE` takes both endpoints inclusive and is Bresenham, so it never strays more than half a
 pixel from the true line. `CIRCLE` is the midpoint algorithm and holds to the same half pixel.

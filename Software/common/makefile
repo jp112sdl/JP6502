@@ -130,6 +130,7 @@ COMMON_SOURCES=syscalls.s	\
 							vdp_text_mode.s \
 							sound.s       \
 							tty.s         \
+							gtx_stub.s    \
 							parse.s       \
 							menu.s        \
 							sd.s
