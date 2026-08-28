@@ -772,6 +772,111 @@ start_poweron:
 start_magic_value:
         .byte   "DB6502"
 
+; ----------------------------------------------------------------------------
+; THE KEYWORD TABLE, READ WITH MORE THAN EIGHT BITS OF INDEX
+;
+; program.s walks BAS_KEY with Y alone, so the table could never exceed 256
+; bytes: at 257 the terminating zero sits at offset 256, Y wraps to nought, the
+; scan restarts at the first keyword and the machine hangs on the first ENTER.
+; That is what adding LINE did, and with 253 of 256 bytes gone there was no room
+; for another statement.
+;
+; The seven places that read the table now call in here instead. Every one of
+; them was three bytes of absolute-indexed load, and a jsr is three bytes too,
+; so CODE keeps its exact length - which on this board is not a nicety, see
+; MEMORY_MAP.md 5.2.3.
+;
+; Y stays the index; what is added is a page. keyptr points at the start of the
+; 256 byte page Y is currently in, and gets carried forward whenever Y wraps.
+; Detecting that needs no cooperation from the caller, because Y only ever moves
+; one step at a time and only ever forwards: an index lower than the one from
+; the previous call can only mean it has just gone round. keylasty holds that
+; previous value.
+;
+; The starting position is the trick that makes it uniform. Both callers begin
+; with Y at $FF and step to nought before the first read, which by the rule
+; above is a wrap. So the pointer starts one page *below* the table and that
+; first wrap is what brings it onto it, and no special case is needed for entry.
+;
+; keyptrm1 trails keyptr by one, for the one caller that reads the byte before
+; the index rather than at it. Working that out with dey/iny would read from the
+; wrong page in exactly the case the whole exercise is about - the step where Y
+; has just wrapped and the byte wanted is the last one of the page before.
+;
+; Cost is about 25 cycles per byte of table read. That is a few tens of
+; milliseconds on a whole line of input, once, when ENTER is pressed.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+; Carries the pointer onto the page Y is now in. Flags are destroyed, A is not.
+key_sync:
+        cpy     keylasty
+        bcs     @same_page
+        inc     keyptr+1
+        inc     keyptrm1+1
+@same_page:
+        sty     keylasty
+        rts
+
+key_reset:
+        lda     #<(TOKEN_NAME_TABLE-$100)
+        sta     keyptr
+        sta     keyptrm1
+        dec     keyptrm1
+        lda     #>(TOKEN_NAME_TABLE-$100)
+        sta     keyptr+1
+        sta     keyptrm1+1
+        lda     keyptrm1
+        cmp     #$ff                    ; borrowed into the page below
+        bne     @no_borrow
+        dec     keyptrm1+1
+@no_borrow:
+        lda     #$ff                    ; so the first index is seen as a wrap
+        sta     keylasty
+        rts
+
+; In place of "sty EOLPNTR / dey" in the tokenizer, with Y at zero. Both call
+; sites had to give up a neighbouring byte to pay for the jsr, because storing
+; to a zero page variable is two bytes and calling is three.
+key_init:
+        sty     EOLPNTR
+        dey
+        bra     key_reset
+
+; In place of "tax / sty FORPNT" in LIST. The ldy #$FF that followed is left
+; where it was; key_reset does not touch Y, so it still does its job.
+key_init_list:
+        tax
+        sty     FORPNT
+        bra     key_reset
+
+; A = table[Y], flags from the load, as the absolute form left them
+key_lda:
+        jsr     key_sync
+        lda     (keyptr),y
+        rts
+
+; A = table[Y-1], for the scan that steps over the keyword it just failed on
+key_prev:
+        jsr     key_sync
+        lda     (keyptrm1),y
+        rts
+
+; A = A - table[Y], carry in from the caller's sec, flags from the subtraction.
+; key_sync uses cpy, so the carry has to be carried across it by hand.
+key_sbc:
+        php
+        jsr     key_sync
+        plp
+        sbc     (keyptr),y
+        rts
+
+.zeropage
+keyptr:         .res 2
+keyptrm1:       .res 2
+keylasty:       .res 1
+
+
 .segment "BASBUF"
 start_magic:    .res START_MAGIC_LEN
 

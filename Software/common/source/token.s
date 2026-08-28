@@ -31,12 +31,14 @@
 .endif
 		keyword_rts "STOP", STOP
 		keyword_rts "ON", ON
-; NULL is deliberately not in the table any more, while CONFIG_NULL stays
-; defined so its routine keeps its place in CODE - the arrangement flow1.s
-; already describes for CBM1. It set the count of null bytes sent after every
-; carriage return, a timing crutch for mechanical teletypes, and it was costing
-; six bytes of a table that had run out of them. See the assert at the end of
-; this file.
+; NULL is back. It was dropped on 2026-08-25 to get this table under 256 bytes,
+; and it is the obvious thing to put back first now that the limit is gone: it
+; costs nothing to restore, and it takes the table to exactly 257 bytes - the
+; size at which the machine used to hang on the first ENTER. If it boots and
+; takes a line of input, the paging works at precisely the boundary that broke.
+.ifdef CONFIG_NULL
+		keyword_rts "NULL", NULL
+.endif
 .ifdef KBD
 		keyword_rts "PLOD", PLOD
 		keyword_rts "PSAV", PSAV
@@ -204,16 +206,14 @@ UNFNC_ATN:
 .else
         .segment "BAS_VEC"
 .endif
-; The tokenizer walks this table with an 8-bit Y - the compare at L2498 in
-; program.s and the scan at L24DB that steps over the keyword it just failed on.
-; Every byte of it therefore has to be reachable from TOKEN_NAME_TABLE through
-; one index register, the terminating zero included. At 257 bytes that zero sits
-; at offset 256, Y wraps round to nought, the scan starts over from the first
-; keyword and never finds an end: the machine hangs on the first ENTER. That is
-; what adding LINE did on 2026-08-25, and nothing in the build said a word about
-; it, so now something does.
+; This table used to be capped at 256 bytes, because program.s walked it with Y
+; and nothing else, so the terminating zero at offset 256 was unreachable and the
+; scan looped for ever - the machine hung on the first ENTER. The seven places
+; that read it now go through key_lda and its neighbours in db6502_extra.s, which
+; carry a page alongside Y, and the cap is gone. The assert below is only a
+; tripwire for something having gone badly wrong, not a real limit.
 .import __BAS_KEY_SIZE__
-.assert __BAS_KEY_SIZE__ <= 256, lderror, "BAS_KEY is past 256 bytes and the tokenizer cannot index it - shorten or drop a keyword"
+.assert __BAS_KEY_SIZE__ <= 4096, lderror, "BAS_KEY has grown absurdly - check that this is intended"
 
 MATHTBL:
         .byte   $79

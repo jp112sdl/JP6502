@@ -204,8 +204,8 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4B6` | 431 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` ist bei 253 von maximal 256 Bytes, siehe 5.3 |
-| `$E4B7` | `$E4FF` | 73 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4BC` | 437 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 257 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4BD` | `$E4FF` | 67 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FB8B` | 652 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
-| `$FB8C` | `$FFF9` | 1134 | frei |
+| `$F900` | `$FBDB` | 732 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FBDC` | `$FFF9` | 1054 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1362 Bytes von 24576.
+ROM frei gesamt 1276 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -466,49 +466,72 @@ billigen Aufhänger: dasselbe ROM mit Füllbytes am **Anfang** von `SDCODE`, in
 Schritten zwischen +37 und +62, und schauen, wo genau es kippt. Die Schwelle
 verrät die Adresse, und die Adresse verrät den Mechanismus.
 
-### 5.3 Die harte Grenze: `BAS_KEY` darf nicht über 256 Bytes
+### 5.3 Die Schlüsselworttabelle und ihre aufgehobene Grenze
 
-Nicht der Platz im ROM ist das knappste Budget für neue Befehle, sondern die
-Schlüsselworttabelle. `program.s` läuft sie an zwei Stellen mit einem **8-Bit-Y**
-ab — der Vergleich bei `L2498` und der Sprung über das gerade gescheiterte
-Schlüsselwort bei `L24DB`. Jedes Byte der Tabelle muss also mit einem
+`BAS_KEY` war bis 25.08.2026 auf 256 Bytes begrenzt, und das war das knappste
+Budget für neue Befehle — nicht der Platz im ROM. `program.s` lief die Tabelle
+an sieben Stellen mit einem **8-Bit-Y** ab. Jedes Byte musste damit mit einem
 Indexregister von `TOKEN_NAME_TABLE` aus erreichbar sein, **die abschließende
 Null eingeschlossen**.
 
 Bei 257 Bytes liegt diese Null auf Offset 256. Y läuft auf null über, der Scan
 beginnt wieder beim ersten Schlüsselwort und findet nie ein Ende: die Maschine
 hängt beim **ersten ENTER**, weil das der erste Moment ist, in dem überhaupt
-etwas tokenisiert wird. Bis dahin läuft alles normal, inklusive Startbild und
-LCD-Panel — das Fehlerbild sieht deshalb nach allem Möglichen aus, nur nicht
-nach einer Tabelle, die ein Byte zu lang ist.
+etwas tokenisiert wird. Bis dahin läuft alles, inklusive Startbild, LCD-Panel
+und Grafikbefehlen — das Fehlerbild sieht nach allem Möglichen aus, nur nicht
+nach einer Tabelle, die ein Byte zu lang ist. Genau das ist mit `LINE` passiert.
 
-Genau das ist am 25.08.2026 mit `LINE` passiert. Die Tabelle stand auf 257.
+#### Wie die Grenze aufgehoben wurde
 
-**Was dagegen jetzt im Build steht:**
+Y bleibt der Index, dazu kommt eine Seite. `keyptr` in der Zero Page zeigt auf
+den Anfang der 256-Byte-Seite, in der Y gerade steht, und wird weitergezogen,
+sobald Y überläuft. Das braucht keine Mitarbeit des Aufrufers: Y bewegt sich
+immer nur um eins und immer nur vorwärts, also **kann ein niedrigerer Index als
+beim letzten Aufruf nur bedeuten, dass er gerade umgelaufen ist.**
 
-```ca65
-.import __BAS_KEY_SIZE__
-.assert __BAS_KEY_SIZE__ <= 256, lderror, "BAS_KEY is past 256 bytes ..."
-```
+Der Startwert ist der Kniff, der es einheitlich macht. Beide Aufrufer beginnen
+mit Y auf `$FF` und gehen vor dem ersten Lesen auf null — nach obiger Regel ein
+Überlauf. Also startet der Zeiger eine Seite *unter* der Tabelle, und genau
+dieser erste Überlauf bringt ihn darauf. Kein Sonderfall für den Einstieg.
 
-Ein Verstoß ist damit ein Linkfehler und keine hängende Maschine mehr. Geprüft,
-indem ein Wegwerf-Schlüsselwort eingefügt und der Build zum Scheitern gebracht
-wurde.
+`keyptrm1` läuft eine Position hinter `keyptr` her, für die eine Stelle, die das
+Byte *vor* dem Index liest. Mit `dey`/`iny` zu rechnen läse in genau dem Fall
+aus der falschen Seite, um den es hier geht: dem Schritt, in dem Y gerade
+umgelaufen ist und das gesuchte Byte das letzte der Seite davor.
 
-**Woher der Platz kam.** `NULL` ist aus der Tabelle geflogen, `CONFIG_NULL`
-bleibt aber definiert, damit die Routine ihren Platz in `CODE` behält — genau
-die Konstruktion, die `flow1.s` für CBM1 schon beschreibt. `NULL n` bestimmte,
-wie viele Nullbytes nach jedem Wagenrücklauf gesendet werden, eine Krücke für
-mechanische Fernschreiber. Sechs Bytes einer Tabelle, die keine mehr hatte.
+#### Warum das `CODE` nicht anfassen durfte
 
-Dass Tokennummern sich dabei verschieben, ist folgenlos: `SAVE` schreibt ein
-Listing im Klartext auf die Karte und `LOAD` tokenisiert es neu.
+Alle sieben Lesestellen waren drei Bytes absolut-indiziert, ein `jsr` ist auch
+drei — `CODE` behält damit Adresse **und** Länge, was auf dieser Platine keine
+Kosmetik ist (5.2.3). Zwei Stellen mussten sich das dritte Byte allerdings beim
+Nachbarn holen, weil ein Speichern in die Zero Page nur zwei Bytes braucht:
 
-**Stand: 253 von 256 Bytes.** Drei Bytes. Der nächste Befehl passt nicht mehr —
-`CIRCLE` allein bräuchte acht. Wer weitermachen will, muss vorher die drei
-Indizierungen in `program.s` auf 16 Bit bringen, und das ist Chirurgie am
-empfindlichsten Code im ROM: `CODE` darf dabei seine Länge nicht ändern, siehe
-5.2.3.
+* Tokenizer: `sty EOLPNTR` + `dey` → `jsr key_init`, das beides erledigt
+* `LIST`: `tax` + `sty FORPNT` → `jsr key_init_list`, das folgende `ldy #$FF`
+  bleibt stehen und stört nicht
+
+Die Routinen liegen in `EXTCODE2`, **hinten angehängt**, damit `COLOR`,
+`SCREEN`, `PLOT`, `LINE` und die Startauswahl ihre Adressen behalten. Beim
+ersten Versuch standen sie vorn und haben vier Bytes in `BAS_VEC` bewegt.
+
+`romcheck` danach: `CODE` identisch in Adresse und Länge mit 79 geänderten
+Operanden, `RODATA`, `RODATA_PA`, `EXTCODE`, `SDCODE`, `SYSCALLS` und `VECTORS`
+byteidentisch, `EXTCODE2` um 80 Bytes gewachsen in vorher leeres ROM.
+
+#### Der Beweis
+
+Die Seitenlogik wurde vorab simuliert — 200 Läufe über je 700 Indizes, mit dem
+realen Aufrufmuster inklusive Mehrfachaufrufen bei unverändertem Y, alle
+effektiven Offsets lückenlos und monoton.
+
+Auf der Hardware zeigt sie sich aber nur, wenn die Tabelle 256 Bytes
+überschreitet. Deshalb ist `NULL` wieder in der Tabelle: es kostet nichts, es
+war nur wegen dieser Grenze geflogen, und es bringt sie auf **genau 257 Bytes**
+— die Größe, bei der die Maschine vorher beim ersten ENTER stehenblieb. Ein
+Startvorgang mit angenommener Eingabe ist damit der Test.
+
+Kosten: rund 25 Zyklen je gelesenem Tabellenbyte, also einige zehn Millisekunden
+für eine ganze Eingabezeile, einmal beim Drücken von ENTER.
 
 ## 6. Kollisionen — Status
 

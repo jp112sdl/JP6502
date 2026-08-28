@@ -368,8 +368,7 @@ L2484:
 L248C:
         sty     STRNG2
         ldy     #$00
-        sty     EOLPNTR
-        dey
+        jsr     key_init        ; was: sty EOLPNTR / dey - see EXTCODE2
         stx     TXTPTR
         dex
 L2496:
@@ -387,7 +386,7 @@ L2498:
   .endif
 .endif
         sec
-        sbc     TOKEN_NAME_TABLE,y
+        jsr     key_sbc         ; was: sbc TOKEN_NAME_TABLE,y
         beq     L2496
         cmp     #$80
         bne     L24D7
@@ -437,9 +436,9 @@ L24D7:
         inc     EOLPNTR
 L24DB:
         iny
-        lda     MATHTBL+28+1,y
+        jsr     key_prev        ; was: lda MATHTBL+28+1,y
         bpl     L24DB
-        lda     TOKEN_NAME_TABLE,y
+        jsr     key_lda         ; was: lda TOKEN_NAME_TABLE,y
         bne     L2498
         lda     INPUTBUFFERX,x
         bpl     L24AA
@@ -804,20 +803,19 @@ L25E8:
 .endif
         sec
         sbc     #$7F
-        tax
-        sty     FORPNT
+        jsr     key_init_list   ; was: tax / sty FORPNT
         ldy     #$FF
 L25F2:
         dex
         beq     L25FD
 L25F5:
         iny
-        lda     TOKEN_NAME_TABLE,y
+        jsr     key_lda         ; was: lda TOKEN_NAME_TABLE,y
         bpl     L25F5
         bmi     L25F2
 L25FD:
         iny
-        lda     TOKEN_NAME_TABLE,y
+        jsr     key_lda         ; was: lda TOKEN_NAME_TABLE,y
         bmi     L25CA
         jsr     OUTDO
         bne     L25FD	; always
