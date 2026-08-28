@@ -13,8 +13,6 @@
       .include "vdp.inc"
       .include "vdp_const.inc"
       .import _tty_init
-      ; Test of 25.08.2026, see common/source/sdcode_pad.s - remove with it
-      .forceimport sdcode_pad
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
@@ -118,6 +116,33 @@ StartupMessage:
 ;	.byte	"Cold [C] or warm [W] start?",$0D,$0A,$00
 	.byte	"Cold start [C] or warm [W] start?",$00
 	
+; ----------------------------------------------------------------------------
+; Twenty-five dead bytes at the FRONT of SDCODE
+;
+; A test, not a feature - remove it once the answer is written down.
+;
+; COLOR put next to CLS wrecks the font on the first boot, twice over and once
+; with every VDP access paced, and nobody knows why. It does two things at once:
+; the body of SDCODE moves up twenty-five bytes, and the block gets longer.
+;
+; The second of those cannot be the cause. Filling the same twenty-five bytes in
+; at the *end* of the block produces a ROM that is byte for byte the working one,
+; because the fill byte for unused ROM is $EA and $EA is nop - the chip cannot
+; tell the difference. So it is the body moving, or it is nothing.
+;
+; This is that, on its own: twenty-five dead bytes ahead of everything else in
+; SDCODE, so the body sits exactly where it sat when COLOR was in here, with no
+; new statement, no keyword and no token in the way. If it fails, moving the
+; body of this block is the fault and the contents never mattered. If it runs,
+; it was something about COLOR itself and the rule can go.
+;
+; MEMORY_MAP.md 5.5.
+; ----------------------------------------------------------------------------
+.segment "SDCODE"
+        .repeat 25
+        nop
+        .endrepeat
+
 ; LOAD, SAVE and the "$" directory listing
 .include "db6502_sdbasic.s"
 

@@ -229,15 +229,15 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — 25 tote Füllbytes (Versuch, siehe 5.5), Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1492 Bytes von 24576.
+ROM frei gesamt 1467 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -692,32 +692,33 @@ des Rumpfes; läuft es auch dann nicht, liegt es an der Länge des Blocks.
 #### Der Trennversuch, 25.08.2026
 
 `COLOR` vorn in `SDCODE` tut zwei Dinge auf einmal: der Rumpf des Blocks rückt
-um 25 Bytes hoch, **und** der Block wird 25 Bytes länger. `common/source/sdcode_pad.s`
-trennt das. Dieselben 25 Bytes gehen als toter Füller **hinter** alles andere in
-`SDCODE` — es ist ein Bibliotheksmodul, das nur das BASIC-ROM per
-`.forceimport` zieht, und es steht hinter `sd.s` in `COMMON_SOURCES`, also am
-Ende des Blocks.
+um 25 Bytes hoch, **und** der Block wird 25 Bytes länger. Es lohnt, das zu
+trennen.
 
-`romcheck` gegen das laufende ROM:
+**Die Länge scheidet sofort aus, ohne Brennvorgang.** Legt man dieselben 25
+Bytes als toten Füller ans *Ende* des Blocks, kommt ein ROM heraus, das
+byteweise das laufende ist — das Füllbyte für unbelegtes ROM ist `$EA`, und
+`$EA` ist `nop`. Der Chip kann die beiden gar nicht unterscheiden. Wenn zwei
+identische Images verschieden laufen würden, wäre das kein Adressproblem mehr,
+sondern ein defekter Chip. Also bleibt: es ist das Verschieben des Rumpfes, oder
+es ist gar nichts.
+
+**Der Versuch dazu:** 25 tote Bytes vor allem anderen in `SDCODE`, in
+`db6502_extra.s` vor dem `.include "db6502_sdbasic.s"`. Der Rumpf liegt damit
+exakt dort, wo er lag, als `COLOR` hier stand — aber ohne neues Statement, ohne
+Schlüsselwort und ohne verschobenes Token.
 
 ```
-SDCODE   $EC00-$F7DA -> $EC00-$F7F3   0 abweichende Bytes, resized +25
-alle anderen Segmente                 identisch
+SDCODE   $EC00-$F7DA -> $EC00-$F7F3   2916 abweichende Bytes, resized +25
+CODE / RODATA / BAS_KEY / BAS_ERR / SYSCALLS / VECTORS   unbewegt
 ```
 
-Null. Der Block endet auf `$F7F3`, exakt wie beim Ausfall, und **kein einziges
-Byte seines Inhalts hat sich bewegt**. Eine Variable, und es ist genau die
-strittige.
+* **Fällt es aus** → das Verschieben des Rumpfes ist der Fehler, und der Inhalt
+  hat nie eine Rolle gespielt. Die Regel steht dann auf eigenen Füßen.
+* **Läuft es** → es lag an `COLOR` selbst, nicht an der Verschiebung, und die
+  Regel kann weg.
 
-* **Läuft es** → es ist das Verschieben des Rumpfes. Dann wäre auch klar, warum
-  `CODE`-Relokation harmlos ist und diese nicht: es liegt an dem, was in
-  `SDCODE` steht, nicht an seiner Länge.
-* **Läuft es nicht** → es ist die Länge des Blocks beziehungsweise die Adressen,
-  die sein Ende erreicht. Dann hat der Inhalt nie eine Rolle gespielt und die
-  Suche geht bei `$F7DB`–`$F7F3` weiter.
-
-Danach fliegen `sdcode_pad.s`, die Zeile in `common/makefile` und der
-`.forceimport` wieder raus.
+Danach fliegen die 25 Bytes und dieser Absatz wieder raus.
 
 #### Die vollständige Liste der Zugriffspaare
 
