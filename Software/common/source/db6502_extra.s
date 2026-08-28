@@ -11,6 +11,7 @@
       ; defined" errors, not a no-op.
       .include "vdp_text_mode.inc"
       .include "vdp.inc"
+      .include "vdp_const.inc"
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
@@ -270,6 +271,269 @@ COLOR:
         jmp     vdp_write_register
 
 ; ----------------------------------------------------------------------------
+; "SCREEN" STATEMENT
+;
+;   SCREEN 0    text, 40x24, the console
+;   SCREEN 1    graphics, 256x192 bitmap (TMS9918A Graphics II)
+;
+; Graphics II puts the bitmap where the text font lives, so the two cannot be on
+; at once: SCREEN 1 takes the VDP out of tty_config and leaves output going to
+; the serial port and the LCD, SCREEN 0 puts the font back and switches it on
+; again. Typing SCREEN 0 blind is the way home, and so is the reset button.
+;
+; The layout is the usual one for a full-screen bitmap. Register 3 is $FF and
+; register 4 is $03 - in this mode both act as masks rather than plain base
+; addresses, and those two values are what select "no masking at all", which is
+; what makes every one of the 768 cells address its own pattern.
+;
+;   $0000-$17FF  bitmap        6144    one bit per pixel
+;   $2000-$37FF  colour        6144    foreground/background per 8x1 group
+;   $3800-$3AFF  name           768    filled 0..255 three times, so that each
+;                                      cell maps to its own pattern
+;   $3B00-$3B7F  sprite attributes
+;   $3C00-$3FFF  sprite patterns
+;
+; That is 16 KB exactly, so sprites are still on the table later.
+;
+; Setting it up writes 13056 bytes into VRAM, about 260 ms. The wait between
+; accesses is not optional - see vdp_write_address in vdp.s.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+GFX_BITMAP_HI   = $00                   ; bitmap at $0000
+GFX_COLOR_HI    = $20                   ; colour table at $2000
+GFX_NAME_HI     = $38                   ; name table at $3800
+GFX_DEFAULT_COL = $F1                   ; white on black, the whole screen
+
+SCREEN:
+        jsr     GETBYT                  ; mode -> X
+        cpx     #$02
+        bcs     SCREEN_RANGE
+        txa
+        beq     screen_text
+
+; --- graphics ---------------------------------------------------------------
+screen_gfx:
+        ldx     #$00
+@regs:
+        lda     gfx_register_inits,x
+        jsr     vdp_write_register
+        inx
+        cpx     #(gfx_register_inits_end - gfx_register_inits)
+        bne     @regs
+
+        ; bitmap: every pixel off
+        ldy     #$00
+        lda     #GFX_BITMAP_HI | VDP_WRITE_VRAM_SELECT
+        ldx     #$00
+        jsr     gfx_fill
+
+        ; colour: every group white on black
+        ldy     #$00
+        lda     #GFX_COLOR_HI | VDP_WRITE_VRAM_SELECT
+        ldx     #GFX_DEFAULT_COL
+        jsr     gfx_fill
+
+        ; name: 0..255, three times over, so each cell has its own pattern
+        ldy     #$00
+        lda     #GFX_NAME_HI | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        ldx     #$03
+@pass:
+        ldy     #$00
+@byte:
+        tya
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        iny
+        bne     @byte
+        dex
+        bne     @pass
+
+        ; Filling takes about a quarter of a second, and the register table
+        ; above leaves the screen blanked so that quarter second is not spent
+        ; showing whatever the VRAM happened to contain.
+        lda     #(VDP_REG1_RAM_16K | VDP_REG1_SCREEN_ACTIVE)
+        ldx     #VDP_REGISTER_1
+        jsr     vdp_write_register
+
+        ; The console has nowhere to go now. gfx_tty_saved doubles as the flag
+        ; for "graphics is on", so a second SCREEN 1 must not overwrite the
+        ; setting it is holding with the one it already switched the VDP out of.
+        lda     gfx_tty_saved
+        bne     @already_saved
+        lda     tty_config
+        sta     gfx_tty_saved
+@already_saved:
+        lda     tty_config
+        and     #<~(TTY_CONFIG_OUTPUT_VDP)
+        sta     tty_config
+        rts
+
+; --- back to text -----------------------------------------------------------
+screen_text:
+        lda     gfx_tty_saved
+        beq     @nothing_saved
+        sta     tty_config
+        stz     gfx_tty_saved
+@nothing_saved:
+        jsr     vdp_boot_registers      ; the text mode register table
+        jsr     vdp_boot_patterns       ; the font the bitmap overwrote
+        jsr     vdp_boot_clear
+        jsr     vdp_boot_enable
+        stz     vdp_line
+        stz     vdp_char_pos
+        rts
+
+SCREEN_RANGE:
+        jmp     IQERR
+
+; Y/A = start address including the write select, X = value.
+; 6144 bytes - the count is the same idiom vdp_boot_clear uses, where the low
+; byte runs out first and 0 means a full 256.
+gfx_fill:
+        stx     gfx_value
+        jsr     vdp_write_address
+        stz     gfx_count
+        lda     #$18
+        sta     gfx_count+1
+@loop:
+        lda     gfx_value
+        sta     VDP_VRAM
+        jsr     vdp_wait
+        dec     gfx_count
+        bne     @loop
+        dec     gfx_count+1
+        bne     @loop
+        rts
+
+gfx_register_inits:
+        .byte   VDP_REG_0_GRAPHICS_MODE_II_ENABLE
+        .byte   VDP_REG1_RAM_16K | VDP_REG1_SCREEN_BLANK
+        .byte   VDP_REG2_NAME_TABLE_BASE_3800
+        .byte   $FF                     ; colour table $2000, nothing masked
+        .byte   $03                     ; bitmap $0000, nothing masked
+        .byte   $76                     ; sprite attributes $3B00
+        .byte   $07                     ; sprite patterns $3C00
+        .byte   $01                     ; black backdrop
+gfx_register_inits_end:
+
+; ----------------------------------------------------------------------------
+; "PLOT" STATEMENT
+;
+;   PLOT x, y, colour
+;
+; x is 0 to 255, y is 0 to 191, colour is 0 to 15 out of the same palette COLOR
+; uses. Colour 0 clears the pixel and leaves it showing the background; 1 to 15
+; set it and give the group it belongs to that foreground colour.
+;
+; "the group it belongs to" is the hardware talking: Graphics II stores one
+; foreground and one background colour per eight horizontal pixels, so plotting
+; a red pixel recolours whatever else is already lit in the same row of eight.
+; There is no way around it short of a full off-screen buffer, which this
+; machine has no RAM for.
+;
+; The address arithmetic is why this mode is worth using. Cell row is y>>3,
+; cell column is x>>3, and each cell is eight bytes, so the byte holding the
+; pixel is at (y>>3)*256 + (x>>3)*8 + (y&7) - a high byte that is just y>>3 and
+; a low byte that is (x & $F8) with (y & 7) dropped into the three bits it
+; leaves free. The colour byte for the same group sits at the same offset in
+; the colour table, so the high byte only needs $20 added.
+; ----------------------------------------------------------------------------
+
+PLOT:
+        jsr     GETBYT                  ; x -> X
+        stx     plot_x
+        jsr     COMBYTE                 ; y -> X
+        cpx     #192
+        bcc     @in_range
+        jmp     IQERR
+@in_range:
+        stx     plot_y
+        jsr     COMBYTE                 ; colour -> X
+        txa
+        and     #$0f
+        sta     plot_col
+
+        lda     plot_y
+        lsr     a
+        lsr     a
+        lsr     a
+        sta     plot_hi                 ; cell row, 0 to 23
+        lda     plot_x
+        and     #$f8
+        sta     plot_lo
+        lda     plot_y
+        and     #$07
+        ora     plot_lo
+        sta     plot_lo
+
+        lda     plot_x                  ; mask = $80 >> (x & 7)
+        and     #$07
+        tax
+        lda     #$80
+@shift:
+        dex
+        bmi     @masked
+        lsr     a
+        bra     @shift
+@masked:
+        sta     plot_mask
+        eor     #$ff
+        sta     plot_nmask
+
+        ldy     plot_lo                 ; read the byte the pixel is in
+        lda     plot_hi
+        jsr     vdp_write_address
+        lda     VDP_VRAM
+        jsr     vdp_wait
+
+        ldx     plot_col
+        beq     @clear
+        ora     plot_mask
+        bra     @store
+@clear:
+        and     plot_nmask
+@store:
+        pha
+        ldy     plot_lo
+        lda     plot_hi
+        ora     #VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        pla
+        sta     VDP_VRAM
+        jsr     vdp_wait
+
+        lda     plot_col                ; a cleared pixel keeps its colour
+        beq     @done
+        ldy     plot_lo
+        lda     plot_hi
+        ora     #GFX_COLOR_HI | VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        lda     plot_col
+        asl     a
+        asl     a
+        asl     a
+        asl     a
+        ora     #$01                    ; black behind it, as SCREEN 1 left it
+        sta     VDP_VRAM
+        jmp     vdp_wait
+@done:
+        rts
+
+.segment "BASBUF"
+gfx_tty_saved:  .res 1                  ; tty_config as it was before SCREEN 1
+gfx_value:      .res 1
+gfx_count:      .res 2
+plot_x:         .res 1
+plot_y:         .res 1
+plot_col:       .res 1
+plot_hi:        .res 1
+plot_lo:        .res 1
+plot_mask:      .res 1
+plot_nmask:     .res 1
+
+; ----------------------------------------------------------------------------
 ; COLD OR WARM START
 ;
 ; The choice only means something when the RAM still holds a BASIC program, and
@@ -295,6 +559,10 @@ COLOR:
 START_MAGIC_LEN = 6
 
 start_select:
+        ; BASBUF holds whatever the SRAM came up with, and SCREEN 0 would write
+        ; that straight into tty_config
+        stz     gfx_tty_saved
+
         ldx     #START_MAGIC_LEN-1
 @test:
         lda     start_magic,x

@@ -89,6 +89,8 @@
 		keyword_rts "SOUND", SOUND
 		keyword_rts "CLS", CLS
 		keyword_rts "COLOR", COLOR
+		keyword_rts "SCREEN", SCREEN
+		keyword_rts "PLOT", PLOT
 .endif
 
 		count_tokens

@@ -586,6 +586,47 @@ before the write is itself a VDP access. The chip wants about 8 µs between two,
 is lost and the pair never completes. It is the same access time that used to leave the screen
 dark at cold start. `COLOR` goes through `vdp_write_register`, which waits between the halves.
 
+### Graphics mode: `SCREEN` and `PLOT`
+
+```basic
+SCREEN 0            back to text, 40x24
+SCREEN 1            graphics, 256x192
+
+PLOT x, y, colour
+```
+
+`x` is 0 to 255, `y` is 0 to 191, `colour` is 0 to 15 out of the palette listed under
+`COLOR`. Colour 0 clears the pixel and leaves the background showing; 1 to 15 set it.
+
+```basic
+10 SCREEN 1
+20 FOR X=0 TO 255
+30 PLOT X, 96+SIN(X/16)*80, 15
+40 NEXT X
+```
+
+**One colour per eight pixels.** The TMS9918A stores a foreground and a background colour for
+each horizontal run of eight pixels, not for each pixel. Plotting a red dot therefore recolours
+whatever else is already lit in the same group of eight. There is no way around it short of a
+full off-screen copy of the screen, and this machine has no 6 KB of RAM to spare for one. The
+background stays black, the way `SCREEN 1` leaves it.
+
+**The text console goes away while graphics is on.** The bitmap occupies the VRAM the font
+lives in, so the two cannot both exist. `SCREEN 1` takes the VDP out of the tty configuration
+and leaves output going to the serial port and the LCD; `SCREEN 0` reloads the font and
+switches it back on. `SCREEN 0` typed blind is the way back, and so is the reset button - after
+a power-on or a reset the console is always restored.
+
+**Speed.** A single `PLOT` is a read-modify-write of the bitmap byte plus a write to the colour
+table, three VRAM addresses in all, about 250 µs. That is roughly 4000 pixels a second, so the
+example above draws in about a fifteenth of a second and filling the whole screen dot by dot
+would take ten. `SCREEN 1` itself writes 13056 bytes and takes about a quarter of a second,
+with the screen blanked while it does.
+
+The VRAM layout is the usual full-screen bitmap: 6144 bytes for the bitmap, 6144 for the
+colour table, 768 for the name table, and the sprite tables still fit in what is left of the
+16 KB.
+
 ### Cold start and warm start
 
 After a **power-on** the machine goes straight into a cold start. There is nothing else it

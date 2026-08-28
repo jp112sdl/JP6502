@@ -131,8 +131,8 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E38` | 57 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) sowie `start_magic` |
-| `$0E39` | `$0E6E` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E00` | `$0E43` | 68 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …), `start_magic`, Zustand von `SCREEN`/`PLOT` |
+| `$0E44` | `$0E79` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
 | `$0E69` | `$0EFB` | 147 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
@@ -204,8 +204,8 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
 | `$A003` | `$DC0B` | 15369 | `CODE` |
 | `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4A8` | 417 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
-| `$E4A9` | `$E4FF` | 87 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
+| `$E308` | `$E4B6` | 431 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` |
+| `$E4B7` | `$E4FF` | 73 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
 | `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
@@ -213,11 +213,11 @@ ROM frei gesamt 5212 Bytes von 24576.
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$F959` | 90 | `EXTCODE2` — `COLOR`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
-| `$F95A` | `$FFF9` | 1696 | frei |
+| `$F900` | `$FA9C` | 413 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, Kalt-/Warmstart-Auswahl, siehe 5.1.1 |
+| `$FA9D` | `$FFF9` | 1373 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1938 Bytes von 24576.
+ROM frei gesamt 1601 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
