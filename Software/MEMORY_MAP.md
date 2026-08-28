@@ -229,15 +229,15 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — 25 tote Füllbytes (Versuch, siehe 5.5), Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1467 Bytes von 24576.
+ROM frei gesamt 1492 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -689,36 +689,47 @@ des Rumpfes; läuft es auch dann nicht, liegt es an der Länge des Blocks.
 **Arbeitsregel, unverändert:** neue Statements nach `EXTCODE2`. `SDCODE` und
 `EXTCODE` sind für Einschübe gesperrt.
 
-#### Der Trennversuch, 25.08.2026
+#### Was der Fehler ist: der Rumpf von `SDCODE` an anderen Adressen
 
-`COLOR` vorn in `SDCODE` tut zwei Dinge auf einmal: der Rumpf des Blocks rückt
-um 25 Bytes hoch, **und** der Block wird 25 Bytes länger. Es lohnt, das zu
-trennen.
+`COLOR` vorn in `SDCODE` tat zwei Dinge auf einmal — der Rumpf rückte 25 Bytes
+hoch, und der Block wurde 25 Bytes länger. Am 25.08.2026 auseinandergenommen.
 
-**Die Länge scheidet sofort aus, ohne Brennvorgang.** Legt man dieselben 25
-Bytes als toten Füller ans *Ende* des Blocks, kommt ein ROM heraus, das
-byteweise das laufende ist — das Füllbyte für unbelegtes ROM ist `$EA`, und
-`$EA` ist `nop`. Der Chip kann die beiden gar nicht unterscheiden. Wenn zwei
-identische Images verschieden laufen würden, wäre das kein Adressproblem mehr,
-sondern ein defekter Chip. Also bleibt: es ist das Verschieben des Rumpfes, oder
-es ist gar nichts.
+**Die Länge scheidet ohne Brennvorgang aus.** Dieselben 25 Bytes als toter
+Füller ans *Ende* des Blocks ergeben ein ROM, das byteweise das laufende ist:
+das Füllbyte für unbelegtes ROM ist `$EA`, und `$EA` ist `nop`. Der Chip kann
+die beiden Images nicht unterscheiden.
 
-**Der Versuch dazu:** 25 tote Bytes vor allem anderen in `SDCODE`, in
-`db6502_extra.s` vor dem `.include "db6502_sdbasic.s"`. Der Rumpf liegt damit
-exakt dort, wo er lag, als `COLOR` hier stand — aber ohne neues Statement, ohne
-Schlüsselwort und ohne verschobenes Token.
+**Der Rumpf ist es.** 25 tote Bytes vor allem anderen in `SDCODE` — kein
+Statement, kein Schlüsselwort, kein verschobenes Token, `CODE`, `RODATA`,
+`BAS_KEY`, `BAS_ERR`, `SYSCALLS` und `VECTORS` unbewegt, nur `SDCODE` um 25
+Bytes weitergerückt. Gebrannt, kalt gestartet: **Zeichenschrott.**
 
-```
-SDCODE   $EC00-$F7DA -> $EC00-$F7F3   2916 abweichende Bytes, resized +25
-CODE / RODATA / BAS_KEY / BAS_ERR / SYSCALLS / VECTORS   unbewegt
-```
+Damit ist die Regel keine Faustregel mehr, sondern ein Messergebnis:
 
-* **Fällt es aus** → das Verschieben des Rumpfes ist der Fehler, und der Inhalt
-  hat nie eine Rolle gespielt. Die Regel steht dann auf eigenen Füßen.
-* **Läuft es** → es lag an `COLOR` selbst, nicht an der Verschiebung, und die
-  Regel kann weg.
+* Es ist **nicht** der Inhalt. Tote `nop`s tun es genauso wie ein Statement.
+* Es ist **nicht** die Länge des Blocks.
+* Es ist **nicht** Relokation an sich — `modem.o` zu entfernen verschiebt elf
+  Bibliotheksmodule und kürzt `CODE` um 345 Bytes, und das läuft (5.4).
+* Es ist der **Rumpf von `SDCODE` auf anderen Adressen.** Sonst nichts.
 
-Danach fliegen die 25 Bytes und dieser Absatz wieder raus.
+**Was daran auffällt.** In `SDCODE` liegen unter anderem die getakteten
+VDP-Primitive selbst — `vdp_wait`, `vdp_write_address`, `vdp_write_register` —
+und der komplette Kaltstart `vdp_boot_*`. Eine Verschiebung bewegt also genau
+die Routinen, die den Bildschirm aufsetzen. Ihre Laufzeit ist zwar
+adressunabhängig (`jsr`/`rts` kosten überall gleich, Sprünge über Seitengrenzen
+gibt es in ihnen nicht), aber der Verdacht liegt näher an ihnen als an
+`libfat32`.
+
+**Nächster Schritt, falls jemand weitergräbt:** die 25 Bytes nicht ganz nach
+vorn, sondern *zwischen* die Bewohner von `SDCODE` legen — einmal so, dass nur
+`libfat32` wandert, einmal so, dass nur die VDP-Routinen wandern. Das halbiert
+den Verdächtigen bei jedem Brand.
+
+**Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
+zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
+`vdp_boot_registers` und liest nie das Statusregister, das als einziges das
+Flipflop am Steuerport zurücksetzt — das tut nur `vdp_boot_init` beim Reset. Ein
+einmal verschobenes Flipflop übersteht also jedes `SCREEN 0`.
 
 #### Die vollständige Liste der Zugriffspaare
 
