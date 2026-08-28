@@ -439,7 +439,8 @@ Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 scan looped forever and the machine hung on the first ENTER, with everything up to that point
 looking perfectly healthy. The seven places that read it now carry a page alongside the index,
 so the cap is gone; section 5.3 of MEMORY_MAP.md has the mechanism. What is left as the real
-limit on new statements is the run-up to `RODATA_PA`, 39 bytes at the time of writing.
+limit on new statements is the space in front of `EXTCODE` at $e700, which is 1014 bytes since
+the XMODEM tables left the ROM - section 5.4 of MEMORY_MAP.md.
 
 **If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
 of `common/source/db6502_sdbasic.s` and the allocating write path at the end of

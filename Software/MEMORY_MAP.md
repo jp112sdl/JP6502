@@ -223,22 +223,21 @@ ROM frei gesamt 5200 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DC0B` | 15369 | `CODE` |
-| `$DC0C` | `$E307` | 1788 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E308` | `$E4D8` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E4D9` | `$E4FF` | 39 | frei (Vorlauf bis zum Page-Alignment von `RODATA_PA`) |
-| `$E500` | `$E6FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
+| `$A003` | `$DAB2` | 15024 | `CODE` |
+| `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FEB4` | 1461 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FEB5` | `$FFF9` | 325 | frei |
+| `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 519 Bytes von 24576.
+ROM frei gesamt 1492 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -555,6 +554,54 @@ gestarteten Programm. `CIRCLE` hat die Tabelle danach auf 263 Bytes gebracht.
 
 Kosten: rund 25 Zyklen je gelesenem Tabellenbyte, also einige zehn Millisekunden
 für eine ganze Eingabezeile, einmal beim Drücken von ENTER.
+
+### 5.4 XMODEM aus dem BASIC-ROM, und der Test, der damit endlich ansteht
+
+`modem.o` steckte im BASIC-ROM, obwohl MS-BASIC keine Datei über die serielle
+Schnittstelle überträgt — `LOAD` und `SAVE` gehen auf die Karte. Hereingezogen
+hat es die Syscall-Tabelle: `syscalls.s` nennt `_modem_send` und
+`_modem_receive`, und das ist `ld65` Referenz genug, das ganze Modul aus der
+Bibliothek zu holen.
+
+| Segment | Bytes | |
+|---|---|---|
+| `CODE` | 345 | |
+| `RODATA` | 118 | |
+| `RODATA_PA` | 512 | XMODEM-CRC-Tabellen, page-aligned |
+| `BSS` | 140 | RAM |
+| `ZEROPAGE` | 7 | RAM |
+
+Die 512 waren die teuren. Sie sind der Grund, warum `RODATA_PA` auf `$E500` lag
+und die Schlüsselworttabellen in die 39 Bytes Vorlauf davor eingesperrt waren.
+Ohne sie reicht der freie Bereich von `$E30A` bis `EXTCODE` auf `$E700` —
+**1014 Bytes**, in die `BAS_VEC`, `BAS_KEY` und `BAS_ERR` wachsen können. Die
+Befehlsdecke ist damit weg.
+
+**Wie es rausfliegt, ohne die Bibliothek anzufassen.** `db6502_extra.s`
+definiert `_modem_send` und `_modem_receive` selbst, als `sec` / `rts`. `ld65`
+löst sie gegen dieses Objekt auf, das auf der Kommandozeile steht, und sucht
+gar nicht erst in der Bibliothek. Die Syscall-Tabelle behält ihr genaues Layout
+und jeder andere Eintrag seine Adresse — dieselbe Konstruktion wie bei
+`gtx_stub.s`, nur andersherum. `rom/modem_test` und `rom/minimal_bootloader`
+definieren nichts dergleichen und linken das echte Modul unverändert.
+
+**Und das ist zugleich der Test, der seit 5.2.1 aussteht.** `modem.o` stand an
+neunter von zwanzig Stellen der `CODE`-Reihenfolge; es zu entfernen verschiebt
+elf Bibliotheksmodule — `string`, `utils`, `via_utils`, `vdp`, `vdp_text_mode`,
+`sound`, `tty`, `parse`, `menu`, `sd` — dazu `RODATA` und `BAS_*`.
+
+```
+CODE      $A003-$DC0B -> $A003-$DAB2   6155 Bytes anders, RESIZED -345
+RODATA    $DC0C-$E307 -> $DAB3-$E138   MOVED
+BAS_*     MOVED
+EXTCODE / SDCODE / SYSCALLS / VECTORS  auf ihren festen Offsets
+```
+
+Das ist genau die Änderungsklasse vom 16.08.2026, die damals den Bildschirm
+schwarz ließ und die seit dem VDP-Fix nie sauber wiederholt wurde. 5.2.3 hält
+sie als offene Frage fest. Läuft dieses Image, ist die Frage beantwortet und
+die Regel gilt nur noch für `SDCODE`; läuft es nicht, ist sie bestätigt und
+gilt für `CODE` genauso.
 
 ## 6. Kollisionen — Status
 

@@ -18,6 +18,8 @@
       .import ACIA_DATA
 ;      .import ACIA_STATUS_RX_FULL
       .export _start_msbasic
+      .export _modem_send
+      .export _modem_receive
       .export gtx_tty_init
       .export gtx_write_char
       .export gtx_write_string
@@ -1247,6 +1249,37 @@ KEYFN:
 GTX_COLUMNS     = 32
 GTX_ROWS        = 24
 GTX_COLOUR      = GFX_DEFAULT_COL       ; white on black, as SCREEN 1 leaves it
+
+; ----------------------------------------------------------------------------
+; NO XMODEM IN THE BASIC ROM
+;
+; Nothing in MS-BASIC transfers files over the serial port - LOAD and SAVE go to
+; the card - but modem.o was linked in anyway, because syscalls.s names
+; _modem_send and _modem_receive in the syscall table and that is reference
+; enough for ld65 to pull the whole module out of the library. It cost 345 bytes
+; of CODE, 118 of RODATA, 512 of RODATA_PA and 147 bytes of RAM.
+;
+; The 512 were the expensive ones. They are the XMODEM CRC tables, page aligned,
+; which is what put RODATA_PA on $E500 and boxed the keyword tables into the
+; 39 bytes of run-up in front of it. Without them BAS_VEC, BAS_KEY and BAS_ERR
+; have everything up to EXTCODE at $E700 to grow into.
+;
+; Defining the two entry points here is all it takes: ld65 resolves them against
+; this object, which is on the command line, and never goes looking in the
+; library. The syscall table keeps its exact layout and every other entry keeps
+; its address, so nothing that calls into it needs rebuilding - a loadable that
+; asked for XMODEM would get a carry back instead of a transfer, and no loadable
+; in the tree asks.
+;
+; rom/modem_test and rom/minimal_bootloader define no such thing and link the
+; real module, exactly as before.
+; ----------------------------------------------------------------------------
+.segment "EXTCODE2"
+
+_modem_send:
+_modem_receive:
+        sec                             ; not in this ROM
+        rts
 
 ; Called in place of _tty_init from standalone.s, which is the last moment
 ; before anything is printed.
