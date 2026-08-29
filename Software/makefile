@@ -25,6 +25,7 @@ FIRMWARE_PROJECTS = blink_c				\
 					nop_fill			\
 					os1					\
 					play_song			\
+					rom_check			\
 					serial_load_test	\
 					serial_test			\
 					serial_wdc			\

@@ -203,9 +203,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E3B6` | 183 | frei |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen (Versuch, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -216,7 +214,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4969 Bytes von 24576.
+ROM frei gesamt 5200 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -228,12 +226,10 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen (Versuch, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -241,7 +237,7 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1261 Bytes von 24576.
+ROM frei gesamt 1492 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -1034,24 +1030,70 @@ sind auch alle dahinter mitgerückt. Die Aussage „die Adresse entscheidet" ruh
 deshalb allein auf `$FEB7` gegen `$E360` und `$E45D`. Das ist ein echter
 Einzelvergleich, aber es ist einer und nicht drei.
 
-#### Der Schnitt: dasselbe niederwertige Byte, andere Gegend
+#### Es ist das niederwertige Byte
 
-`$FEB7` ist die einzige Adresse, die für sich allein durchgefallen ist. Zwei
-Dinge unterscheiden sie von `$E360` und `$E45D`: das niederwertige Byte `$B7`
-statt `$60`/`$5D`, und die Gegend — oberstes ROM statt des Lochs bei `$E3xx`.
+`$E3B7` — dasselbe niederwertige Byte wie die durchgefallene Adresse, dieselbe
+Gegend wie die bestandenen. Gebrannt, viermal kalt gestartet: **schwarzer
+Bildschirm.** Nicht einmal Zeichenschrott; `vdp_boot_init` läuft alle zwanzig
+Versuche leer und gibt auf.
 
-`$E3B7` trennt die beiden. Dasselbe niederwertige Byte wie die durchgefallene
-Adresse, dieselbe Gegend wie die beiden bestandenen. Sonst ist der Brand
-einvariabel: der BASIC-SD-Rumpf steht byteweise auf `$EC00`, `libfat32`
-byteweise auf `$F144`, `SDCODE` behält Anfang, Ende und Länge, und im Block
-selbst ändern sich 40 von 231 Bytes, alle in Operanden.
+| Adresse | nied. Byte | Gegend | Variablen | Ergebnis |
+|---|---|---|---|---|
+| `$F05D` | `$5D` | `SDCODE` | Referenz | gut |
+| `$E45D` | `$5D` | Loch `$E3xx` | eine | gut |
+| `$E360` | `$60` | Loch `$E3xx` | eine | gut |
+| `$E3B7` | `$B7` | Loch `$E3xx` | eine | **schwarz** |
+| `$FEB7` | `$B7` | oberstes ROM | eine | **kaputt** |
+| `$F076` | `$76` | `SDCODE` | zwei | kaputt |
 
-* **Zeichenschrott** → das niederwertige Byte entscheidet, also die Lage der
-  Seitengrenze im Block. Damit wäre man zurück bei Taktzahlen — die für
-  Verzweigungen ausgeschlossen sind, aber nicht für alles.
-* **sauberes Bild** → die Gegend entscheidet. `$FEB7` liegt als einzige
-  geprüfte Adresse oberhalb von `$F800`, und dann lohnt sich der Blick auf die
-  Dekodierung dieses obersten ROM-Bereichs.
+Zwei völlig verschiedene Seiten mit demselben niederwertigen Byte fallen beide
+durch; drei verschiedene Seiten mit anderen niederwertigen Bytes laufen alle.
+Die Gegend ist es nicht. Es ist das niederwertige Byte.
+
+#### Was sich genau so verhält: eine kranke niederwertige Adressleitung
+
+`A0`–`A7` wählen das Byte innerhalb einer Seite. Eine Leitung, die grenzwertig
+ist — zu langsam, zu viel Kapazität, eine gerissene Lötstelle — versagt an
+denselben Offsets in *jeder* Seite, ganz gleich in welcher. Genau das Muster,
+das die Tabelle zeigt.
+
+Und der Rest passt dazu: Code, der an so einem Offset liegt, wird falsch
+zurückgelesen. Ein falscher Befehl in der Routine, die den Zeichensatz kopiert,
+gibt einen kaputten Zeichensatz; ein falscher Befehl in der Bootschleife gibt
+gar kein Bild. Beides ist beobachtet, und die Verzweigungsrechnung wie auch die
+Störimpuls-Messung sind erklärtermaßen negativ ausgegangen, weil beide von der
+falschen Annahme ausgingen, der Prozessor bekomme überhaupt zu sehen, was
+gebrannt wurde.
+
+#### `rom/rom_check` — die Frage direkt gestellt
+
+64 Bytes bekanntes Muster an jeder der fünf Adressen, zur Laufzeit zurückgelesen
+und gezählt, wie viele nicht stimmen. Jeder Block trägt eine eigene Kennung
+(`$11`, `$33`, `$55`, `$77`, `$99`), damit ein Lesevorgang, der im Nachbarblock
+landet, nicht zufällig durchgeht. Dazu die Summe aller 24 KB ROM, die sich mit
+derselben Summe über die `.bin`-Datei auf dem Rechner vergleichen lässt.
+
+Erwartet für dieses Image: `SUM 85E4`.
+
+```
+SUM 85E4
+F05D 00 E360 00
+E3B7 00 E45D 00
+FEB7 00
+```
+
+* **`SUM` stimmt und überall `00`** → das ROM wird korrekt gelesen, die
+  Adressleitungen sind in Ordnung, und der Fehler sitzt woanders. Dann bleibt
+  als nächstes, den Verdacht vom Lesen aufs Ausführen zu verschieben: dieselben
+  Muster nicht lesen, sondern anspringen.
+* **`SUM` weicht ab oder ein Block zählt ungleich `00`** → gefunden. Das Brett
+  liest nicht, was gebrannt wurde, und die Suche ist eine Frage von
+  Durchgangsprüfung und Oszilloskop an `A0`–`A7`, nicht mehr eine von
+  Assemblercode.
+
+Zu beachten: ein Lesefehler, der nur unter bestimmten Adressfolgen auftritt,
+kann sich bei diesem gemächlichen Prüflauf verstecken. Ein sauberes Ergebnis
+schließt eine grenzwertige Leitung also nicht aus, ein schmutziges beweist sie.
 
 #### Die vollständige Liste der Zugriffspaare
 
