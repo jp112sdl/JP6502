@@ -384,6 +384,7 @@ token table or to the load address.
 | `LOAD` | read `BASIC.BAS` |
 | `LOAD "NAME.BAS"` | read `NAME.BAS` from the root directory |
 | `LOAD "$"` | replace the program with a listing of the card, then `LIST` it |
+| `LOAD "@"` | replace the program with one sent over the serial port, see below |
 | `SAVE` | write `BASIC.BAS` |
 | `SAVE "NAME.BAS"` | write `NAME.BAS` |
 
@@ -479,6 +480,46 @@ eight thousand sectors, about thirteen minutes. `SAVE` therefore keeps the FSInf
 as it takes and returns clusters, instead of marking it unknown; `fsck_msdos` confirms the
 number afterwards. A card that arrives without a usable count is told apart from one with a
 real zero: the line then reads `??? BLOCKS FREE`.
+
+### Sending a program over the serial port
+
+`LOAD "@"` takes the program from the ACIA instead of the card, and `tools/basicsend.py`
+sends it from the Mac over an FTDI cable. It is the same plain text again - the same lines
+`LIST` prints, the same lines a `.BAS` file holds - so a program can be written in a proper
+editor, sent over, tried out, edited on the machine and saved to the card, with nothing
+converted anywhere along the way.
+
+```bash
+./tools/basicsend.py SNAKE.BAS
+```
+
+Then type `LOAD "@"` on the machine. Either order works: the receiver repeats its "ready"
+every half second while it waits, so the tool picks one up whenever it arrives. The status
+line counts the lines as they land, and `OK` comes back when the last one is in.
+
+The tool takes a path, or a bare name it looks up in `basic/`:
+
+| | |
+| --- | --- |
+| `basicsend.py --list` | what is in `basic/`, with line and byte counts |
+| `basicsend.py HANOI.BAS` | send it |
+| `basicsend.py -p /dev/tty.usbserial-XXXX prog.bas` | pick the port by hand |
+| `basicsend.py --as-is prog.bas` | do not touch the case of anything |
+
+By default the tool upper-cases everything outside string literals, because the tokeniser only
+knows upper case keywords - `10 print "hello"` would be a syntax error, and `10 PRINT "hello"`
+is what you meant. Blank lines are dropped, and a line over 78 characters is refused before
+anything is sent rather than being silently cut short at the far end.
+
+`LOAD "@"` runs `NEW` first, exactly as `LOAD` from the card does, so what arrives replaces
+what was in memory. A line without a line number is *executed* rather than stored, and a
+syntax error ends the transfer with the usual message - the tool is told and stops rather than
+sitting out its timeout. Ctrl+C on the machine also ends it.
+
+One line at a time, each acknowledged before the next is sent. That is not for the sake of the
+wire - 19200 baud is nothing - but because inserting a line into a long program takes longer
+than sending one, and streaming would overrun the 256 byte receive buffer inside a second.
+A three wire cable is therefore enough: RX, TX and ground, no handshake lines.
 
 ### The `SOUND` statement
 

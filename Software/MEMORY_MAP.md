@@ -131,9 +131,9 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E62` | 99 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
-| `$0E63` | `$0E98` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
-| `$0E69` | `$0EFB` | 147 | ungenutzt |
+| `$0E00` | `$0E65` | 102 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) und `db6502_serial.s` (`ser_idle`, `ser_timer`), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
+| `$0E66` | `$0E9B` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E9C` | `$0EFB` | 96 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
 
@@ -223,21 +223,26 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DAA5` | 15011 | `CODE` |
-| `$DAA6` | `$E12B` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E12C` | `$E2FC` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E2FD` | `$E6FF` | 1027 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DB6D` | 15211 | `CODE` (darin 200 Bytes `db6502_serial.s`, siehe 5.6) |
+| `$DB6E` | `$E1F3` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E1F4` | `$E3C4` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E3C5` | `$E6FF` | 827 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7DB` | `$F7FF` | 37 | frei |
+| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F7F4` | `$F7FF` | 12 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FF23` | 1572 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1396 Bytes von 24576.
+ROM frei gesamt 1171 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
+Block: es liegt fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht
+weiter nach hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten.
+Was dort noch dazukommt, muss also entweder klein sein oder in `CODE` gehören —
+`db6502_serial.s` steht aus genau diesem Grund in `CODE` und nicht neben dem
+SD-Code, den es sich ansonsten teilt.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -2026,6 +2031,64 @@ Zeichensatz war schon beim Einschalten hin, `CLS` damit nicht beurteilbar. Es
 geht deshalb noch einmal allein aufs Image: gegen das zuletzt laufende ROM sind
 `RODATA`, `BAS_*`, `SDCODE`, `EXTCODE`, `EXTCODE2`, `SYSCALLS` und `VECTORS`
 byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
+
+### 5.6 `LOAD "@"` — ein Programm über den ACIA
+
+`common/source/db6502_serial.s`, 200 Bytes in `CODE`, drei Bytes in `BASBUF`.
+Gegenstelle ist `tools/basicsend.py` auf dem Mac.
+
+Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
+die Zeilen laufen durch den Tokenizer des Interpreters, als wären sie getippt
+worden. Über die Leitung geht deshalb reiner Text — genau das, was `LIST`
+ausgibt, und genau das, was eine `.BAS` auf der Karte enthält. Ein Programm kann
+also auf dem Mac geschrieben, hierher geschickt, hier bearbeitet und auf die
+Karte gespeichert werden, ohne dass irgendwo umgewandelt wird.
+
+**Kein neues Token.** `LOAD "$"` gab es schon für das Verzeichnis, also wurde
+`LOAD "@"` daneben gesetzt. `sd_getname` meldet „das war kein Dateiname" wie
+bisher im Carry und lässt das Zeichen selbst in A stehen; `LOAD` verzweigt
+danach. Das kostet vier Bytes und spart die Tokentabelle: ein neues Schlüsselwort
+hätte alle Funktions- und Operatortokens dahinter um eins verschoben, und die
+stehen zwar nicht in gespeicherten Programmen, aber die Tabelle ist nach 5.3
+ohnehin knapp.
+
+**Warum eine Quittung pro Zeile.** Eine Zeile mit 40 Zeichen ist bei 19200 Baud
+nach 21 ms durch. Sie einzufügen heißt aber, ihren Platz zu suchen, alles
+dahinter hochzuschieben und die Links neu zu setzen — bei einem Programm von
+einigen hundert Zeilen deutlich länger als 21 ms. Der 256 Bytes große
+RX-Ringpuffer wäre in der ersten Sekunde überrannt. Der Empfänger schickt
+deshalb ein `ACK` ($06), wenn er bereit ist, und der Sender wartet darauf. Die
+RTS-Leitung wird vom Treiber zwar bedient — der IRQ zieht sie ab 128 wartenden
+Bytes hoch —, aber ob sie am FTDI überhaupt ankommt, hängt am Kabel. Mit der
+Quittung ist das egal, und drei Drähte reichen.
+
+Das `ACK`, das eine Zeile bestätigt, ist dasselbe, das die nächste anfordert. Es
+gibt also keinen getrennten Handschlag: `ser_getline` schickt es als Erstes, für
+jede Zeile, die erste eingeschlossen.
+
+**Wer zuerst startet, ist egal.** Solange keine Zeile angefangen ist,
+wiederholt `ser_readbyte` das `ACK` etwa jede halbe Sekunde. Ein Tool, das später
+dazukommt, hört also noch eines. Mitten in einer Zeile wird nicht wiederholt —
+ein `ACK` an dieser Stelle setzte den Sender eine Zeile vor den Empfänger.
+Erkannt wird das an `ser_idle`, und das ist gratis: nach `inx` kann `X` nicht
+mehr null sein, ein `stx ser_idle` genügt.
+
+**Herauskommen.** `ser_readbyte` blockiert, und zwar mit Absicht: ein
+Gegenüber, das weg ist, schickt nie wieder etwas, und kein Zeitlimit könnte es
+von einem unterscheiden, das nur langsam ist. Ctrl+C bricht ab. Der Empfänger
+schickt dann `CAN` ($18), damit der Sender nicht sein eigenes Zeitlimit absitzt;
+dasselbe tut `sd_finish`, wenn ein Syntaxfehler in einer empfangenen Zeile den
+Interpreter mitten im Laden auf die Eingabeaufforderung zurückwirft.
+
+**Warum in `CODE`.** `SDCODE` hat nach 5.1 noch 12 Bytes. Der Block liegt fest
+zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach hinten,
+weil geladene Programme seine Tabelle bei `$F800` erwarten. Die 200 Bytes gehen
+deshalb nach `CODE`, obwohl der Code sich Zustand und LCD-Anzeige mit
+`db6502_sdbasic.s` teilt. Der Sprung dorthin ist ein `jmp`, kein `bra` — die
+Blöcke liegen 4 KB auseinander.
+
+Die Statuszeile ist die des Kartenladens, nur mit `SERIAL` statt eines
+Dateinamens darin, damit der Zeilenzähler unverändert weiterläuft.
 
 ## 6. Kollisionen — Status
 

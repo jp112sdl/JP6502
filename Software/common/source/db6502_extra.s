@@ -140,6 +140,9 @@ StartupMessage:
 ; LOAD, SAVE and the "$" directory listing
 .include "db6502_sdbasic.s"
 
+; LOAD "@" - the same lines, arriving over the serial port instead
+.include "db6502_serial.s"
+
 .segment "EXTCODE"
 
 ; ----------------------------------------------------------------------------

@@ -16,6 +16,7 @@
 ;   LOAD              read BASIC.BAS
 ;   LOAD "NAME.BAS"   read NAME.BAS
 ;   LOAD "$"          replace the program with a listing of the card
+;   LOAD "@"          take the program from the serial port - db6502_serial.s
 ;   SAVE              write BASIC.BAS
 ;   SAVE "NAME.BAS"   write NAME.BAS
 ;
@@ -36,9 +37,10 @@
 
 .segment "CODE"
 
-SD_MODE_OFF  = 0
-SD_MODE_FILE = 1
-SD_MODE_DIR  = 2
+SD_MODE_OFF    = 0
+SD_MODE_FILE   = 1
+SD_MODE_DIR    = 2
+SD_MODE_SERIAL = 3              ; the lines come off the ACIA - db6502_serial.s
 
 SD_NAME_COLUMN  = 13            ; width of the name field in a "$" line
 SD_SIZE_COLUMN  = 5             ; width of the block count field
@@ -97,7 +99,7 @@ sd_decbuf32:    .res 10         ; sd_dec32 renders here
 ; ---------------------------------------------------------------------------
 LOAD:
         jsr sd_getname
-        bcs @directory
+        bcs @notafile
 
         ; The name is parsed first, so a bad one fails before the card is asked
         ; to do anything
@@ -116,6 +118,11 @@ LOAD:
         jsr sd_lcdbegin
         lda #SD_MODE_FILE
         bra @start
+
+@notafile:
+        cmp #'@'
+        bne @directory
+        jmp ser_load            ; out of branch range - ser_load is in CODE
 
 @directory:
         jsr sd_ledon
@@ -151,7 +158,7 @@ LOAD:
 ; ---------------------------------------------------------------------------
 SAVE:
         jsr sd_getname
-        bcs @syntax             ; SAVE "$" is not a thing
+        bcs @syntax             ; neither SAVE "$" nor SAVE "@" is a thing
 
         ; A name that is about to bring a new entry into the directory has to
         ; be one that FAT accepts - see sd_checkname
@@ -231,10 +238,12 @@ sd_getname:
 
         ldy #$00
         lda (INDEX),y
-        cmp #'$'
-        bne @convert
         cpx #$01
-        beq @isdirectory
+        bne @convert            ; only a one character name can be either
+        cmp #'$'
+        beq @notaname
+        cmp #'@'
+        beq @notaname
 
 @convert:
         ; Space pad, then fill in the two halves separately - FAT stores the
@@ -280,7 +289,10 @@ sd_getname:
         clc
         rts
 
-@isdirectory:
+; Carry set says the argument was not a file name at all, and A says which of
+; the two it was - the character itself, which is cheaper than a flag byte and
+; reads better at the call site.
+@notaname:
         sec
         rts
 
@@ -350,6 +362,8 @@ sd_badchars_end:
 ; ---------------------------------------------------------------------------
 sd_getline:
         lda sd_loadmode
+        cmp #SD_MODE_SERIAL
+        beq @serial
         cmp #SD_MODE_DIR
         beq @directory
 
@@ -404,6 +418,9 @@ sd_getline:
         ldx #<(INPUTBUFFER-1)
         ldy #>(INPUTBUFFER-1)
         rts
+
+@serial:
+        jmp ser_getline
 
 sd_endload:
         stz sd_loadmode
@@ -764,7 +781,13 @@ sd_finish:
         jsr sd_promptled
         lda sd_loadmode
         beq @checksave
-        ; An error interrupted a load - back to the keyboard
+        ; An error interrupted a load - back to the keyboard. A host at the
+        ; other end of a serial load is waiting for an ACK that is not coming,
+        ; so tell it rather than leaving it to time out.
+        cmp #SD_MODE_SERIAL
+        bne @backtokeyboard
+        jsr ser_cancel
+@backtokeyboard:
         stz sd_loadmode
 
 @checksave:
