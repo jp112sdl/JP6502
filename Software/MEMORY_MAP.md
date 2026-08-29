@@ -1710,6 +1710,70 @@ Flanken, mehr als es Buszyklen gibt — Masseproblem an der Klemme). Deshalb ist
 nicht gemessen, ob die Störimpulse den Daten- oder den Steuerport treffen. Für
 die Abhilfe macht das keinen Unterschied.
 
+#### Der Verursacher: ein 74HC138 ohne Taktfreigabe
+
+`/CSW` und `/CSR` kommen aus **einem einzigen 74HC138**. Eine zweite Aufnahme,
+diesmal mit den Freigabepins des Dekoders (`G1` Pin 6, `/G2A` Pin 4, `/G2B`
+Pin 5), zeigt den Vorgang Takt für Takt:
+
+```
+  t(ns)  phi2  R/W  /CSW  /CSR  G1  /G2A  /G2B
+   -42     0    0    0     1    1    0     0     Schreibzugriff laeuft
+    +0     0    1    1     0    1    0     0     R/W geht hoch, Freigabe steht noch
+   +42     0    1    1     1    1    1     0     /G2A geht weg, Dekoder gesperrt
+```
+
+**`R/W` steigt ein Sample, bevor `/G2A` die Freigabe wegnimmt.** In genau diesem
+Fenster ist der '138 noch freigegeben und `R/W` sagt bereits „lesen" — also
+zieht er `/CSR` auf tief. Das ist der Störimpuls, direkt beobachtet.
+
+Und `/G2A` ist die Adressdekodierung: sie geht weg, wenn der Adressbus auf den
+nächsten Befehl weiterrückt. **Wie schnell das geschieht, hängt daran, welche
+Adresse als Nächstes anliegt** — damit ist auch der letzte Rest der
+Adressabhängigkeit erklärt, und zwar als Laufzeit, nicht als Logik.
+
+Zwei Zahlen aus derselben Aufnahme belegen die eigentliche Ursache:
+
+* **Kein Freigabepin schaltet im Takt.** Bei 3 991 193 Buszyklen hat `phi2`
+  99,9 % der erwarteten Flanken, `G1` 4,5 %, `/G2A` 3,1 %, `/G2B` 0,7 %. Der
+  '138 ist also **nicht taktsynchron freigegeben**.
+* **`/CSW` ist 958 ns von 1000 ns breit**, deckt also praktisch den ganzen
+  Buszyklus ab statt nur die Datenphase.
+
+Der Fehler ist damit kein Grenzfall, den man verschieben müsste, sondern eine
+fehlende Qualifizierung: die Auswahl des VDP steht an, solange die Adresse
+anliegt, und was der '138 in dieser Zeit auf seine Ausgänge legt, entscheidet
+allein `R/W`.
+
+Zählung über 97 Markerpaare, mit korrekt angeschlossenem `R/W`:
+
+| | `/CSW` | `/CSR` echt | Störimpulse |
+|---|---|---|---|
+| Kopie `$40`, läuft | immer 6 | immer 2 | `{0: 88, 1: 9}` |
+| Kopie `$90`, versagt | immer 6 | immer 2 | `{1: 6, 2: 21, 3: 29, 4: 14, 5: 24, 6: 3}` |
+
+#### Die Abhilfe
+
+Beide Ausgänge mit φ2 nachsperren:
+
+```
+/CSW' = /CSW_138  ODER  NICHT phi2
+/CSR' = /CSR_138  ODER  NICHT phi2
+```
+
+Ein 74HC32 und ein Inverter. Der Störimpuls entsteht, während φ2 tief ist — am
+Nachgatter ist `NICHT phi2` dann bereits hoch und zwingt beide Strobes
+inaktiv. Die echten Zugriffe liegen in der φ2-Hochphase und laufen unverändert
+durch. Nebenbei schrumpft der Strobe von 958 ns auf die Datenphase, was der
+TMS9918A ohnehin erwartet.
+
+**Ein Vorbehalt dazu:** `phi2` hat in beiden Aufnahmen nur rund 31 % Tastgrad,
+nicht die üblichen 50 %. Nach dem Nachsperren wäre der Strobe also nur noch
+etwa 310 ns breit. Das liegt über dem, was der 9918 mindestens braucht, aber
+ohne Reserve. Vor dem Umbau lohnt der Blick, ob wirklich der φ2-Ausgang der CPU
+gemessen wurde und wie sein Tastgrad tatsächlich aussieht; ein symmetrischerer
+Takt gäbe der Abhilfe deutlich mehr Luft.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
