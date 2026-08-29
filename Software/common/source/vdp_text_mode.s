@@ -299,16 +299,19 @@ vdp_clear_text_screen:
 ;------------------------------------------------------------------------------
 vdp_backspace:
       .scope
-      ldx vdp_char_pos
-      beq dont_backspace
-      dex 
+      ; Only column nought has nothing in front of it. There used to be a
+      ; second test here that refused at column one as well, which left the
+      ; first character of a line on the screen for ever - tty_read_line had
+      ; already taken it out of the buffer by then, so what stayed behind was
+      ; not even part of the line any more. Nothing needs protecting at column
+      ; nought either: vdp_set_prompt would put a character there, and nothing
+      ; calls it.
+      lda vdp_char_pos
       beq dont_backspace
 
       dec vdp_char_pos
       lda #SPACE
       jsr vdp_out_char
-;      jsr load_vram_char_position
-;      sta VDP_VRAM
 
 dont_backspace:
       rts
