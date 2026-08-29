@@ -203,9 +203,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E3B6` | 183 | frei |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf der früher schlechten Adresse (Gegenprobe, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -216,7 +214,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4969 Bytes von 24576.
+ROM frei gesamt 5200 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -228,12 +226,10 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf der früher schlechten Adresse (Gegenprobe, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Gegenprobe, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -241,7 +237,7 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1261 Bytes von 24576.
+ROM frei gesamt 1492 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -306,6 +302,13 @@ gesperrt für Einschübe; wer dort etwas ändern muss, hält die Länge des Modu
 konstant.
 
 ### 5.2 Warum `SDCODE` ein eigener Block ist
+
+> **Gelöst am 29.08.2026 — siehe 5.5.** Alles, was in 5.2 bis 5.2.3 über
+> gefährliche Verschiebungen steht, war die Beobachtung eines Hardwarefehlers:
+> der Adressdekoder erzeugte bei jedem Schreibzugriff auf den VDP einen
+> Stör-Lesezugriff, und ob er entstand, hing daran, welche Adresse als Nächstes
+> geholt wurde. Ein Gatter am '138 hat das beseitigt. Die Abschnitte bleiben als
+> Protokoll stehen, ihre Regeln gelten nicht mehr.
 
 `SDCODE` ist mit `offset=$4c00` fest positioniert und liegt damit *hinter* allem anderen,
 statt wie üblich am Ende von `CODE`. Der Grund ist kein Platzproblem, sondern ein Befund
@@ -607,7 +610,7 @@ sie als offene Frage fest. Läuft dieses Image, ist die Frage beantwortet und
 die Regel gilt nur noch für `SDCODE`; läuft es nicht, ist sie bestätigt und
 gilt für `CODE` genauso.
 
-### 5.5 Aufgelöst: es ist eine Mikrosekunde, nicht die Adresse
+### 5.5 Aufgelöst: eine Mikrosekunde — und ein Gatter
 
 Der Versuch aus 5.4 ist durch, und er hat **zwei** Antworten geliefert.
 
@@ -1910,9 +1913,54 @@ Störimpulse weg sind — nicht, dass BASIC an einer früher schlechten Adresse
 läuft. Dafür wird das Image gebaut, das viermal einen schwarzen Bildschirm
 gab, bitgleich: `VDPCODE` auf `$E3B7`, `md5 930be09d5751eefc481b0983eee4eaec`.
 
-Läuft es, ist die Sache erledigt: dann fliegt die Zusicherung aus
-`standalone.s`, `db6502_sdbasic.s` darf wieder wachsen, und die Regel „neuer
-Code gehört nach `EXTCODE2`" ist Geschichte.
+Gebrannt, mehrfach kalt gestartet: **Bild ist da.** Dasselbe ROM, das viermal
+schwarz blieb, läuft.
+
+#### Erledigt
+
+Damit ist die Untersuchung abgeschlossen, und das Ergebnis ist, dass die
+Software nie schuld war. Was jetzt gilt:
+
+* **Die Regel „neuer Code gehört nach `EXTCODE2`" ist aufgehoben.**
+  `db6502_sdbasic.s`, `CLS` und alles andere in `SDCODE` dürfen wieder wachsen,
+  Bibliotheksmodule dürfen sich verschieben, Statements dürfen dort stehen, wo
+  sie hingehören. `EXTCODE2` bleibt als Block bestehen — der Code darin ist ja
+  in Ordnung —, aber es ist kein Zwang mehr.
+* **Die Zusicherung `vdp_wait = $F05D` in `standalone.s` ist entfernt.** Sie
+  hatte genau einen Zweck, und der ist entfallen.
+* **`VDPCODE` ist aus `firmware.ext.cfg` verschwunden.** Die VDP-Routinen liegen
+  wieder in `SDCODE`, wo sie hingehören, und `microsoft_basic` ist byteidentisch
+  mit der eingefrorenen Referenz.
+* **Die Taktung der VDP-Zugriffe bleibt.** Die acht Mikrosekunden, die der
+  TMS9918A verlangt, sind unabhängig von diesem Fehler real; die Korrekturen
+  vom 25.08.2026 (5.5, erster Teil) waren richtig und bleiben.
+
+Was von der Untersuchung im Baum bleibt, ist die Prüfung: `rom/vdp_scope`
+erzeugt die Aufnahme, `common/srglitch.py` wertet sie aus. Wer am Adressdekoder
+etwas ändert, kann damit in zwei Minuten nachsehen, ob die Störimpulse wieder
+da sind.
+
+#### Was diese Jagd gekostet hat, und was sie gelehrt hat
+
+Dreizehn Brennvorgänge und sechs Prüf-ROMs, und der Fehler war die ganze Zeit
+ein Gatter. Drei Lehren, die beim nächsten Mal Zeit sparen:
+
+**Dreimal hat ein sauberes Muster gepasst und war trotzdem falsch** — erst eine
+einzelne Verzweigung, dann `A7` gegen `A6`, dann das niederwertige Byte als
+Bitmuster. Jedes davon starb an einem Brand, der gebaut wurde, um es zu
+*widerlegen*, nicht um es zu bestätigen. Bei wenigen Datenpunkten passt fast
+immer irgendetwas.
+
+**Viermal lag der Denkfehler im eigenen Messaufbau**: Seite an das
+niederwertige Byte gekoppelt, Probennummer an die Bildphase gekoppelt, RAM und
+Probenform gleichzeitig getauscht, Füller vor mehr Bewohner gelegt als
+beabsichtigt. Wenn eine Messung der vorigen widerspricht, ist zuerst der
+Aufbau verdächtig, nicht die Schaltung.
+
+**Und die Frage „was kommt eigentlich zurück" hätte sechs Brände früher gestellt
+gehört.** Sechs Durchgänge lang wurde nur gezählt, *ob* etwas zurückkommt. Der
+erste Blick auf die tatsächlichen Bytes ergab `A5 20` statt `5A A5` — ein
+Versatz um genau eins — und von da an ging es geradeaus zum Störimpuls.
 
 #### Aufgeräumt
 

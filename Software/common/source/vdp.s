@@ -443,18 +443,7 @@ no_writechar_carry:
 ;
 ;------------------------------------------------------------------------------
 
-; EXPERIMENT, not a permanent arrangement - MEMORY_MAP.md 5.5. Moving these
-; routines anywhere wrecks the display; moving anything else does not. This
-; build moves them by whole pages and nothing else: they go to $E45D, which has
-; the same low byte as the $F05D they have today, so every branch inside them
-; crosses - or does not cross - exactly the page boundaries it does now. The
-; code executes cycle for cycle identically and only A8..A15 differ.
       .segment "SDCODE"
-
-SDCODE_VDP_HOLE = $E7                   ; vdp.o $83 + vdp_text_mode.o $64
-      .res SDCODE_VDP_HOLE, $EA
-
-      .segment "VDPCODE"
 
 ; 16 cycles including the call, against the 8 us the chip asks for at 1 MHz
 vdp_wait:

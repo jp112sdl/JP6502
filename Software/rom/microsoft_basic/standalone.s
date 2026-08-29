@@ -18,32 +18,6 @@
         .import _start_msbasic
         .import gtx_tty_init
 
-;------------------------------------------------------------------------------
-;
-; The VDP routines have to stay where they are - MEMORY_MAP.md 5.5.
-;
-; Nine burns have established that moving vdp_wait and the rest of the paced
-; VDP block to a different address wrecks the display, that the address alone
-; decides it, that the ROM reads and executes correctly at all of them, and
-; that the same code out of RAM never fails. What is left is analogue and needs
-; an oscilloscope, not another burn.
-;
-; Until then the working layout has to hold, and right now it holds by
-; accident: vdp_wait sits at $F05D only because msbasic.o happens to contribute
-; $45D bytes to SDCODE ahead of it. Any edit to db6502_sdbasic.s or to CLS
-; moves it, and the first sign of that would be a screen full of the wrong
-; glyphs on a board that was working an hour ago.
-;
-; So the address is asserted here, in the one project it applies to. If this
-; fires, the fix is not to change the number - it is to put the new code in
-; EXTCODE2, which sits behind everything else and moves nothing.
-;
-;------------------------------------------------------------------------------
-; Deliberately $E3B7 for this build, not $F05D: the routines are parked on the
-; address that used to give a black screen, to prove the board no longer cares.
-; Once that is confirmed the whole assertion goes away.
-        .import vdp_wait
-        .assert vdp_wait = $E3B7, lderror, "vdp_wait is not where this test wants it - see MEMORY_MAP.md 5.5"
 
         .segment "VECTORS"
 
