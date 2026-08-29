@@ -244,15 +244,6 @@ CLS_ANSI:
 ; address pair showing itself - it was not. Same fault, same first boot.
 ; EXTCODE2 sits behind everything else, so a statement put there moves nothing.
 ; See MEMORY_MAP.md 5.5.
-
-; EXPERIMENT, not a permanent arrangement - MEMORY_MAP.md 5.5. This is the last
-; SDCODE content in msbasic.o, so filler here lands between the BASIC SD
-; statements and the VDP routines. It leaves the SD statements byte for byte at
-; $EC00, puts the VDP routines at $F076 - the address they had in the first
-; burn that ever failed - and pushes libfat32 25 bytes up, which is a move that
-; has already been shown to be harmless.
-        .res    25, $EA
-
 .segment "EXTCODE2"
 
 ; ----------------------------------------------------------------------------

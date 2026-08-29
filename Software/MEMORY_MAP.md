@@ -203,7 +203,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E6FF` | 1024 | frei |
+| `$E300` | `$E3B6` | 183 | frei |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen (Versuch, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -214,7 +216,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5200 Bytes von 24576.
+ROM frei gesamt 4969 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -226,18 +228,20 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen (Versuch, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 25 Bytes Füller (Versuch, siehe 5.5), getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FEB6` | 1463 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1467 Bytes von 24576.
+ROM frei gesamt 1261 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -987,22 +991,13 @@ Am Aufbau nachzusehen wäre demnach:
 3. Woraus entstehen `CSR`/`CSW`, und wie breit ist der Impuls?
 4. Laufzeit der Dekodierkette gegen die Adress-Vorhaltezeit des 6502.
 
-#### `rom/vdp_alias` — die Messung dazu
+#### `rom/vdp_alias` — gemessen, und nichts gefunden
 
-Ein Oszilloskop ist dafür nicht nötig. Ein Störzugriff verstellt den
-VRAM-Zeiger, und das ist sichtbar: 256 bekannte Bytes aus einer Probe an einer
-bestimmten ROM-Adresse in den VDP schreiben, zurücklesen, zählen wie viele
-falsch ankommen. Verschiebt sich der Zeiger unterwegs, stimmt ab dort nichts
-mehr.
-
-Dieselbe 14 Byte lange Probe wird fünfmal gebunden, auf genau die fünf
-Adressen aus der Tabelle. Sie ist absichtlich in sich geschlossen: nach dem
-Schreibzugriff holt der Prozessor jedes weitere Byte aus der Probe selbst, so
-dass die einzige geprüfte Adresse ihre eigene ist. Vier `nop` geben dem Chip 19
-Takte zwischen zwei Schreibzugriffen — mehr als das Doppelte des Verlangten,
-denn um die acht Mikrosekunden geht es hier nicht.
-
-Die LCD-Ausgabe:
+Ein Oszilloskop ist dafür nicht nötig: ein Störzugriff verstellt den VRAM-Zeiger,
+und das ist sichtbar. Dieselbe 14 Byte lange Probe wurde fünfmal gebunden, auf
+die fünf gebrannten Adressen, jede in sich geschlossen — nach dem Schreibzugriff
+holte der Prozessor jedes weitere Byte aus der Probe selbst. 256 bekannte Bytes
+schreiben, zurücklesen, Abweichungen zählen.
 
 ```
 PRB 5A A5
@@ -1011,23 +1006,52 @@ E360 00 E45D 00
 FEB7 00
 ```
 
-`PRB 5A A5` heißt, dass der VRAM-Pfad überhaupt trägt; steht dort etwas
-anderes, ist der Rest wertlos. Danach fünf Zählerstände:
+`PRB 5A A5` — der VRAM-Pfad trägt. Und danach fünfmal `00`. **Ein einfacher
+Schreibzugriff, ausgeführt von einer der schlechten Adressen, erzeugt keinen
+Störzugriff.** Der Versuchs-ROM ist wieder aus dem Baum; das Ergebnis steht
+hier, und die Fassung liegt in der Historie.
 
-* **überall `00`** → die Adresse des schreibenden Befehls ist es nicht, und der
-  Mechanismus sitzt woanders, als diese Messung reicht.
-* **`00` bei `$F05D`, `$E360`, `$E45D` und etwas anderes bei `$F076` und
-  `$FEB7`** → gefunden. Dann erzeugt der Aufbau Störzugriffe in Abhängigkeit
-  davon, welche Adresse als Nächstes geholt wird, und die Suche wandert von der
-  Software auf die Platine.
-* **überall ungleich `00`** → auch der Rücklesepfad ist betroffen; dann taugt
-  die Messung so nicht und braucht einen Zähler, der ohne VRAM auskommt.
+Was die Probe nicht nachgestellt hat, und was sie beim nächsten Anlauf
+nachstellen müsste: sie hat nur den Datenport `$8080` benutzt, nie den
+Steuerport `$8081` mit seinem Flipflop, und ihre Pausen waren `nop`s statt
+`jsr vdp_wait` — die echten Routinen holen nach jedem Zugriff als Nächstes die
+Adresse von `vdp_wait`, und die wandert mit.
 
-**Nebenbefund, der zum Bild passt:** `SCREEN 0` holt den Zeichensatz nicht
-zurück, obwohl es `vdp_boot_patterns` aufruft. `screen_text` geht direkt auf
-`vdp_boot_registers` und liest nie das Statusregister, das als einziges das
-Flipflop am Steuerport zurücksetzt — das tut nur `vdp_boot_init` beim Reset. Ein
-einmal verschobenes Flipflop übersteht also jedes `SCREEN 0`.
+#### Ein Buchhaltungsfehler, der zwei Brände kostet
+
+Beim Nachrechnen der Reihe fällt auf, dass `$F076` nie einvariabel war:
+
+| Brand | VDP-Routinen | `libfat32` | Variablen | Ergebnis |
+|---|---|---|---|---|
+| Referenz | `$F05D` | `$F144` | — | gut |
+| `$F076` | `$F076` | `$F15D` | **zwei** | kaputt |
+| `$FEB7` | `$FEB7` | `$F144` | eine | kaputt |
+| `$E45D` | `$E45D` | `$F144` | eine | gut |
+| `$E360` | `$E360` | `$F144` | eine | gut |
+
+Der Füller lag am Ende des msbasic-Anteils, also *vor* den VDP-Routinen — damit
+sind auch alle dahinter mitgerückt. Die Aussage „die Adresse entscheidet" ruht
+deshalb allein auf `$FEB7` gegen `$E360` und `$E45D`. Das ist ein echter
+Einzelvergleich, aber es ist einer und nicht drei.
+
+#### Der Schnitt: dasselbe niederwertige Byte, andere Gegend
+
+`$FEB7` ist die einzige Adresse, die für sich allein durchgefallen ist. Zwei
+Dinge unterscheiden sie von `$E360` und `$E45D`: das niederwertige Byte `$B7`
+statt `$60`/`$5D`, und die Gegend — oberstes ROM statt des Lochs bei `$E3xx`.
+
+`$E3B7` trennt die beiden. Dasselbe niederwertige Byte wie die durchgefallene
+Adresse, dieselbe Gegend wie die beiden bestandenen. Sonst ist der Brand
+einvariabel: der BASIC-SD-Rumpf steht byteweise auf `$EC00`, `libfat32`
+byteweise auf `$F144`, `SDCODE` behält Anfang, Ende und Länge, und im Block
+selbst ändern sich 40 von 231 Bytes, alle in Operanden.
+
+* **Zeichenschrott** → das niederwertige Byte entscheidet, also die Lage der
+  Seitengrenze im Block. Damit wäre man zurück bei Taktzahlen — die für
+  Verzweigungen ausgeschlossen sind, aber nicht für alles.
+* **sauberes Bild** → die Gegend entscheidet. `$FEB7` liegt als einzige
+  geprüfte Adresse oberhalb von `$F800`, und dann lohnt sich der Blick auf die
+  Dekodierung dieses obersten ROM-Bereichs.
 
 #### Die vollständige Liste der Zugriffspaare
 
