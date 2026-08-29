@@ -1644,6 +1644,72 @@ Adresse, aus der sie geholt werden.
 Das LCD zählt nebenher mit, damit sichtbar bleibt, dass die schlechte Kopie
 während der Aufnahme wirklich versagt.
 
+#### Gemessen: der VDP bekommt Lesezugriffe, die niemand ausgelöst hat
+
+Aufgenommen mit 24 MHz auf 1 MHz Bustakt, also 42 ns Auflösung — bei den ersten
+1 MHz fehlten 63 % der Strobes, das war unbrauchbar. 286 verwertbare
+Markerpaare. `common/srglitch.py` wertet die `.sr`-Datei aus:
+
+```
+die Kopie, die laeuft:
+  /CSW           {6: 286}
+  /CSR, echt     {2: 286}
+  /CSR, Glitches {0: 136, 1: 130, 2: 19, 3: 1}
+die Kopie, die versagt:
+  /CSW           {6: 286}
+  /CSR, echt     {2: 286}
+  /CSR, Glitches {2: 5, 3: 87, 4: 70, 5: 61, 6: 63}
+```
+
+Die Breiten der `/CSR`-Impulse zerfallen in zwei Gruppen ohne irgendetwas
+dazwischen: **900–1100 ns** und **unter 100 ns**. Die breiten sind die
+Lesezugriffe des Programms — davon gibt es in beiden Fenstern exakt zwei, das
+Programm tut also genau das Richtige. Die schmalen sind **Störimpulse von etwa
+42 ns**, und sie liegen alle **auf der abfallenden Flanke von `/CSW`**: Median
+`+0 ns`, 5.–95. Perzentil `+0 ns`.
+
+`/CSW` selbst ist tadellos: immer genau sechs, immer 958–1000 ns breit.
+
+**Damit ist die Ursache gefunden.** Jedes Schreiben auf den VDP erzeugt beim
+Beenden einen kurzen Lese-Strobe. Das ist ein Wettlauf in der Auswahllogik: wenn
+der Schreibzyklus endet, geht `R/W` wieder auf hoch, *bevor* die Auswahl des VDP
+verschwindet — für diesen Moment ist „VDP ausgewählt und Lesen" wahr, und
+`/CSR` zuckt. Ein solcher Zugriff auf den Datenport stellt den VRAM-Zeiger
+weiter; einer auf den Steuerport liest das Statusregister und setzt dabei das
+Schreib-Flipflop zurück.
+
+Und **jede einzelne Beobachtung der letzten neun Brände fällt damit an ihren
+Platz**:
+
+| Beobachtung | Erklärung |
+|---|---|
+| Lesezeiger genau eins zu hoch | ein Störimpuls auf dem Datenport |
+| zerstörter Zeichensatz | 1024 Schreibzugriffe, jeder mit der Chance auf einen |
+| hängt an der Adresse | der Wettlauf entscheidet sich daran, welche Adresse als Nächstes geholt wird, und das ist der nächste Befehl |
+| kein Bitmuster in der Adresse | es ist Laufzeit, keine Logik |
+| ROM ja, RAM nein | anderer Baustein, andere Flankenzeiten am selben Bus |
+| an manchen Adressen sporadisch | ein Wettlauf an der Grenze |
+| Taktzahlen erklären nichts | erklären sie auch nicht — es ist die Adresse selbst |
+| `os1` nie betroffen | sein `vdp_wait` liegt auf `$EC00`, und diese Lage gewinnt den Wettlauf |
+
+#### Was in Hardware zu ändern ist
+
+`/CSR` darf nicht zusagen können, während `/CSW` gerade endet. Sauber ist:
+
+```
+/CSR = NICHT (VDP_AUSGEWAEHLT UND R/W UND phi2)
+/CSW = NICHT (VDP_AUSGEWAEHLT UND NICHT R/W UND phi2)
+```
+
+Steht in `/CSW` bereits φ2 und in `/CSR` nicht, ist genau das der Fehler: mit φ2
+im `/CSR`-Term kann der Impuls beim Fallen von φ2 nicht mehr entstehen. Zu
+prüfen ist also das Gatter, das `/CSR` erzeugt.
+
+Ein Nachtrag zur Messung: der `MODE`-Kanal war unbrauchbar (41 Millionen
+Flanken, mehr als es Buszyklen gibt — Masseproblem an der Klemme). Deshalb ist
+nicht gemessen, ob die Störimpulse den Daten- oder den Steuerport treffen. Für
+die Abhilfe macht das keinen Unterschied.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
