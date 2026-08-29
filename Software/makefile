@@ -33,6 +33,7 @@ FIRMWARE_PROJECTS = blink_c				\
 					vdp_lobyte			\
 					vdp_lobyte2			\
 					vdp_sweep			\
+					vdp_romram			\
 
 LOADABLE_PROJECTS = d_pad_test			\
 					hello_world			\

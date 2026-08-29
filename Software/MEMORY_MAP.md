@@ -1398,6 +1398,44 @@ Ein Zeichen deckt vier niederwertige Bytes ab: Punkt heißt alle vier bestanden,
 Stern alle vier durchgefallen, **Plus heißt, dass der Rand eines Bandes in
 diesem Zeichen liegt** — und die Ränder sind das Gesuchte.
 
+Gebrannt, `N=0015`: **einundzwanzig Runden über 192 Adressen, kein einziger
+Fehlschlag.** Aus dem RAM fällt kein niederwertiges Byte durch.
+
+#### Aber schon wieder zwei Änderungen auf einmal
+
+So verlockend „RAM sauber, ROM nicht" klingt — es ist noch nicht ablesbar,
+denn zwischen den beiden ROMs haben sich zwei Dinge geändert, und beide sind
+meine. Der Sweep läuft aus dem RAM, **und** er benutzt eine andere Probe:
+geradeaus durchlaufender Code mit `nop`s als Pause, während `vdp_lobyte2` zwei
+Unterprogramme in sich selbst aufrief. Beides kann der Auslöser sein.
+
+#### `rom/vdp_romram` — eine Probe, zwei Speicher
+
+Deshalb ändert dieser Brand genau eines. Die verschiebbare Probe des Sweeps
+wird für beide Zeilen benutzt. Sechs Kopien davon liegen im ROM auf den
+niederwertigen Bytes `$50`, `$80`, `$90` und `$98`, die durchfallen, sowie
+`$40` und `$60`, die bestehen — am gebauten Image als byteidentisch nachgeprüft.
+Dieselben sechs niederwertigen Bytes werden zusätzlich aus dem RAM gefahren,
+aus einer Kopie auf `$2000+LO`. Gleiche Befehle, gleiche Pausen, gleiche
+Reihenfolge, gleiche Synchronisierung auf den Bildrücklauf; der einzige
+Unterschied zwischen den Zeilen ist, aus welchem Baustein die Bytes geholt
+werden.
+
+```
+N=0020
+R ****..
+M ......
+50809098 4060
+```
+
+* **ROM fällt durch, RAM sauber** → es ist der Speicherbaustein oder dessen
+  Zeitverhalten, nicht der Adressbus. Der Bus führt in beiden Zeilen dieselben
+  Adressen.
+* **beide sauber** → die geradeaus durchlaufende Probe reicht nicht, um es
+  hervorzurufen, und es kommt auf `jsr` und `rts` an, die `vdp_lobyte2` hatte.
+* **beide fallen durch** → doch der Adressbus, und das Schweigen des Sweeps
+  braucht eine andere Erklärung.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
