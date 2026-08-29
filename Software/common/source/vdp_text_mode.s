@@ -118,10 +118,21 @@ vdp_newline:
 ;
 ;------------------------------------------------------------------------------
 vdp_write_char:
+      ; Only a character that was actually drawn moves the cursor. A carriage
+      ; return and a line feed both leave vdp_out_char with the column already
+      ; at nought, so advancing afterwards put it at one - which is where the
+      ; console then started the next line. BASIC sends both for every newline,
+      ; so everything after the sign-on came out indented until something reset
+      ; the column another way, and tty_read_line does exactly that on ENTER:
+      ; hence an indent that appeared, survived one typed line and vanished.
+      cmp #LINE_FEED
+      beq @control
+      cmp #CARRIAGE_RETURN
+      beq @control
       jsr vdp_out_char
-
-      jsr vdp_advance_char_position  
-      rts
+      jmp vdp_advance_char_position
+@control:
+      jmp vdp_out_char
 
 ;------------------------------------------------------------------------------
 ;
@@ -171,8 +182,9 @@ vdp_write_string:
     bra @write_loop  
 
 @done:
-    jsr vdp_advance_char_position  
-
+    ; No advance here: every character went through vdp_write_char, which has
+    ; already moved the cursor past it. The extra step left every string one
+    ; column further along than it had printed.
     ply
     rts
 
