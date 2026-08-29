@@ -1095,6 +1095,12 @@ Zu beachten: ein Lesefehler, der nur unter bestimmten Adressfolgen auftritt,
 kann sich bei diesem gemächlichen Prüflauf verstecken. Ein sauberes Ergebnis
 schließt eine grenzwertige Leitung also nicht aus, ein schmutziges beweist sie.
 
+Gebrannt: **`SUM 85E4`, und fünfmal `00`.** Die Summe stimmt aufs Byte mit der
+über die `.bin`-Datei überein, und jeder der fünf Blöcke kommt vollständig
+zurück. Das ROM gibt heraus, was hineingebrannt wurde — jedenfalls beim Lesen.
+Damit ist ein hart defektes Bauteil aus, und die Einschränkung des vorigen
+Absatzes ist alles, was noch offen ist.
+
 #### `rom/rom_exec` — dasselbe, aber ausgeführt statt gelesen
 
 `rom_check` liest mit `(zp),y` vorwärts, ein Byte alle fünf Takte, in der
