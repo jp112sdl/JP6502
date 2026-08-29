@@ -1815,6 +1815,47 @@ naheliegt: es würde den Störimpuls vom Zyklusende an den Zyklusanfang
 verschieben, wo `R/W` dann veraltet ist, während die Adressdekodierung schon
 zusagt. Der Wettlauf bliebe, nur mit vertauschten Rollen.
 
+#### Der Tastgrad ist erklärt und behoben
+
+Die 29 % kamen von der Takterzeugung: ein 4-MHz-Oszillator und ein CD4017 als
+Teiler. Der CD4017 gibt je Zählschritt einen Ausgang frei, bei Teilung durch
+vier also **eine** Hochphase auf **drei** Tiefphasen — 25 % von Bauart wegen,
+kein Fehler in der Schaltung, sondern eine Eigenschaft des Teilers. Ersetzt
+durch einen echten 1-MHz-Oszillator ohne Teiler.
+
+Nachgemessen: `phi2O` hat jetzt **Periode 1,000 µs, hoch 500 ns, Tastgrad
+50 %**.
+
+#### Was der symmetrische Takt ändert — und was nicht
+
+**Die Störimpulse bleiben unverändert.** Über 111 Markerpaare:
+
+| | `/CSW` | `/CSR` echt | Störimpulse |
+|---|---|---|---|
+| Kopie `$40`, läuft | immer 6 | immer 2 | `{0: 102, 1: 9}` |
+| Kopie `$90`, versagt | immer 6 | immer 2 | `{1:7, 2:29, 3:21, 4:26, 5:25, 6:3}` |
+
+Das war zu erwarten: der Wettlauf im '138 hängt an Laufzeiten, nicht an der
+Taktform. Wer gehofft hatte, der Takt sei die Ursache, liegt falsch — er war
+nur das Hindernis für die Abhilfe.
+
+**Und genau das ist jetzt weg.** Die φ2-Hochphase liegt bei `+417 ns` bis
+`+917 ns` im 958 ns langen Strobe, ein nachgesperrter Strobe wäre also
+**500 ns** breit statt 292 ns. Das ist ein gewöhnliches 6502-Zeitbudget, und
+die Zugriffszeit des 9918 passt bequem hinein.
+
+99,6 % der Störimpulse liegen in der φ2-Tiefphase; die beiden Ausnahmen von 457
+liegen außerhalb der Messfenster und bei gesperrtem Dekoder, sind also Rauschen.
+Im typischen Fall ist φ2 bereits **83 ns** tief, bevor der Störimpuls kommt —
+die Sperre greift mit Reserve, nicht auf Kante.
+
+Damit ist der Umbau geklärt: **φ2 in die Auswahl des VDP**, entweder als
+Freigabe am '138 oder als Nachgatter an `/CSW` und `/CSR`. Der Rest der
+Untersuchung ist Bestätigung: nach dem Umbau `rom/vdp_scope` brennen, aufnehmen,
+`common/srglitch.py` darüber — die Zeile mit den Störimpulsen muss in **beiden**
+Fenstern auf `{0: alle}` stehen. Dann kann die Zusicherung in `standalone.s`
+wieder heraus und `db6502_sdbasic.s` darf wieder wachsen.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
