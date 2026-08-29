@@ -746,6 +746,34 @@ Upstream MS-BASIC has `GET` for this, but `CONFIG_SMALL` leaves its routine out 
 entirely, so restoring the keyword would mean compiling the routine and growing `CODE` - see
 section 5.2.3 of MEMORY_MAP.md for why that is the one change to avoid.
 
+### The d-pad
+
+Four buttons on VIA2 port B, active low, so a pressed button reads as a zero bit. Nothing has
+to be set up first - `_blink_init` runs during boot and leaves those bits as inputs.
+
+```basic
+B = PEEK(34816)
+IF (B AND  8)=0 THEN REM up
+IF (B AND 64)=0 THEN REM down
+IF (B AND 16)=0 THEN REM left
+IF (B AND 32)=0 THEN REM right
+```
+
+`(B AND 120)=120` is "nothing pressed", which makes a serviceable "press any key to start" and,
+counted round a loop, a seed for `RND`. Bit 7 is the LED and bits 0 and 1 are outputs as well -
+writing to the port will turn the LED on and off, and is otherwise best left alone.
+
+`basic/DPAD.BAS` steers a sprite with it, which is about twenty lines. `basic/SNAKE.BAS` is a
+game on the graphics screen: the field is 8x8 cells, and each one is drawn with eight `VPOKE`s
+rather than sixty-four `PLOT`s, because a character row of the bitmap is one page of VRAM and
+its eight rows of pixels are eight consecutive addresses. Collisions come out of an occupancy
+array rather than by walking the body, so a long snake costs no more per move than a short one.
+
+Sprites are the fast way to move something: two bytes go to the attribute table and the chip
+does the rest, where the same movement drawn into the bitmap is a few hundred writes. What they
+will not do is a snake - only four sprites appear on any one scanline, and a snake lying flat
+is a row of segments on the same line.
+
 ### Cold start and warm start
 
 After a **power-on** the machine goes straight into a cold start. There is nothing else it
