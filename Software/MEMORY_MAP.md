@@ -203,9 +203,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E3B6` | 183 | frei |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf einer bekannt schlechten Adresse (Versuch, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -216,7 +214,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 4969 Bytes von 24576.
+ROM frei gesamt 5200 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -228,12 +226,10 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
-| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf einer bekannt schlechten Adresse (Versuch, siehe 5.5) |
-| `$E49E` | `$E6FF` | 610 | frei |
+| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -241,7 +237,7 @@ ROM frei gesamt 4969 Bytes von 24576.
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1261 Bytes von 24576.
+ROM frei gesamt 1492 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -1236,6 +1232,72 @@ C0+ D0+ E0+ F0+
 * **ein Muster von `-`** → die Karte des Fehlers, und ihre Ränder sagen, was er
   ist: ein einzelner Wert ist ein Bit einer Leitung, ein zusammenhängender
   Bereich eine Zeitschwelle, jeder zweite eine einzelne Adressleitung.
+
+Gebrannt:
+
+```
+00+ 10+ 20+ 30+
+40+ 50- 60+ 70+        $40, $60 und $70 fielen beim ersten Kaltstart mit durch
+80- 90- A0- B0-
+C0+ D0+ E0+ F0+
+```
+
+Nach den obersten zwei Bits des niederwertigen Bytes sortiert ist das ein
+sauberer Schnitt:
+
+| `A7` | `A6` | niederw. Bytes | Ergebnis |
+|---|---|---|---|
+| 0 | 0 | `$00`–`$30` | durchweg gut |
+| 0 | 1 | `$40`–`$70` | wackelig, `$50` durchweg schlecht |
+| 1 | 0 | `$80`–`$B0` | durchweg schlecht |
+| 1 | 1 | `$C0`–`$F0` | durchweg gut |
+
+`A7` und `A6` **gleich** geht immer. `A7` und `A6` **verschieden** fällt durch —
+hart, wenn `A7` das gesetzte ist, unzuverlässig, wenn `A6` es ist.
+
+**So sehen zwei gekoppelte Nachbarleitungen aus.** Stimmen sie überein, fließt
+zwischen ihnen kein Strom und die Flanke ist sauber; unterscheiden sie sich,
+zieht die eine an der anderen. Ein hochohmiger Schluss — Flussmittelrest,
+Zinnbrücke, ein Härchen — tut genau das, und er erklärt auch, warum das ROM
+sauber blieb: bei einem Lesezugriff übernimmt der 6502 die Daten spät im Takt,
+eine träge Adressflanke hat sich bis dahin gesetzt. Das dekodierte
+Auswahlsignal des VDP ist der knappe Pfad.
+
+#### Zwei Fehler in dieser Karte, beide meine
+
+**Seite und niederwertiges Byte waren dieselbe Variable.** Probe `k` lag auf
+Seite `$B0+k` mit niederwertigem Byte `k*$10`, also war `A11`–`A8` immer gleich
+`A7`–`A4`. Der Schnitt kann genauso gut `A11` gegen `A10` sein.
+
+**Die Probe ist 62 Bytes lang.** Eine Kopie „auf `$50`" verbringt ihre Zeit
+zwischen `$50` und `$8D` und liegt damit quer über der Grenze. Bei Schrittweite
+`$10` ist das die halbe Karte.
+
+#### `rom/vdp_lobyte2` — dieselbe Frage ohne die beiden Fehler
+
+Jedes niederwertige Byte wird zweimal gebunden: Satz A auf Seite `$D0+k`, Satz B
+auf Seite `$D0+((k+8) mod 16)`. Gleiche niederwertige Bytes, andere Seiten — am
+gebauten Image nachgeprüft. Stimmen die zwei Zeilen überein, entscheidet das
+niederwertige Byte und die Seiten sind unschuldig; laufen sie auseinander,
+steckt die Seite doch mit drin.
+
+Schrittweite `$08` statt `$10` über das interessante Band `$40`–`$B8`, also
+doppelt so fein. Und weil die erste Karte teilweise wackelte, läuft jede Kopie
+fünfzehnmal; berichtet wird die Zahl der Fehlschläge als eine Hexziffer.
+
+```
+LO 40-B8 STEP 8
+000000F0FFFFFFFF
+000000F0FFFFFFFF
+```
+
+#### Und die Messung, die kein ROM braucht
+
+Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
+und die beiden Kandidatenpaare sind `A6`/`A7` und `A10`/`A11`. Beide sind am
+6502 wie am ROM Nachbarpins. Ein Durchgangsprüfer im stromlosen Zustand kostet
+nichts und kann das hier beenden: einige hundert Ohm zwischen zwei
+Adressleitungen sind kein Zufall.
 
 #### Die vollständige Liste der Zugriffspaare
 
