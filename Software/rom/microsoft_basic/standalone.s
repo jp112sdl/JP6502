@@ -39,8 +39,11 @@
 ; EXTCODE2, which sits behind everything else and moves nothing.
 ;
 ;------------------------------------------------------------------------------
+; Deliberately $E3B7 for this build, not $F05D: the routines are parked on the
+; address that used to give a black screen, to prove the board no longer cares.
+; Once that is confirmed the whole assertion goes away.
         .import vdp_wait
-        .assert vdp_wait = $F05D, lderror, "vdp_wait has moved - new code belongs in EXTCODE2, see MEMORY_MAP.md 5.5"
+        .assert vdp_wait = $E3B7, lderror, "vdp_wait is not where this test wants it - see MEMORY_MAP.md 5.5"
 
         .segment "VECTORS"
 

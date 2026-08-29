@@ -203,7 +203,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E6FF` | 1024 | frei |
+| `$E300` | `$E3B6` | 183 | frei |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf der früher schlechten Adresse (Gegenprobe, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -214,7 +216,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5200 Bytes von 24576.
+ROM frei gesamt 4969 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -226,10 +228,12 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf der früher schlechten Adresse (Gegenprobe, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Gegenprobe, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -237,7 +241,7 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1492 Bytes von 24576.
+ROM frei gesamt 1261 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -1850,11 +1854,73 @@ Im typischen Fall ist φ2 bereits **83 ns** tief, bevor der Störimpuls kommt �
 die Sperre greift mit Reserve, nicht auf Kante.
 
 Damit ist der Umbau geklärt: **φ2 in die Auswahl des VDP**, entweder als
-Freigabe am '138 oder als Nachgatter an `/CSW` und `/CSR`. Der Rest der
-Untersuchung ist Bestätigung: nach dem Umbau `rom/vdp_scope` brennen, aufnehmen,
-`common/srglitch.py` darüber — die Zeile mit den Störimpulsen muss in **beiden**
-Fenstern auf `{0: alle}` stehen. Dann kann die Zusicherung in `standalone.s`
-wieder heraus und `db6502_sdbasic.s` darf wieder wachsen.
+Freigabe am '138 oder als Nachgatter an `/CSW` und `/CSR`.
+
+#### Warum ein Verzögerungsglied an `R/W` nicht geht — gemessen
+
+Naheliegend wäre, statt eines Gatters einfach `R/W` zum '138 zu verzögern, bis
+die Freigabe weg ist. Die Aufnahme sagt, dass das nicht geht:
+
+```
+ZYKLUSBEGINN   R/W wird tief   42 ns VOR   /G2A wird tief
+ZYKLUSENDE     R/W wird hoch   42 ns VOR   /G2A wird hoch
+```
+
+`R/W` eilt an **beiden** Enden gleich weit vor. Damit das Ende sauber wird,
+müsste die Verzögerung größer als dieser Vorsprung sein; damit der Anfang
+sauber bleibt, kleiner. Jede feste Verzögerung repariert die eine Flanke und
+zerlegt die andere um denselben Betrag.
+
+#### Der Umbau: ein 74HC00
+
+Kein 74HC32 zur Hand, und der '00 ist ohnehin die bessere Wahl — vier Gatter,
+ein Gehäuse, und φ2 muss nicht invertiert werden:
+
+```
+Gatter 1 (Pin 1,2 -> 3)    NAND(/CSW_138, /CSW_138)   = Inverter
+Gatter 2 (Pin 4,5 -> 6)    NAND(Pin 3, phi2)          -> /CSW zum VDP
+Gatter 3 (Pin 9,10 -> 8)   NAND(/CSR_138, /CSR_138)   = Inverter
+Gatter 4 (Pin 12,13 -> 11) NAND(Pin 8, phi2)          -> /CSR zum VDP
+```
+
+Pin 14 an +5 V, Pin 7 an GND, 100 nF dazwischen. φ2 ist `PHI2O`, Pin 39 des
+65C02.
+
+#### Gemessen nach dem Umbau: null
+
+Sechs Sekunden Aufnahme, 155 Markerpaare:
+
+| | `/CSW` echt | Störimpulse | `/CSR` echt | Störimpulse |
+|---|---|---|---|---|
+| Kopie `$40` | immer 6 | **`{0: 155}`** | immer 2 | **`{0: 155}`** |
+| Kopie `$90` | immer 6 | **`{0: 155}`** | immer 2 | **`{0: 155}`** |
+
+Die Strobes sind jetzt 500 ns breit statt 958 — sie liegen in der Datenphase,
+wo sie hingehören. Von den 43 700 Störimpulsen je Aufnahme sind **null**
+übrig; die 144 kurzen Impulse, die das Skript im ganzen Mitschnitt noch findet,
+liegen sämtlich in der ersten Millisekunde, also im Einschwingen des Analyzers.
+
+Die Kopie auf `$90`, die vorher in jedem einzelnen Fenster versagt hat,
+verhält sich jetzt Byte für Byte wie die auf `$40`.
+
+#### Die Gegenprobe am eigentlichen Patienten
+
+Das Steckbrett ist repariert, aber bewiesen ist damit erst, dass die
+Störimpulse weg sind — nicht, dass BASIC an einer früher schlechten Adresse
+läuft. Dafür wird das Image gebaut, das viermal einen schwarzen Bildschirm
+gab, bitgleich: `VDPCODE` auf `$E3B7`, `md5 930be09d5751eefc481b0983eee4eaec`.
+
+Läuft es, ist die Sache erledigt: dann fliegt die Zusicherung aus
+`standalone.s`, `db6502_sdbasic.s` darf wieder wachsen, und die Regel „neuer
+Code gehört nach `EXTCODE2`" ist Geschichte.
+
+#### Aufgeräumt
+
+`rom/vdp_lobyte`, `rom/vdp_lobyte2`, `rom/vdp_sweep` und `rom/vdp_romram` sind
+aus dem Baum, mit ihnen 48 feste Segmente aus `firmware.ext.cfg`, die sich
+zuletzt gegenseitig im Weg standen. Ihre Ergebnisse stehen hier, ihre Quellen
+in der Historie. Geblieben sind `rom/vdp_scope` und `common/srglitch.py` —
+zusammen die Prüfung, mit der sich das jederzeit wiederholen lässt.
 
 #### Und die Messung, die kein ROM braucht
 
