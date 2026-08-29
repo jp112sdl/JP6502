@@ -203,7 +203,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$CD3A` | `$E029` | 4848 | `RODATA` |
 | `$E02A` | `$E0FF` | 214 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
-| `$E300` | `$E6FF` | 1024 | frei |
+| `$E300` | `$E3B6` | 183 | frei |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf einer bekannt schlechten Adresse (Versuch, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
 | `$E854` | `$EBFF` | 940 | frei |
 | `$EC00` | `$F37D` | 1918 | `SDCODE` — getakteter VDP-Kaltstart und der allozierende Schreibpfad aus `libfat32.s` |
@@ -214,7 +216,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5200 Bytes von 24576.
+ROM frei gesamt 4969 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -226,10 +228,12 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$A003` | `$DAB2` | 15024 | `CODE` |
 | `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
 | `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E30A` | `$E3B6` | 173 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$E3B7` | `$E49D` | 231 | `VDPCODE` — die VDP-Routinen auf einer bekannt schlechten Adresse (Versuch, siehe 5.5) |
+| `$E49E` | `$E6FF` | 610 | frei |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, 231 Bytes Füller anstelle des VDP-Kaltstarts (Versuch, siehe 5.5), allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
@@ -237,7 +241,7 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$FEB7` | `$FFF9` | 323 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1492 Bytes von 24576.
+ROM frei gesamt 1261 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -1127,9 +1131,52 @@ R 9B9B9B9B9B
 I 0000000000
 ```
 
-Reihenfolge `$F05D $E360 $E3B7 $E45D $FEB7`. Steht das so da, holt und führt
-das Brett an all diesen Adressen unter Last korrekt aus, und das Herausholen
-der Bytes aus dem ROM ist als Ursache erledigt.
+Reihenfolge `$F05D $E360 $E3B7 $E45D $FEB7`. Gebrannt: **genau das.** Das Brett
+holt und führt an all diesen Adressen korrekt aus, auch an den beiden, an denen
+die VDP-Routinen durchfallen. Das ROM ist als Ursache erledigt, in beiden
+Richtungen. Beide Prüf-ROMs sind wieder aus dem Baum; die Ergebnisse stehen
+hier, die Fassungen in der Historie.
+
+#### Was danach übrig ist
+
+Drei Messungen sind negativ ausgegangen, und zusammen schneiden sie den
+Suchraum scharf:
+
+| Gemessen | Ergebnis | Damit erledigt |
+|---|---|---|
+| Seitengrenzen aller elf Verzweigungen über fünf Brände | kein Muster | Taktzahlen im Block |
+| Störzugriff durch einen Schreibbefehl von der schlechten Adresse | fünfmal `00` | Adresse des schreibenden Befehls allein |
+| Lesen und Ausführen an allen fünf Adressen | `SUM` stimmt, `R`/`I` sauber | das ROM |
+
+Was keine dieser Proben nachgestellt hat, ist die Kombination: ein Zugriff auf
+den **Steuerport** `$8081` mit seinem Schreib-Flipflop, gepaart mit
+`jsr vdp_wait` als Pause — wobei die als Nächstes geholte Adresse die von
+`vdp_wait` ist, und die wandert mit dem Block. Genau dieses Flipflop ist das
+Bauteil, dessen Verrutschen seit Monaten als Erklärung für den kaputten
+Zeichensatz dasteht (5.5, erster Teil).
+
+#### `vdp_diag` auf `$E3B7` — den echten Code messen statt nachbauen
+
+Zwei nachgebaute Proben sind ins Leere gelaufen. Also nicht mehr nachbauen: der
+echte Kaltstart wird an die schlechte Adresse gelegt und dabei vermessen.
+`rom/vdp_diag` bringt das schon mit — es geht den Kaltstart Schritt für Schritt
+durch und berichtet ans LCD —, und `VDPCODE` auf `$43B7` legt seine
+VDP-Routinen auf `$E3B7`, wo sie im BASIC-ROM einen schwarzen Bildschirm
+erzeugt haben.
+
+Damit wird aus „das Bild sieht falsch aus" eine Zahl:
+
+* `PRB` ≠ `5A A5` → schon der einfache VRAM-Weg trägt nicht, und das Flipflop
+  ist bereits beim ersten Adresspaar verrutscht.
+* `M1` ≠ `FFFF` → die Zeichensatzkopie geht ab diesem Byte daneben; `G`/`W`
+  sagen, was dort steht und was dorthin gehört.
+* `SH` ≠ `0000` → was in VRAM steht, *ist* der Zeichensatz, nur um so viele
+  Bytes versetzt — die Signatur eines verrutschten Flipflops.
+* `ST` unter `$80` → der Chip gibt keine Bilder aus, und der schwarze Schirm
+  ist kein Zeichenfehler, sondern ein toter Chip.
+* alles sauber → der echte Code läuft an `$E3B7` in `vdp_diag` fehlerfrei, und
+  dann ist es nicht die Adresse für sich, sondern etwas an ihrem Zusammenspiel
+  mit dem übrigen BASIC-ROM.
 
 #### Die vollständige Liste der Zugriffspaare
 

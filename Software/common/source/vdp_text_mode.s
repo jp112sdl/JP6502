@@ -419,7 +419,8 @@ VDP_PROBE_LO      = $3FFE
 VDP_PROBE_VALUE1  = $5A
 VDP_PROBE_VALUE2  = $A5
 
-      .segment "SDCODE"
+; In VDPCODE for the duration of the experiment described in vdp.s
+      .segment "VDPCODE"
 
 vdp_boot_init:
       phx
