@@ -1351,6 +1351,53 @@ enge Leseschleife den Chip öfter träfe als die acht Mikrosekunden erlauben.
 Eine Runde dauert dadurch etwa eine halbe Sekunde, also wird nach jeder Runde
 neu gezeichnet.
 
+Gebrannt, 141 Runden:
+
+```
+N=008D
+..**.1.1****.1..     Satz A
+..**....****.1..     Satz B
+```
+
+**Die beiden Zeilen sind zusammengelaufen.** Durchgefallen sind `$50`, `$58`,
+`$80`, `$88`, `$90`, `$98`; alles andere höchstens einmal in 141 Runden. Damit
+steht zweierlei fest: die **Seiten sind unschuldig** — zwei verschiedene Seiten
+geben dieselbe Antwort —, und das niederwertige Byte entscheidet **zuverlässig**,
+sobald die Phase festgehalten wird.
+
+Nur ist es kein Bitmuster. Weder ein einzelnes Adressbit noch ein Bitpaar, an
+keinem Offset in der Probe, trennt die durchgefallenen von den bestandenen
+Werten; die Zahl der gleichzeitig umschaltenden Adressleitungen auch nicht. Was
+die Karte zeigt, sind zwei Bänder, ungefähr `$50`–`$5F` und `$80`–`$9F`, und
+eine Abtastung alle acht Bytes kann deren Ränder nicht auflösen.
+
+#### `rom/vdp_sweep` — jedes niederwertige Byte, aus dem RAM
+
+Also nicht jedes achte, sondern jedes. Das verlangt eine Probe, die sich
+verschieben lässt, und diese lässt sich verschieben: sie enthält keinen Bezug
+auf sich selbst, nur absolute Verweise auf die VDP-Ports und auf zwei
+Zero-Page-Bytes. Sie wird nach `$2000+LO` kopiert und dort aufgerufen, für `LO`
+von `$40` bis `$FF`.
+
+Aus dem RAM zu laufen beantwortet nebenbei eine zweite Frage umsonst. Fallen
+dieselben niederwertigen Bytes durch wie aus dem ROM, dann ist es der Adressbus
+und nicht der Speicherbaustein. Ist das RAM überall sauber, ist es etwas am
+Zeitverhalten des ROM, und das wäre eine andere Suche.
+
+Jede Probe wartet weiterhin auf den Bildrücklauf. Eine Runde dauert damit rund
+vier Sekunden.
+
+```
+N=000C 40-FF
+....****........     $40-$7F
+****............     $80-$BF
+................     $C0-$FF
+```
+
+Ein Zeichen deckt vier niederwertige Bytes ab: Punkt heißt alle vier bestanden,
+Stern alle vier durchgefallen, **Plus heißt, dass der Rand eines Bandes in
+diesem Zeichen liegt** — und die Ränder sind das Gesuchte.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
