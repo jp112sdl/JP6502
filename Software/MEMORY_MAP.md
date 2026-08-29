@@ -1604,6 +1604,46 @@ Wenn sie zuschlägt, ist die Antwort **nicht**, die Zahl anzupassen, sondern den
 neuen Code nach `EXTCODE2` zu legen, das hinter allem anderen sitzt und nichts
 verschiebt.
 
+#### Warum `os1` nie betroffen war
+
+`os1` hat in dieser Sache nie Ärger gemacht, und der Grund steht in seiner
+Mapdatei: sein `vdp_wait` liegt auf **`$EC00`**. In `os1` trägt `msbasic.o`
+nichts zu `SDCODE` bei, also steht `vdp.o` ganz vorn im Block und erbt dessen
+Seitenanfang. Niederwertiges Byte `$00` — und `$00` war in jeder gemessenen
+Karte durchweg gut.
+
+Die naheliegendere Vermutung, `os1` initialisiere den Bildschirm einfach viel
+später (zweimal eine Sekunde Wartezeit vor der ersten Ausgabe, und der VDP kommt
+erst in `_run_shell`), trägt dagegen nicht: in `vdp_romram` liefen dieselben
+Fehlschläge über 379 Runden, also mehrere Minuten nach dem Einschalten,
+unverändert weiter. Ein Aufwärmeffekt ist es nicht.
+
+#### `rom/vdp_scope` — für den Logikanalyzer
+
+Die Frage, die ein Analyzer in einer einzigen Aufnahme beantwortet: kam am
+Steuerport `$FE` an oder `$FF`, oder gab es einen Zugriff mehr, als das Programm
+ausgelöst hat? Das erste wäre eine Datenleitung — `D0` — und damit
+Buskonkurrenz; das zweite ein Strobe, den niemand programmiert hat.
+
+Das ROM legt die gute und die schlechte Kopie unmittelbar nacheinander in ein
+Triggerfenster, mit einer Marke auf der LED-Leitung (Bit 7 von VIA2 Port B, von
+`_blink_init` ohnehin als Ausgang gesetzt):
+
+```
+Marke hoch   Kopie auf niederwertigem Byte $40 - läuft
+Marke tief   kurze Lücke
+Marke hoch   Kopie auf niederwertigem Byte $90 - läuft nicht
+Marke tief   rund 20 ms Ruhe
+```
+
+Auf die erste steigende Flanke nach der Ruhephase triggern, dann liegen beide
+Proben in einem Fenster, die funktionierende zuerst. Die beiden Kopien sind am
+gebauten Image als byteidentisch nachgeprüft; der einzige Unterschied ist die
+Adresse, aus der sie geholt werden.
+
+Das LCD zählt nebenher mit, damit sichtbar bleibt, dass die schlechte Kopie
+während der Aufnahme wirklich versagt.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
