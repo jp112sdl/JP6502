@@ -1178,6 +1178,65 @@ Damit wird aus „das Bild sieht falsch aus" eine Zahl:
   dann ist es nicht die Adresse für sich, sondern etwas an ihrem Zusammenspiel
   mit dem übrigen BASIC-ROM.
 
+Gebrannt. Der Fehler ist da, und er ist damit aus BASIC heraus in ein 1,2 KB
+großes Diagnose-ROM gewandert:
+
+| | gut (Routinen normal) | `$E3B7` |
+|---|---|---|
+| `PRB` | `5A A5` | **`EF CB`** |
+| `ST` | `E2` | `DA` |
+| `M1` | `FFFF` | **`0000`** |
+| `ENB` | `FFFF` | `0000` |
+| `TXT` | `FFFF` | `0140` |
+| `SH` | `0000` | **`FFFF`** |
+| `SCR` | `FFFF` | `0000` |
+
+Zeile für Zeile gelesen:
+
+* `ST DA` — Bit 7 gesetzt. Der Chip ist getaktet und gibt Bilder aus. Er ist
+  nicht tot, der schwarze Schirm ist kein toter Chip.
+* `PRB EF CB` — zwei Bytes nach `$3FFE` geschrieben und zurückgelesen, und es
+  kommt Müll. Das ist der einfachste Zugriff, den es gibt, und er sitzt vor
+  allem anderen. **Schon das erste Adresspaar kommt nicht an.**
+* `M1 0000` — folgerichtig ist die Zeichensatzkopie ab ihrem allerersten Byte
+  falsch.
+* `SH FFFF` — und was in VRAM steht, ist nicht der Zeichensatz an falscher
+  Stelle. Es ist gar nicht der Zeichensatz.
+
+Damit ist der Ort benannt: der **Steuerport `$8081` und sein
+Schreib-Flipflop**. Genau das Bauteil, das seit Beginn dieses Abschnitts als
+Erklärung für zerstörte Zeichensätze dasteht — nur dass es hier nicht
+verrutscht, sondern die Adresse überhaupt nicht annimmt.
+
+#### `rom/vdp_lobyte` — den Parameter in einem Brand kartieren
+
+Bisher sind fünf Adressen einzeln gebrannt worden, und jede kostete einen
+Brennvorgang für ein Bit Erkenntnis. Das geht besser: dieselbe in sich
+geschlossene Probe wird sechzehnmal gebunden, auf die niederwertigen Bytes
+`$00` bis `$F0`, jede in einer eigenen Seite (`$B000`, `$B110`, `$B220`, …).
+Jede Kopie bringt ihren eigenen Adressschreiber und ihre eigene Pause mit, so
+dass jedes Byte, das zwischen zwei Zugriffen auf den Steuerport geholt wird,
+das niederwertige Byte dieser Kopie trägt. Die Kopien unterscheiden sich
+ausschließlich in den Operanden ihrer eigenen `jsr`/`jmp` — nachgeprüft am
+gebauten Image.
+
+Der VDP wird vorher über die gewöhnlichen Routinen hochgefahren, jede Probe
+trifft also auf einen laufenden Chip. Sie schreibt `$5A` und `$A5` nach `$3FFE`
+und liest zurück; nur wenn beide ankommen, gilt sie als bestanden.
+
+```
+00+ 10+ 20+ 30+
+40+ 50+ 60+ 70+
+80+ 90+ A0+ B0-
+C0+ D0+ E0+ F0+
+```
+
+* **überall `+`** → das niederwertige Byte allein entscheidet doch nicht, und
+  der fehlende Bestandteil ist etwas, das auch diese Probe noch nicht tut.
+* **ein Muster von `-`** → die Karte des Fehlers, und ihre Ränder sagen, was er
+  ist: ein einzelner Wert ist ein Bit einer Leitung, ein zusammenhängender
+  Bereich eine Zeitschwelle, jeder zweite eine einzelne Adressleitung.
+
 #### Die vollständige Liste der Zugriffspaare
 
 Nachdem das Scrollen als letztes umkippte — Text lief sauber bis zum unteren

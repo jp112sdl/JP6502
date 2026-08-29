@@ -68,6 +68,7 @@ diag_txt:       .res 2
 diag_scr:       .res 2
 diag_lines:     .res 1
 diag_enb:       .res 2
+diag_step:      .res 1
 
         .code
 
@@ -77,14 +78,27 @@ init:
         jsr _lcd_init
         jsr _lcd_clear
 
+        ; A trail on the top line, one letter per step as it completes. The
+        ; report clears the display before printing, so on a good run none of
+        ; this survives - it is here for the run that never reaches the report.
+        stz diag_step
+        lda #'.'
+        jsr step_mark
+
 ;--- the cold start, step by step -------------------------------------------
 
         lda VDP_REG                     ; clears the control port flip-flop
         jsr vdp_boot_registers
+        lda #'R'
+        jsr step_mark
 
         jsr probe                       ; -> diag_prb
+        lda #'P'
+        jsr step_mark
 
         jsr vdp_boot_patterns
+        lda #'F'
+        jsr step_mark
 
         ; the first eight bytes as they actually sit in VRAM
         jsr read_pattern_start
@@ -103,11 +117,17 @@ init:
         sta diag_mis2
         lda diag_mis+1
         sta diag_mis2+1
+        lda #'1'
+        jsr step_mark
 
 ;--- and now with a chip that has been up for a while ------------------------
 
         jsr vdp_boot_clear
+        lda #'C'
+        jsr step_mark
         jsr vdp_boot_enable
+        lda #'E'
+        jsr step_mark
 
         lda #30                         ; longer than one frame at 50 Hz
         jsr _delay_ms
@@ -121,9 +141,14 @@ init:
         lda diag_mis+1
         sta diag_enb+1
 
+        lda #'2'
+        jsr step_mark
+
 ;--- is what landed in VRAM the font, just from the wrong place? -------------
 
         jsr find_shift
+        lda #'S'
+        jsr step_mark
 
 ;--- and now the part the cold start never exercises: printing ---------------
 ;
@@ -364,6 +389,26 @@ find_shift:
         lda #$ff                        ; not the font at all
         sta diag_shift
         sta diag_shift+1
+        rts
+
+;------------------------------------------------------------------------------
+; step_mark - put A on the top line at the next free column. Every register is
+; kept, because this sits between the steps of a measurement.
+;------------------------------------------------------------------------------
+step_mark:
+        pha
+        phx
+        phy
+        pha
+        ldx diag_step
+        ldy #$00
+        jsr lcd_set_position
+        pla
+        jsr _lcd_print_char
+        inc diag_step
+        ply
+        plx
+        pla
         rts
 
 ;------------------------------------------------------------------------------
