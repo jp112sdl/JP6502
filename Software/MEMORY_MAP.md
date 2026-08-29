@@ -199,9 +199,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
-| `$A000` | `$CD3A` | 11579 | `CODE` |
-| `$CD3B` | `$E02A` | 4848 | `RODATA` |
-| `$E02B` | `$E0FF` | 213 | frei |
+| `$A000` | `$CD40` | 11585 | `CODE` |
+| `$CD41` | `$E030` | 4848 | `RODATA` |
+| `$E031` | `$E0FF` | 207 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
@@ -214,7 +214,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5199 Bytes von 24576.
+ROM frei gesamt 5193 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -223,21 +223,21 @@ ROM frei gesamt 5199 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DA9F` | 15005 | `CODE` |
-| `$DAA0` | `$E125` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E126` | `$E2F6` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E2F7` | `$E6FF` | 1033 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DAA5` | 15011 | `CODE` |
+| `$DAA6` | `$E12B` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E12C` | `$E2FC` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E2FD` | `$E6FF` | 1027 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
 | `$F7DB` | `$F7FF` | 37 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FF21` | 1570 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FF22` | `$FFF9` | 216 | frei |
+| `$F900` | `$FF23` | 1572 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1404 Bytes von 24576.
+ROM frei gesamt 1396 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

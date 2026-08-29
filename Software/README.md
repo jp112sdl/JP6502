@@ -746,6 +746,15 @@ Upstream MS-BASIC has `GET` for this, but `CONFIG_SMALL` leaves its routine out 
 entirely, so restoring the keyword would mean compiling the routine and growing `CODE` - see
 section 5.2.3 of MEMORY_MAP.md for why that is the one change to avoid.
 
+### The console
+
+40 columns by 24 rows in text mode, 32 by 24 in graphics. A line that runs off the right edge
+wraps onto the next row, and the screen scrolls when it runs off the bottom - in graphics mode
+that scroll costs about a third of a second, see the note under the graphics statements.
+
+`PRINT` counts its own columns for the comma and `TAB` zones, and knows nothing about the
+console, so a very long line can wrap somewhere the zones did not expect.
+
 ### Stopping a program
 
 `Ctrl+C` breaks a running program and a running `LIST`, and prints `BREAK IN` with the line

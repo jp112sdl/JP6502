@@ -1344,11 +1344,14 @@ gtx_write_char:
         cmp     #$0a                    ; line feed
         beq     gtx_newline_active
         jsr     gtx_render
-        ; and on to the next cell
+        ; and on to the next cell, or the next row if that was the last one.
+        ; Wrapping used to put the column back to nought and leave the row
+        ; alone, so a long line overwrote itself from the left.
         inc     gtx_col
         lda     gtx_col
         cmp     #GTX_COLUMNS
         bcc     @done
+        bra     gtx_newline_active
 @carriage_return:
         stz     gtx_col
 @done:

@@ -69,13 +69,24 @@ vdp_text_init:
 vdp_advance_char_position:
       pha
 
+      ; Past the right edge the line wraps, the way any console does. It used
+      ; to stop dead in the last column instead, so everything after the
+      ; fortieth character of a line piled up in the same cell.
+      ;
+      ; vdp_newline puts the column back to nought, moves down a row and
+      ; scrolls when there is no row left, and it keeps A - which matters,
+      ; because the caller's character is on the stack here, not in the
+      ; accumulator.
       lda vdp_char_pos
-      cmp #VDP_TEXT_MODE_LINE_LENGTH - 1
+      inc a
+      cmp #VDP_TEXT_MODE_LINE_LENGTH
+      bcs @wrap
 
-      beq @do_not_advance_char
-
-      inc vdp_char_pos
-@do_not_advance_char:      
+      sta vdp_char_pos
+      pla
+      rts
+@wrap:
+      jsr vdp_newline
       pla
       rts
 
