@@ -1409,8 +1409,20 @@ gtx_write_string:
 ;
 ; text_screen_buffer holds the page in transit. It belongs to the text mode
 ; scroll, which cannot be running while this is.
+;
+; Every register comes back untouched, and that is not politeness. This hangs
+; off the newline path, where vdp_newline and the whole text mode scroll behind
+; it save A, X and Y - tty_read_line is sitting there with its buffer index in
+; Y, and the line being typed is built on it. Handing back a different X or Y
+; corrupts the line, and because the prompt is part of that line the machine
+; then prints rubbish and scrolls for ever. Same lesson as gtx_render, one
+; routine further along.
 ; ----------------------------------------------------------------------------
 gtx_scroll:
+        pha
+        phx
+        phy
+
         lda     #GFX_BITMAP_HI
         jsr     gtx_scroll_table
         lda     #GFX_COLOR_HI
@@ -1428,7 +1440,12 @@ gtx_scroll:
         ldy     #$00
         lda     #(GFX_COLOR_HI + GTX_ROWS - GTX_SCROLL_ROWS) | VDP_WRITE_VRAM_SELECT
         ldx     #GTX_COLOUR
-        jmp     gfx_fill
+        jsr     gfx_fill
+
+        ply
+        plx
+        pla
+        rts
 
 ; A = high byte of the table. Moves pages 1..23 down onto 0..22.
 gtx_scroll_table:
