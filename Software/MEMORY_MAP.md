@@ -1314,6 +1314,43 @@ Ein Punkt heißt „nie fehlgeschlagen", eine Ziffer die Anzahl, ein Stern
 „sechzehn oder mehr". Zusammen mit `N` ist beides etwas wert; einzeln nichts.
 Eine Minute laufen lassen, dann ablesen.
 
+#### Gemessen am Brett: keine Brücke
+
+`A6`/`A7`: 270 kΩ. `A8`/`A9`: 270 kΩ. `A10`/`A11`: 270 kΩ. Auf **jedem**
+Nachbarpaar derselbe Wert — das ist der Leckpfad durch die CMOS-Eingänge am
+Bus, nicht eine Verbindung. Eine echte Zinnbrücke läge bei einigen hundert Ohm
+und auf genau einem Paar. **Die Kopplungsthese ist damit erledigt**, und zwar
+ohne einen weiteren Brennvorgang.
+
+#### Und ein dritter Denkfehler im Aufbau
+
+Eine Beispielausgabe der ersten Fassung:
+
+```
+00FFEE67FFFF6731
+00FF4501FFFFDD65
+```
+
+Struktur ist da: `$40`/`$48` fallen in beiden Sätzen nie durch, `$50`/`$58` und
+`$80`–`$98` fallen in beiden immer durch. Dazwischen widersprechen sich die
+Zeilen: bei `$60` steht 14 gegen 4, bei `$70` 6 gegen 0, bei `$A0` 6 gegen 13.
+
+Der Grund liegt wieder im Aufbau. Die Proben laufen hintereinander weg und
+kosten alle gleich viele Takte, also bestimmt die **Nummer** einer Probe, wo im
+VDP-Bild sie landet — und die Nummer ist mit dem niederwertigen Byte gekoppelt.
+Satz A sind die Nummern 0–15, Satz B die Nummern 16–31, also eine andere Phase.
+Dass die zwei Zeilen auseinanderlaufen, hat damit eine viel einfachere
+Erklärung als „die Seite zählt".
+
+Behoben, indem jede Probe auf den Bildrücklauf wartet: Statusregister lesen
+(löscht das Merkbit und nebenbei das Flipflop am Steuerport), pollen bis es
+wieder gesetzt ist, dann sofort die Probe. Jede Probe beginnt damit an
+derselben Stelle im Bild. Der Poll ist auf fünfzehn Takte gepolstert, weil eine
+enge Leseschleife den Chip öfter träfe als die acht Mikrosekunden erlauben.
+
+Eine Runde dauert dadurch etwa eine halbe Sekunde, also wird nach jeder Runde
+neu gezeichnet.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,

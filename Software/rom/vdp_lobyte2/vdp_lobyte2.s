@@ -21,9 +21,14 @@
 ; the tidy map above was partly luck.
 ;
 ; So this does not report once. It runs the whole set over and over, counts
-; failures per copy, and refreshes the display every sixteen rounds. The
-; numbers settle as the rounds add up, and the round counter says how much
-; evidence is behind them. Leave it running for a minute before reading it.
+; failures per copy, and redraws after every round. The numbers settle as the
+; rounds add up, and the round counter says how much evidence is behind them.
+;
+; It also waits for a vertical retrace before every single probe. Without that,
+; a probe's position in the round decides where in the VDP's frame it lands,
+; and the position is the very thing being varied - which made set A and set B
+; disagree for no better reason than that one runs after the other. A round now
+; takes about half a second because of the waiting, so read it after a minute.
 ;
 ; Each low byte is linked twice, once in page $D0+k and once in page
 ; $D0+((k+8) mod 16), so identical low bytes sit in different pages. If the two
@@ -117,8 +122,9 @@ init:
         stz probe_r0
         stz probe_r1
         phx
-        jsr call_probe
-        plx
+        jsr wait_frame                  ; every probe starts at the same point
+        jsr call_probe                  ; in the frame, so its position in the
+        plx                             ; round cannot decide its phase
 
         lda probe_r0
         cmp #PROBE_V1
@@ -140,11 +146,8 @@ init:
         bne @no_carry
         inc rounds+1
 @no_carry:
-        lda rounds
-        and #$0f                        ; the LCD is slow, so not every round
-        bne @round
-        jsr report
-        bra @round
+        jsr report                      ; a round is now a good half second,
+        bra @round                      ; so it can afford to draw every time
 
 ;------------------------------------------------------------------------------
 ; report - the round counter and the two rows
@@ -182,6 +185,29 @@ report:
 
 call_probe:
         jmp (call_target)
+
+;------------------------------------------------------------------------------
+; wait_frame - return just after a vertical retrace.
+;
+; The probes run back to back and all take the same number of cycles, so
+; without this a probe's position in the round decides where in the VDP's frame
+; it lands - and the position is the very thing being varied. Reading the
+; status register clears the flag, and it clears the control port flip-flop
+; too, so each probe also starts from a known state.
+;
+; The poll is padded to fifteen cycles, because a tight read loop would hit the
+; chip more often than the eight microseconds it asks for.
+;------------------------------------------------------------------------------
+wait_frame:
+        lda VDP_REG
+@poll:
+        nop
+        nop
+        nop
+        nop
+        lda VDP_REG
+        bpl @poll
+        rts
 
 ;------------------------------------------------------------------------------
 ; print_row - sixteen failure counts starting at result,X, one hex digit each
