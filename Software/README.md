@@ -746,6 +746,16 @@ Upstream MS-BASIC has `GET` for this, but `CONFIG_SMALL` leaves its routine out 
 entirely, so restoring the keyword would mean compiling the routine and growing `CODE` - see
 section 5.2.3 of MEMORY_MAP.md for why that is the one change to avoid.
 
+### Stopping a program
+
+`Ctrl+C` breaks a running program and a running `LIST`, and prints `BREAK IN` with the line
+number. `CONT` carries on from there.
+
+`Ctrl+X` is a different thing entirely and lives a level lower: the keyboard controller sends
+`$18` for it, the interrupt handler picks that off before it ever reaches the input buffer, and
+the machine restarts. It works no matter what BASIC is doing, including inside a `SOUND` that
+has not finished, which `Ctrl+C` cannot do - the check happens between statements.
+
 ### The d-pad
 
 Four buttons on VIA2 port B, active low, so a pressed button reads as a zero bit. Nothing has

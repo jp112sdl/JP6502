@@ -223,10 +223,10 @@ ROM frei gesamt 5203 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DA92` | 14992 | `CODE` |
-| `$DA93` | `$E118` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E119` | `$E2E9` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E2EA` | `$E6FF` | 1046 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DA9B` | 15001 | `CODE` |
+| `$DA9C` | `$E121` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E122` | `$E2F2` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E2F3` | `$E6FF` | 1037 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5203 Bytes von 24576.
 | `$FF22` | `$FFF9` | 216 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1417 Bytes von 24576.
+ROM frei gesamt 1408 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

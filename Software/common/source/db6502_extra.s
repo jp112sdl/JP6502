@@ -29,9 +29,33 @@
 
 .segment "CODE"
 
+; ----------------------------------------------------------------------------
+; SEE IF CONTROL-C TYPED
+;
+; Upstream gives every target its own ISCNTC and ends it by running into STOP -
+; that fall-through is what turns a detected Ctrl+C into BREAK. This port
+; replaced the routine with a jump to MONISCNTC, which only reports in the
+; carry, and neither caller looks at the carry: NEWSTT in flow1.s goes straight
+; on to TXTPTR, and the LIST loop in program.s does the same. So the key was
+; read, recognised, thrown away, and nothing happened. That was the whole of
+; "Ctrl+C never works" - the keyboard controller sends $03 for it correctly,
+; and $18 for Ctrl+X, which the interrupt handler picks off separately as a
+; system break, which is why that one always did work.
+;
+; STOP wants the carry set to take the break path and Z set for its
+; end-of-statement test - exactly what a "cmp #3" that matched would leave
+; behind, which is how the fall-through arrived upstream. It also drops the
+; caller's return address itself, with two plas, so this jumps rather than
+; calls.
+; ----------------------------------------------------------------------------
 ISCNTC:
-          jmp MONISCNTC
-;!!! *used*to* run into "STOP"
+          jsr MONISCNTC
+          bcc @nothing_typed
+          lda #$00                  ; Z set: STOP reads it as end of statement
+          sec                       ; C set: STOP takes the break path
+          jmp STOP
+@nothing_typed:
+          rts
 
 init:
 _start_msbasic:
