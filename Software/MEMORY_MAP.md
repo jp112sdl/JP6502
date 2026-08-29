@@ -1436,6 +1436,62 @@ M ......
 * **beide fallen durch** → doch der Adressbus, und das Schweigen des Sweeps
   braucht eine andere Erklärung.
 
+Gebrannt, `N=017B` — 379 Runden:
+
+```
+N=017B
+R .***.*
+M ......
+50809098 4060
+```
+
+| `LO` | ROM | RAM | mit der `jsr`-Probe |
+|---|---|---|---|
+| `$50` | . | . | durchgefallen |
+| `$80` | * | . | durchgefallen |
+| `$90` | * | . | durchgefallen |
+| `$98` | * | . | durchgefallen |
+| `$40` | . | . | bestanden |
+| `$60` | * | . | bestanden |
+
+Zwei Dinge stehen damit.
+
+**Das RAM ist sauber, das ROM nicht** — bei gleichen Befehlen, gleicher
+Adress-Endung, gleicher Phase. Der einzige verbleibende Unterschied ist der
+Baustein, aus dem geholt wird. Einschränkung, die dazugehört: auf dieser
+Platine liegt RAM unter `$8000` und ROM darüber, „ROM gegen RAM" ist also
+zwangsläufig auch „`A15`=1 gegen `A15`=0", und der VDP liegt seinerseits bei
+`A15`=1. Trennen lässt sich das auf dieser Platine nicht.
+
+**`$50` und `$60` haben getauscht.** Mit der Probe aus Unterprogrammen fiel
+`$50` durch und `$60` nicht, mit der geradeaus laufenden ist es umgekehrt. Also
+entscheidet nicht die Anfangsadresse des Blocks, sondern wo die einzelnen
+Befehle darin landen — was auch erklärt, warum kein Bitmuster auf die
+Blockadresse passt.
+
+#### Was eigentlich zurückkommt
+
+Sechs Brände lang wurde nur gezählt, ob etwas zurückkommt, nie was. Das ist die
+nächste Frage, und sie kostet keine neue Probe: dieselbe Fassung zeigt jetzt
+zusätzlich die zuletzt gelesenen zwei Bytes einer ROM-Kopie, die durchfällt
+(`$90`), und einer, die es nicht tut (`$40`).
+
+```
+N=0080
+R .***.*
+M ......
+90 EF CB 40 5A A5
+```
+
+Geschrieben wurde `$5A $A5`. Was stattdessen dasteht, sagt die Art des Fehlers:
+
+* **`A5 5A`, vertauscht** → das Flipflop am Steuerport ist verrutscht.
+* **ein oder zwei Bits daneben** → der Datenbus, und dann ist Buskonkurrenz mit
+  dem langsam abschaltenden ROM die naheliegende Erklärung.
+* **beliebiger Müll** → gelesen wurde an einer ganz anderen VRAM-Adresse, das
+  Adresspaar ist also gar nicht angekommen.
+* **wechselt von Runde zu Runde** → analog, nicht logisch.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,

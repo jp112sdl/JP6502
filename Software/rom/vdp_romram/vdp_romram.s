@@ -35,7 +35,13 @@
 ;   N=0020
 ;   R ****..
 ;   M ......
-;   50809098 4060
+;   90 EF CB 40 5A A5
+;
+; The last line is what actually came back, from one ROM copy that fails and
+; one that does not, in the order $50 $80 $90 $98 $40 $60 for the columns above
+; it. $5A $A5 is what was written. Anything else says how it went wrong - two
+; swapped bytes are a slipped flip-flop, a bit or two out is the data bus, and
+; arbitrary rubbish is a read from somewhere else in VRAM entirely.
 ;
 ;------------------------------------------------------------------------------
 
@@ -78,6 +84,8 @@ rounds:         .res 2
 slot:           .res 1
 six_idx:        .res 1
 six_left:       .res 1
+last_bad:       .res 2
+last_good:      .res 2
 
         .code
 
@@ -134,6 +142,20 @@ init:
         jsr call_probe
 
         ldx slot
+        cpx #$02                        ; ROM $90, one that fails
+        bne @not_bad_slot
+        lda probe_r0
+        sta last_bad
+        lda probe_r1
+        sta last_bad+1
+@not_bad_slot:
+        cpx #$04                        ; ROM $40, one that passes
+        bne @not_good_slot
+        lda probe_r0
+        sta last_good
+        lda probe_r1
+        sta last_good+1
+@not_good_slot:
         lda probe_r0
         cmp #PROBE_V1
         bne @bad
@@ -235,12 +257,30 @@ report:
         ldx #$06
         jsr print_six
 
+        ; what actually came back, from one ROM copy that fails and one that
+        ; does not. $5A $A5 is what was written; anything else says how it went
+        ; wrong, which no pass-or-fail column can.
         ldy #$03
         ldx #$00
         jsr lcd_set_position
-        lda #<msg_lo
-        ldx #>msg_lo
-        jmp _lcd_print
+        lda #<msg_90
+        ldx #>msg_90
+        jsr _lcd_print
+        lda last_bad
+        jsr print_hex
+        lda #' '
+        jsr _lcd_print_char
+        lda last_bad+1
+        jsr print_hex
+        lda #<msg_40
+        ldx #>msg_40
+        jsr _lcd_print
+        lda last_good
+        jsr print_hex
+        lda #' '
+        jsr _lcd_print_char
+        lda last_good+1
+        jmp print_hex
 
 print_six:
         stx six_idx
@@ -307,7 +347,8 @@ print_hex:
 msg_n:    .byte "N=", $00
 msg_rom:  .byte "R ", $00
 msg_ram:  .byte "M ", $00
-msg_lo:   .byte "50809098 4060", $00
+msg_90:   .byte "90 ", $00
+msg_40:   .byte " 40 ", $00
 
 rom_probe:
         .word   romp_0, romp_1, romp_2, romp_3, romp_4, romp_5
