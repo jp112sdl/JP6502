@@ -9,9 +9,9 @@
 ; not: it is only touched by compiled code using register variables (-Or), and
 ; putting it there would push every MS-BASIC zero page label six bytes up. That
 ; changes no segment size, yet it rewrites 1725 of the 15369 CODE bytes in the
-; BASIC ROM - every absolute operand pointing into the zero page. On this board
-; that is not a risk worth taking for a symbol pure assembler builds never use,
-; see MEMORY_MAP.md section 5.2.1.
+; BASIC ROM - every absolute operand pointing into the zero page. That was once
+; a real risk - MEMORY_MAP.md 5.5 - and is now merely a large diff for a symbol
+; pure assembler builds never use, which is still reason enough to leave it.
 ;
 ; crt0.o is pulled out of common.c.lib only by the .forceimport __STARTUP__ that
 ; cc65 puts into every compiled module, so assembler-only ROMs keep the zero

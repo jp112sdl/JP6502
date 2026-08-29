@@ -439,7 +439,8 @@ no_writechar_carry:
 ; is about, so they are paced as well - it costs about 50 ms, once. The routines
 ; above stay untouched and stay fast for everything that runs afterwards.
 ;
-; In SDCODE because CODE must keep its byte count - MEMORY_MAP.md 5.2.1.
+; In SDCODE because CODE had to keep its byte count when this was written -
+; MEMORY_MAP.md 5.5 for why that stopped being true.
 ;
 ;------------------------------------------------------------------------------
 

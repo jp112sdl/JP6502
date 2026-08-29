@@ -84,11 +84,12 @@ sd_decbuf32:    .res 10         ; sd_dec32 renders here
         .import __BASBUF_RUN__, __BASBUF_SIZE__
         .assert (__BASBUF_RUN__ + __BASBUF_SIZE__) <= (INPUTBUFFER-4), lderror, "BASBUF has grown into the BASIC line input buffer"
 
-; The body lives in its own ROM block at $ec00 instead of in CODE. Appending
-; ~1.1 KB to CODE moves every library module behind msbasic.o to a new
-; address, and on this board that alone is enough to kill the VDP picture -
-; a ROM built from unchanged sources plus 1110 dead filler bytes fails the
-; same way. See MEMORY_MAP.md, section "SDCODE".
+; The body lives in its own ROM block at $ec00 instead of in CODE. It was put
+; there because appending ~1.1 KB to CODE moved every library module behind
+; msbasic.o and killed the VDP picture - a ROM built from unchanged sources
+; plus 1110 dead filler bytes failed the same way. That turned out to be a race
+; in the address decoder, fixed in hardware on 29.08.2026; see MEMORY_MAP.md
+; 5.5. The block stays because there is no reason to move 1.1 KB back.
         .segment "SDCODE"
 
 ; ---------------------------------------------------------------------------

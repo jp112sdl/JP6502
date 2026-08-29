@@ -141,8 +141,9 @@ msg_no_acia:
 ; mounts on its own, so OS/1 has to do it here.
 ;
 ; This sits in EXTCODE and replaces the "jsr _system_init" at init rather than
-; being a second call next to it, so CODE keeps its length and nothing linked
-; after os1.o moves - see MEMORY_MAP.md section 5.2.1.
+; being a second call next to it, which kept CODE the same length and moved
+; nothing linked after os1.o. That was the point at the time - MEMORY_MAP.md
+; 5.5 - and it is a reasonable shape regardless.
 os1_init:
       jsr _system_init
       jmp _sd_init

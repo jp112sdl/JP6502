@@ -8,8 +8,9 @@
         .include "vdp_text_mode.inc"
         ; Every VDP output call goes through the gtx_* layer in db6502_extra.s,
         ; which sends the character to the bitmap while SCREEN 1 is up and hands
-        ; it straight back to the routine named here otherwise. The call sites
-        ; keep their three bytes, so CODE keeps its length - MEMORY_MAP.md 5.2.3
+        ; it straight back to the routine named here otherwise. A jsr for a
+        ; jsr, so nothing here changed length - which mattered a great deal at
+        ; the time, and no longer does: MEMORY_MAP.md 5.5.
         .import gtx_write_char
         .import gtx_write_string
         .import gtx_newline

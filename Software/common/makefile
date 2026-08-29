@@ -44,9 +44,11 @@ PICOCOM_FLAGS=-b 19200 -fh --send-cmd 'sz -X'
 PYTHON_BINARY=python
 PYTHON_PROGRAM=../../common/loadtrim.py
 
-# Relocation check against the ROM last confirmed on the hardware. The
-# reference files live in the project folder and are only meaningful for
-# firmware builds - see MEMORY_MAP.md section 5.2.1
+# Comparison against the ROM last confirmed on the hardware. The reference
+# files live in the project folder and are only meaningful for firmware builds.
+# This began as a guard against relocation, which used to kill the picture; that
+# fault was in the address decoder and is fixed - MEMORY_MAP.md 5.5 - so what
+# is left is a useful "is this the change I meant to make" report.
 ROMCHECK_PROGRAM=../../common/romcheck.py
 REFERENCE_BINARY=reference.$(ADDRESS_MODE).bin
 REFERENCE_SEGMENTS=reference.$(ADDRESS_MODE).segments
@@ -268,9 +270,9 @@ endif
 	$(HEXDUMP_BINARY) $(HEXDUMP_FLAGS) $<
 	@$(MD5_BINARY) $<
 
-# Check the fresh image against the one confirmed on the hardware. This board
-# leaves the display dead when library modules end up at new addresses, and
-# noticing that after the burn costs an hour - see MEMORY_MAP.md section 5.2.1
+# Check the fresh image against the one confirmed on the hardware, and say what
+# moved. Moving things is no longer dangerous - MEMORY_MAP.md 5.5 - but knowing
+# that an edit shifted half the ROM is still worth the two seconds.
 ifeq ($(BUILD_TYPE),load)
 romcheck:
 	@echo "romcheck applies to firmware builds only"

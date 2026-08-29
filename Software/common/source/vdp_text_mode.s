@@ -217,8 +217,9 @@ done:
       ; or displaced out of an otherwise correct line. vdp_write_address leaves
       ; sixteen microseconds.
       ;
-      ; The three bytes this costs come out of the two stores it replaces, so
-      ; CODE keeps its length - MEMORY_MAP.md 5.2.3.
+      ; The three bytes it costs come out of the two stores it replaces, which
+      ; kept CODE the same length. That was a requirement once - MEMORY_MAP.md
+      ; 5.5 - and is now just a tidy accident.
       tay
       lda vdp_vram_address+1
       ora #VDP_WRITE_VRAM_SELECT
@@ -401,8 +402,9 @@ vdp_scroll_line:
 ; thing is retried until VRAM holds what was written to it and the status
 ; register shows frames going out.
 ;
-; This sits in SDCODE because CODE has to keep its byte count and EXTCODE is
-; nearly full - see MEMORY_MAP.md section 5.2.1.
+; This sits in SDCODE because CODE had to keep its byte count when it was
+; written and EXTCODE was nearly full. The first half of that reason is gone -
+; MEMORY_MAP.md 5.5 - and it stays here because it works, not because it must.
 ;
 ;------------------------------------------------------------------------------
 

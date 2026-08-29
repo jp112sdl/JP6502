@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Compare a freshly built ROM against the one confirmed on the hardware.
 
-This board does not tolerate relocated code in the BASIC ROM: moving the
-library modules to new addresses leaves the display dead, whether the shift
-comes from code being added or removed. MEMORY_MAP.md section 5.2.1 has the
-evidence. The rule that follows is that a segment which is not pinned to a
-fixed offset must keep its start and its end, so a change may alter operands
-but must never move a byte.
+This began as a guard. The board would lose its picture whenever the library
+modules landed at new addresses, whatever caused the shift, so the rule was
+that an unpinned segment had to keep its start and its end. That turned out to
+be a race in the address decoder rather than anything about the software, and
+it was fixed in hardware on 29.08.2026 - MEMORY_MAP.md 5.5.
 
-That is what this checks, before the EEPROM is burned rather than after:
+What is left is still worth running. It says what an edit did to the image, and
+"half the ROM moved" is often news:
 
   * every ROM segment present in the reference must still be there, with the
     same start and end - unless the linker config pins it with "offset=", in
@@ -211,13 +211,14 @@ def main():
 
     print()
     if failures:
-        print("FAIL - do not burn this image:")
+        print("MOVED - the image is not just an operand edit:")
         for line in failures:
             print("  * %s" % line)
-        print("See MEMORY_MAP.md section 5.2.1 for why, and for the ways around it.")
+        print("That used to be dangerous and is not any more - MEMORY_MAP.md 5.5.")
+        print("Check it is what you meant, then burn it and refreeze.")
         return 1
 
-    print("OK - nothing has moved, safe to burn.")
+    print("OK - nothing has moved.")
     return 0
 
 

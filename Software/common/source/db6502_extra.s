@@ -45,17 +45,13 @@ _start_msbasic:
       stz sd_savemode
 
       ; Ask the cold/warm question only when there is something to ask about -
-      ; start_select in EXTCODE2 decides. The jump keeps this call site the
-      ; length the prompt had, because CODE must not change size:
-      ; MEMORY_MAP.md section 5.2.3.
+      ; start_select in EXTCODE2 decides.
       jmp start_select
 
-      ; The 29 bytes the prompt used to occupy here. Never executed; they are
-      ; kept so that every library module behind msbasic.o stays on the address
-      ; the working ROM has.
-      .repeat 29
-      nop
-      .endrepeat
+      ; Twenty-nine dead nops used to follow, holding the place the prompt had
+      ; occupied so that no library module behind msbasic.o changed address.
+      ; That mattered while the address decoder was glitching; it is fixed, so
+      ; they are gone - MEMORY_MAP.md 5.5.
 
 MONCOUT:
     ; Every character BASIC prints goes through here, which is what makes SAVE
@@ -237,14 +233,13 @@ CLS_DONE:
 CLS_ANSI:
         .byte   $1b,"[2J",$1b,"[H",$00
 
-; COLOR lives in EXTCODE2 rather than next to CLS in SDCODE, and it has now
-; earned that place twice. Twenty-five bytes here push every module behind it in
-; SDCODE to a new address, and on this board that comes back as a screen full of
-; the wrong glyphs. It was tried again on 25.08.2026 with every VDP access
-; paced, on the theory that the ruined font was the one microsecond on the
-; address pair showing itself - it was not. Same fault, same first boot.
-; EXTCODE2 sits behind everything else, so a statement put there moves nothing.
-; See MEMORY_MAP.md 5.5.
+; COLOR sits in EXTCODE2 rather than next to CLS in SDCODE, and it was put
+; there the hard way: twenty-five bytes here pushed every module behind it in
+; SDCODE to a new address, and the board came back with a screen full of the
+; wrong glyphs - twice, the second time with every VDP access paced, which
+; ruled out the microsecond and left nothing but the addresses. It was the
+; address decoder, and it is fixed. This could move next to CLS now, and there
+; is no reason to. See MEMORY_MAP.md 5.5.
 .segment "EXTCODE2"
 
 ; ----------------------------------------------------------------------------
@@ -758,8 +753,9 @@ plot_nmask:     .res 1
 ; made of the kind of bytes an SRAM likes is exactly the one that turns up by
 ; accident.
 ;
-; In EXTCODE2 because inserting into CODE moves every library module behind
-; msbasic.o, which on this board kills the picture - MEMORY_MAP.md 5.2.3.
+; In EXTCODE2 because when it was written, inserting into CODE moved every
+; library module behind msbasic.o and killed the picture. Fixed since, in the
+; decoder - MEMORY_MAP.md 5.5.
 ; ----------------------------------------------------------------------------
 .segment "EXTCODE2"
 
@@ -816,8 +812,8 @@ start_magic_value:
 ;
 ; The seven places that read the table now call in here instead. Every one of
 ; them was three bytes of absolute-indexed load, and a jsr is three bytes too,
-; so CODE keeps its exact length - which on this board is not a nicety, see
-; MEMORY_MAP.md 5.2.3.
+; so CODE kept its exact length. That was not a nicety at the time; see
+; MEMORY_MAP.md 5.5 for why it has stopped mattering.
 ;
 ; Y stays the index; what is added is a page. keyptr points at the start of the
 ; 256 byte page Y is currently in, and gets carried forward whenever Y wraps.
@@ -929,8 +925,8 @@ keylasty:       .res 1
 ; not merely invisible here: a y above 191 would put the colour byte up in the
 ; name table and take the display apart.
 ;
-; Appended after the keyword table helpers so that everything already in
-; EXTCODE2 keeps its address - MEMORY_MAP.md 5.3 says why that is deliberate.
+; Appended after the keyword table helpers, which at the time was how anything
+; new got in without moving what was already there - MEMORY_MAP.md 5.5.
 ; ----------------------------------------------------------------------------
 .segment "EXTCODE2"
 
@@ -1199,9 +1195,9 @@ VPOKE:
 ;
 ; Upstream has GET for this, but CONFIG_SMALL leaves its routine out of the
 ; build entirely, so bringing the keyword back would mean compiling the routine
-; and growing CODE - the one change this board does not survive, MEMORY_MAP.md
-; 5.2.3. MONRDKEY already returns carry clear when nothing is waiting, so doing
-; it here instead costs ten bytes.
+; and growing CODE. That was once the one change this board did not survive -
+; MEMORY_MAP.md 5.5 - and even now MONRDKEY already returns carry clear when
+; nothing is waiting, so doing it here costs ten bytes and is simply less code.
 ;
 ; A function rather than a GET-style statement because assigning to a variable
 ; needs PTRGET and the rest of the assignment path, which is a great deal more
@@ -1230,8 +1226,9 @@ KEYFN:
 ; and drawing a character into the bitmap eight bytes at a time is cheap.
 ;
 ; The five places in tty.s that reached for the VDP now call in here. Each was a
-; three byte jsr and still is, so CODE keeps its length. While gtx_active is
-; clear every one of them hands straight back to the routine it used to call.
+; three byte jsr and still is, which kept CODE the same length - a requirement
+; then, tidiness now, MEMORY_MAP.md 5.5. While gtx_active is clear every one of
+; them hands straight back to the routine it used to call.
 ;
 ; A character cell falls out of the bitmap layout very neatly. The byte holding
 ; pixel (x,y) is at high = y>>3, low = (x & $F8) | (y & 7), so for a cell at

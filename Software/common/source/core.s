@@ -86,15 +86,11 @@ _system_init:
         ; _sd_save, which only test sd_ready, has to call _sd_init for itself -
         ; rom/os1 does.
         ;
-        ; The three bytes the "jsr _sd_init" occupied are padded rather than
-        ; dropped. core.o sits in common.lib ahead of most other modules, so
-        ; shortening it moves every library module in the BASIC ROM to a new
-        ; address - the one change this board is known to react badly to, see
-        ; MEMORY_MAP.md section 5.2.1. Padding keeps CODE, RODATA and BAS_* on
-        ; the addresses the working ROM has.
-        nop
-        nop
-        nop
+        ; Where the "jsr _sd_init" used to be there were three padding nops,
+        ; because shortening core.o moved every library module behind it and
+        ; this board used to lose its picture when that happened. That was a
+        ; decoder glitch, fixed in hardware on 29.08.2026 - MEMORY_MAP.md 5.5 -
+        ; so the padding is gone.
         ; Done, return from subroutine
         rts
 

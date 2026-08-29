@@ -199,9 +199,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
-| `$A000` | `$CD39` | 11578 | `CODE` |
-| `$CD3A` | `$E029` | 4848 | `RODATA` |
-| `$E02A` | `$E0FF` | 214 | frei |
+| `$A000` | `$CD36` | 11575 | `CODE` |
+| `$CD37` | `$E026` | 4848 | `RODATA` |
+| `$E027` | `$E0FF` | 217 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
@@ -214,7 +214,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5200 Bytes von 24576.
+ROM frei gesamt 5203 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -223,10 +223,10 @@ ROM frei gesamt 5200 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DAB2` | 15024 | `CODE` |
-| `$DAB3` | `$E138` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E139` | `$E309` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E30A` | `$E6FF` | 1014 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DA92` | 14992 | `CODE` |
+| `$DA93` | `$E118` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E119` | `$E2E9` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E2EA` | `$E6FF` | 1046 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7DA` | 3035 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5200 Bytes von 24576.
 | `$FF22` | `$FFF9` | 216 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1385 Bytes von 24576.
+ROM frei gesamt 1417 Bytes von 24576.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 

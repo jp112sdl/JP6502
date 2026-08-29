@@ -14,8 +14,9 @@
 ; library, so there this file is never pulled at all.
 ;
 ; The jumps live in EXTCODE2, which costs those ROMs twelve bytes of otherwise
-; empty ROM and, more to the point, not one byte of CODE. See MEMORY_MAP.md
-; section 5.2.3 for why that distinction is the whole game on this board.
+; empty ROM and not one byte of CODE. That distinction used to be the whole
+; game on this board; since the decoder was fixed it is only tidiness -
+; MEMORY_MAP.md 5.5.
 ; ----------------------------------------------------------------------------
 
         .setcpu "65C02"
