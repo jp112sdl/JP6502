@@ -13,6 +13,7 @@
       .include "vdp.inc"
       .include "vdp_const.inc"
       .import _tty_init
+      .import text_screen_buffer
       .import sn_send
       .import ACIA_STATUS
       .import ACIA_DATA
@@ -1242,16 +1243,23 @@ KEYFN:
 ; well as the shape, so text stays readable over whatever was drawn there; that
 ; costs a second address and doubles the time, and it is worth it.
 ;
-; What it does not do is scroll. Moving the bitmap up by a row means shifting
-; 23 rows of 256 bytes through the VRAM twice over, about half a second, and
-; paying that on every line at the prompt would be worse than the problem. The
-; cursor wraps to the top instead and overwrites, which is predictable and free.
+; It scrolls, and it is not cheap - see gtx_scroll at the end of this block for
+; what that costs and why there is no way round it.
 ; ----------------------------------------------------------------------------
 .segment "EXTCODE2"
 
 GTX_COLUMNS     = 32
 GTX_ROWS        = 24
 GTX_COLOUR      = GFX_DEFAULT_COL       ; white on black, as SCREEN 1 leaves it
+
+; How far the picture jumps when the cursor runs off the bottom. One row is
+; what a terminal does and costs about a third of a second every time, because
+; the bitmap has to go through the processor twice - see gtx_scroll. Jumping
+; further moves nearly the same bytes but does it once every that many lines,
+; so the cost per line falls with the jump: a third of a second at one row,
+; about 90 ms at four, about 45 ms at eight. The screen jumps rather than
+; slides, which is what slow terminals did.
+GTX_SCROLL_ROWS = 1
 
 ; ----------------------------------------------------------------------------
 ; NO XMODEM IN THE BASIC ROM
@@ -1336,7 +1344,9 @@ gtx_newline_active:
         lda     gtx_row
         cmp     #GTX_ROWS
         bcc     @done
-        stz     gtx_row                 ; back to the top rather than scrolling
+        lda     #GTX_ROWS-GTX_SCROLL_ROWS
+        sta     gtx_row                 ; land on the first row that came free
+        jsr     gtx_scroll
 @done:
         rts
 
@@ -1376,6 +1386,85 @@ gtx_write_string:
         ply
         rts
 
+; ----------------------------------------------------------------------------
+; gtx_scroll - move the picture up by one character row
+;
+; A character row is exactly one 256-byte page of the bitmap. The byte holding
+; pixel (x,y) sits at high = y>>3, low = (x & $F8) | (y & 7), so across a row
+; the high byte is the row number and the low byte runs the full 0..255.
+; Scrolling is therefore 23 page moves in the shape table and 23 in the colour
+; table, with the row that comes free cleared afterwards.
+;
+; That is 11776 bytes across the processor twice, and there is no way around
+; it. The 9918 has no block move, and Graphics II gives every cell its own
+; pattern, so the name table cannot be rotated the way a text mode screen can -
+; a cell can only reach the 2 KB pattern block belonging to its third of the
+; screen, and scrolling crosses those boundaries. It costs about a third of a
+; second per line.
+;
+; The loops pace themselves. The chip asks for eight microseconds between
+; accesses and the tightest loop here leaves thirteen, so there is no vdp_wait
+; in them and the display can stay on. What that shows is the copy sweeping
+; down the screen, which reads as the scroll it is.
+;
+; text_screen_buffer holds the page in transit. It belongs to the text mode
+; scroll, which cannot be running while this is.
+; ----------------------------------------------------------------------------
+gtx_scroll:
+        lda     #GFX_BITMAP_HI
+        jsr     gtx_scroll_table
+        lda     #GFX_COLOR_HI
+        jsr     gtx_scroll_table
+
+        ; and the rows that just came free, blank and in the text colour
+        lda     #GTX_SCROLL_ROWS
+        sta     gfx_count+1
+        ldy     #$00
+        lda     #(GFX_BITMAP_HI + GTX_ROWS - GTX_SCROLL_ROWS) | VDP_WRITE_VRAM_SELECT
+        ldx     #$00
+        jsr     gfx_fill
+        lda     #GTX_SCROLL_ROWS
+        sta     gfx_count+1
+        ldy     #$00
+        lda     #(GFX_COLOR_HI + GTX_ROWS - GTX_SCROLL_ROWS) | VDP_WRITE_VRAM_SELECT
+        ldx     #GTX_COLOUR
+        jmp     gfx_fill
+
+; A = high byte of the table. Moves pages 1..23 down onto 0..22.
+gtx_scroll_table:
+        sta     gtx_page
+        ldx     #GTX_ROWS-GTX_SCROLL_ROWS
+@page:
+        ldy     #$00                    ; read the row that comes down here
+        lda     gtx_page
+        clc
+        adc     #GTX_SCROLL_ROWS
+        ora     #VDP_READ_VRAM_SELECT
+        jsr     vdp_write_address
+        ldy     #$00
+@read:
+        lda     VDP_VRAM
+        sta     text_screen_buffer,y
+        iny
+        bne     @read
+
+        ldy     #$00                    ; put it down one row
+        lda     gtx_page
+        ora     #VDP_WRITE_VRAM_SELECT
+        jsr     vdp_write_address
+        ldy     #$00
+@write:
+        lda     text_screen_buffer,y
+        sta     VDP_VRAM
+        iny
+        bne     @write
+
+        inc     gtx_page
+        dex
+        bne     @page
+        rts
+
+; ----------------------------------------------------------------------------
 ; Draws A into the cell at gtx_col/gtx_row without moving the cursor.
 ;
 ; Y has to come back untouched. tty_write_byte saves X around the echo and not
@@ -1444,6 +1533,7 @@ gtx_src:        .res 2
 gtx_active:     .res 1                  ; non-zero while SCREEN 1 is up
 gtx_col:        .res 1
 gtx_row:        .res 1
+gtx_page:       .res 1                  ; the row gtx_scroll is moving down to
 
 .segment "BASBUF"
 spr_n:          .res 1

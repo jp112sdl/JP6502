@@ -670,10 +670,18 @@ the eight rows of pixels are eight consecutive VRAM addresses, so one address ge
 eight bytes go out. The colour is written too, so text stays readable over whatever was drawn
 underneath.
 
-32 columns by 24 rows, against 40 by 24 in text mode. **It does not scroll.** Moving the bitmap
-up one row means shifting 23 rows of 256 bytes through VRAM twice over, about half a second,
-and paying that on every line at the prompt would be worse than the problem it solved. The
-cursor wraps to the top and overwrites instead.
+32 columns by 24 rows, against 40 by 24 in text mode. **It scrolls, and it is slow.** A
+character row is exactly one 256-byte page of the bitmap, so moving the picture up a row is 23
+page moves in the shape table and 23 in the colour table - 11776 bytes through the processor
+twice, about a third of a second. There is no way round it: the 9918 has no block move, and in
+this mode every cell has its own pattern, so the name table cannot be rotated the way it can on
+a text screen. What you see is the copy sweeping down the screen, which reads as the scroll it
+is.
+
+If a third of a second a line is too slow - a long `LIST` is the case that hurts - the jump is
+one constant, `GTX_SCROLL_ROWS` in `db6502_extra.s`. Jumping further moves nearly the same
+bytes but does it once every that many lines, so the cost per line falls with the jump: about
+90 ms at four rows, about 45 ms at eight. The screen then jumps rather than slides.
 
 `SCREEN 0` reloads the font and goes back to the 40 column text screen; so does the reset
 button, and after a power-on the console is always the text one.
