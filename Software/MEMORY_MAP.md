@@ -1767,12 +1767,53 @@ inaktiv. Die echten Zugriffe liegen in der φ2-Hochphase und laufen unverändert
 durch. Nebenbei schrumpft der Strobe von 958 ns auf die Datenphase, was der
 TMS9918A ohnehin erwartet.
 
-**Ein Vorbehalt dazu:** `phi2` hat in beiden Aufnahmen nur rund 31 % Tastgrad,
-nicht die üblichen 50 %. Nach dem Nachsperren wäre der Strobe also nur noch
-etwa 310 ns breit. Das liegt über dem, was der 9918 mindestens braucht, aber
-ohne Reserve. Vor dem Umbau lohnt der Blick, ob wirklich der φ2-Ausgang der CPU
-gemessen wurde und wie sein Tastgrad tatsächlich aussieht; ein symmetrischerer
-Takt gäbe der Abhilfe deutlich mehr Luft.
+#### Am φ2-Ausgang der CPU nachgemessen
+
+Die vorherige Aufnahme lag am Takteingang. Am `PHI2O`-Ausgang gemessen ändert
+sich nichts Wesentliches, und es kommen drei harte Zahlen dazu:
+
+* **`phi2O` ist 292 ns von 1000 ns hoch**, also 29 % Tastgrad. Das ist auch am
+  Ausgang so, nicht nur am Eingang.
+* **100 % der Störimpulse liegen in der φ2-Tiefphase.** Eine Sperre gegen φ2
+  fängt damit jeden einzelnen.
+* **Von 38 950 `/CSR`-Impulsen sind 38 552 Störimpulse — 99 %.** Fast jeder
+  Lese-Strobe, den der VDP sieht, ist keiner. `/CSW` dagegen glitcht in 3194
+  Impulsen **kein einziges Mal**; der Wettlauf entsteht nur beim Übergang
+  Schreiben→Lesen am Zyklusende, nicht umgekehrt.
+
+Die φ2-Hochphase liegt bei `+625 ns` bis `+917 ns` innerhalb des 958 ns langen
+`/CSW`-Impulses. Der Strobe beginnt also 625 ns *bevor* φ2 steigt — das ist die
+fehlende Taktfreigabe, direkt abgelesen — und endet 41 ns nachdem φ2 gefallen
+ist. In diesem Schwanz sitzt der Störimpuls.
+
+#### Warum das Nachsperren nicht ohne Weiteres genügt
+
+Nach `strobe' = strobe ODER NICHT phi2` wäre der Strobe **292 ns** breit statt
+958 ns. Für `/CSW` ist das unkritisch: der 9918 übernimmt die Daten an der
+steigenden Flanke, und die Daten stehen dort längst.
+
+Für `/CSR` ist es das nicht. Heute bekommt der Chip 958 ns Zeit, seine Daten
+herauszugeben; die CPU übernimmt sie an der fallenden Flanke von φ2. Nach dem
+Nachsperren blieben ihm 292 ns minus der Vorhaltezeit der CPU. Ob das reicht,
+hängt an der Zugriffszeit des konkreten Bausteins — beim TMS9918A liegt sie in
+derselben Größenordnung, und das ist zu knapp, um es ungeprüft zu löten.
+
+**Der Tastgrad ist deshalb das eigentliche Hindernis.** Ein 6502-Takt hat
+üblicherweise rund 50 %; hier sind es 29 %. Mit einem symmetrischen Takt wären
+es rund 500 ns, und die Sperre ginge ohne Sorge. Also in dieser Reihenfolge:
+
+1. **Takt-Tastgrad prüfen** — und zwar mit einem analogen Oszilloskop, denn ein
+   Logikanalyzer mit fester Schwelle meldet bei langsamen Flanken zu kurze
+   Hochphasen. Ist er wirklich 29 %, gehört das ohnehin in Ordnung gebracht.
+2. **Dann φ2 in die Auswahl** — als Freigabe am '138, wenn ein Eingang frei
+   gemacht werden kann, sonst als Nachgatter an beiden Ausgängen.
+3. **Danach die Zugriffszeit gegen den verbliebenen Strobe rechnen**, bevor
+   gelötet wird.
+
+Ein `R/W`-Verzögerungsglied ist übrigens **keine** Abhilfe, auch wenn es
+naheliegt: es würde den Störimpuls vom Zyklusende an den Zyklusanfang
+verschieben, wo `R/W` dann veraltet ist, während die Adressdekodierung schon
+zusagt. Der Wettlauf bliebe, nur mit vertauschten Rollen.
 
 #### Und die Messung, die kein ROM braucht
 
