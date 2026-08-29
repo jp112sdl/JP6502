@@ -1940,6 +1940,20 @@ erzeugt die Aufnahme, `common/srglitch.py` wertet sie aus. Wer am Adressdekoder
 etwas ändert, kann damit in zwei Minuten nachsehen, ob die Störimpulse wieder
 da sind.
 
+#### Und die Probe aufs Exempel
+
+Der Beweis auf der Platine bestand bis dahin darin, dass die VDP-Routinen
+allein an eine früher tödliche Adresse gelegt wurden. Das Aufräumen der
+Behelfslösungen hat den größeren Fall nachgeliefert: die tote Polsterung ist
+raus — drei `nop` in `core.s`, neunundzwanzig in `db6502_extra.s` — und damit
+endet `CODE` zweiunddreißig Bytes früher, während `RODATA`, `BAS_VEC`,
+`BAS_KEY` und `BAS_ERR` alle um dieselben zweiunddreißig Bytes nach unten
+rücken. Genau die Verschiebung, mit der die ganze Geschichte am 10.08.2026
+angefangen hat.
+
+Gebrannt: **läuft sauber**, samt `DPAD.BAS` und `SNAKE.BAS`. Damit ist auch die
+Systemebene bestätigt und die Referenz auf diesen Stand eingefroren.
+
 #### Was diese Jagd gekostet hat, und was sie gelehrt hat
 
 Dreizehn Brennvorgänge und sechs Prüf-ROMs, und der Fehler war die ganze Zeit
