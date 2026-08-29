@@ -1095,6 +1095,36 @@ Zu beachten: ein Lesefehler, der nur unter bestimmten Adressfolgen auftritt,
 kann sich bei diesem gemächlichen Prüflauf verstecken. Ein sauberes Ergebnis
 schließt eine grenzwertige Leitung also nicht aus, ein schmutziges beweist sie.
 
+#### `rom/rom_exec` — dasselbe, aber ausgeführt statt gelesen
+
+`rom_check` liest mit `(zp),y` vorwärts, ein Byte alle fünf Takte, in der
+einfachsten Adressfolge, die es gibt. Ein laufendes Programm wechselt die
+Adresse in jedem Takt und in beliebigen Mustern. Deshalb dieselbe Frage noch
+einmal, nur ausgeführt statt gelesen.
+
+Dieselbe 21 Byte lange Routine liegt an den fünf Adressen. Sie benutzt nur
+Direktoperanden und eine relative Verzweigung, also sind alle fünf Kopien
+byteweise gleich und müssen byteweise gleiche Ergebnisse liefern. 256
+Durchläufe einer Rechenkette pro Aufruf, 64 Aufrufe pro Adresse — rund
+zweihunderttausend Befehlsholungen je Adresse.
+
+Zwei Zahlen, die verschiedene Fehler fangen:
+
+* **`R`** — Ergebnis des letzten Aufrufs. Alle fünf müssen `$9B` sein. Ein
+  abweichender Wert ist eine Adresse, an der immer falsch ausgeführt wird.
+* **`I`** — alle 64 Ergebnisse XOR-verknüpft. 64 ist gerade, ein stabiles
+  Ergebnis hebt sich also zu `$00` auf, egal welcher Wert. Alles andere heißt:
+  die Adresse ist nicht falsch, sondern unzuverlässig.
+
+```
+R 9B9B9B9B9B
+I 0000000000
+```
+
+Reihenfolge `$F05D $E360 $E3B7 $E45D $FEB7`. Steht das so da, holt und führt
+das Brett an all diesen Adressen unter Last korrekt aus, und das Herausholen
+der Bytes aus dem ROM ist als Ursache erledigt.
+
 #### Die vollständige Liste der Zugriffspaare
 
 Nachdem das Scrollen als letztes umkippte — Text lief sauber bis zum unteren
