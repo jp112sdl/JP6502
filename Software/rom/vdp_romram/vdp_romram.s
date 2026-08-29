@@ -58,10 +58,10 @@
 PROBE_RAM     = $2000
 PROBE_LEN     = probe_template_end - probe_template
 
-PROBE_LO      = $FE                     ; $3FFE, clear of every table
+; $3FF0-$3FFF, clear of every table. Each byte is written with its own low
+; address, so what comes back says where the read pointer actually stood.
+PROBE_LO      = $F0
 PROBE_HI      = $3F
-PROBE_V1      = $5A
-PROBE_V2      = $A5
 
         .segment "VECTORS"
 
@@ -73,6 +73,8 @@ PROBE_V2      = $A5
 
 probe_r0:       .res 1
 probe_r1:       .res 1
+probe_r2:       .res 1
+probe_r3:       .res 1
 call_target:    .res 2
 copy_src:       .res 2
 copy_dst:       .res 2
@@ -84,8 +86,9 @@ rounds:         .res 2
 slot:           .res 1
 six_idx:        .res 1
 six_left:       .res 1
-last_bad:       .res 2
-last_good:      .res 2
+bad_lo:         .res 1
+bad_bytes:      .res 4
+good_bytes:     .res 4
 
         .code
 
@@ -142,27 +145,29 @@ init:
         jsr call_probe
 
         ldx slot
-        cpx #$02                        ; ROM $90, one that fails
-        bne @not_bad_slot
-        lda probe_r0
-        sta last_bad
-        lda probe_r1
-        sta last_bad+1
-@not_bad_slot:
-        cpx #$04                        ; ROM $40, one that passes
+        cpx #$04                        ; ROM $40, which has always passed
         bne @not_good_slot
-        lda probe_r0
-        sta last_good
-        lda probe_r1
-        sta last_good+1
+        jsr keep_good
 @not_good_slot:
         lda probe_r0
-        cmp #PROBE_V1
+        cmp #(PROBE_LO+0)
         bne @bad
         lda probe_r1
-        cmp #PROBE_V2
+        cmp #(PROBE_LO+1)
+        bne @bad
+        lda probe_r2
+        cmp #(PROBE_LO+2)
+        bne @bad
+        lda probe_r3
+        cmp #(PROBE_LO+3)
         beq @good
 @bad:
+        cpx #$06                        ; only ROM slots are worth showing
+        bcs @count
+        lda bad_lo
+        bne @count                      ; the first one this round is enough
+        jsr keep_bad
+@count:
         lda result,x
         cmp #$FF
         beq @good
@@ -172,12 +177,41 @@ init:
         cpx #12
         bne @next
 
+        stz bad_lo                      ; a fresh look next round
         inc rounds
         bne @no_carry
         inc rounds+1
 @no_carry:
         jsr report
         bra @round
+
+;------------------------------------------------------------------------------
+; keep_bad / keep_good - remember what a copy read back, so that the report can
+; show the bytes and not only a verdict. X is the slot and is preserved.
+;------------------------------------------------------------------------------
+keep_bad:
+        lda probe_low,x
+        sta bad_lo
+        lda probe_r0
+        sta bad_bytes
+        lda probe_r1
+        sta bad_bytes+1
+        lda probe_r2
+        sta bad_bytes+2
+        lda probe_r3
+        sta bad_bytes+3
+        rts
+
+keep_good:
+        lda probe_r0
+        sta good_bytes
+        lda probe_r1
+        sta good_bytes+1
+        lda probe_r2
+        sta good_bytes+2
+        lda probe_r3
+        sta good_bytes+3
+        rts
 
 ;------------------------------------------------------------------------------
 ; place_probe - copy the template to PROBE_RAM + A, and aim call_target at it
@@ -248,39 +282,50 @@ report:
         ldx #$00
         jsr print_six
 
-        ldy #$02
-        ldx #$00
-        jsr lcd_set_position
+        lda #' '
+        jsr _lcd_print_char
         lda #<msg_ram
         ldx #>msg_ram
         jsr _lcd_print
         ldx #$06
         jsr print_six
 
-        ; what actually came back, from one ROM copy that fails and one that
-        ; does not. $5A $A5 is what was written; anything else says how it went
-        ; wrong, which no pass-or-fail column can.
+        ldy #$02
+        ldx #$00
+        jsr lcd_set_position
+        lda #<msg_bad
+        ldx #>msg_bad
+        jsr _lcd_print
+        lda bad_lo
+        jsr print_hex
+        lda #' '
+        jsr _lcd_print_char
+        ldx #$00
+@bad_row:
+        phx
+        lda bad_bytes,x
+        jsr print_hex
+        plx
+        inx
+        cpx #$04
+        bne @bad_row
+
         ldy #$03
         ldx #$00
         jsr lcd_set_position
-        lda #<msg_90
-        ldx #>msg_90
+        lda #<msg_good
+        ldx #>msg_good
         jsr _lcd_print
-        lda last_bad
+        ldx #$00
+@good_row:
+        phx
+        lda good_bytes,x
         jsr print_hex
-        lda #' '
-        jsr _lcd_print_char
-        lda last_bad+1
-        jsr print_hex
-        lda #<msg_40
-        ldx #>msg_40
-        jsr _lcd_print
-        lda last_good
-        jsr print_hex
-        lda #' '
-        jsr _lcd_print_char
-        lda last_good+1
-        jmp print_hex
+        plx
+        inx
+        cpx #$04
+        bne @good_row
+        rts
 
 print_six:
         stx six_idx
@@ -347,8 +392,8 @@ print_hex:
 msg_n:    .byte "N=", $00
 msg_rom:  .byte "R ", $00
 msg_ram:  .byte "M ", $00
-msg_90:   .byte "90 ", $00
-msg_40:   .byte " 40 ", $00
+msg_bad:  .byte "B ", $00
+msg_good: .byte "G 40 ", $00
 
 rom_probe:
         .word   romp_0, romp_1, romp_2, romp_3, romp_4, romp_5
@@ -365,6 +410,7 @@ probe_low:
 ;------------------------------------------------------------------------------
 
 .macro  vdp_romram_probe
+        ; point the chip at $3FF0 for writing
         lda #PROBE_LO
         sta VDP_REG
         nop
@@ -378,19 +424,19 @@ probe_low:
         nop
         nop
 
-        lda #PROBE_V1
+        ; sixteen bytes, each one equal to the address it belongs at
+        ldx #PROBE_LO
+@fill:
+        txa
         sta VDP_VRAM
         nop
         nop
         nop
         nop
-        lda #PROBE_V2
-        sta VDP_VRAM
-        nop
-        nop
-        nop
-        nop
+        inx
+        bne @fill
 
+        ; and back from $3FF0
         lda #PROBE_LO
         sta VDP_REG
         nop
@@ -412,6 +458,18 @@ probe_low:
         nop
         lda VDP_VRAM
         sta probe_r1
+        nop
+        nop
+        nop
+        nop
+        lda VDP_VRAM
+        sta probe_r2
+        nop
+        nop
+        nop
+        nop
+        lda VDP_VRAM
+        sta probe_r3
         rts
 .endmacro
 

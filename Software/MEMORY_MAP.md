@@ -1492,6 +1492,53 @@ Geschrieben wurde `$5A $A5`. Was stattdessen dasteht, sagt die Art des Fehlers:
   Adresspaar ist also gar nicht angekommen.
 * **wechselt von Runde zu Runde** → analog, nicht logisch.
 
+Gebrannt, und es bleibt dauerhaft stehen:
+
+```
+90 A5 20   40 5A A5
+```
+
+**Das ist kein Müll, das ist ein Versatz um genau eins.** Geschrieben wurde
+`$5A` nach `$3FFE` und `$A5` nach `$3FFF`. Zurückgelesen ab `$3FFE` kommt
+`A5 20`: das erste gelesene Byte ist der *zweite* geschriebene Wert, und das
+zweite ist der Inhalt von `$0000`, weil der VRAM-Zeiger bei `$4000` umläuft.
+Der Lesezeiger stand also auf `$3FFF` statt auf `$3FFE`. Reproduzierbar, ohne
+Rauschen.
+
+Zwei Ursachen kommen dafür in Frage, und sie sind unterscheidbar:
+
+* Das niederwertige Adressbyte kam als `$FF` statt `$FE` an — ein einzelnes
+  Datenbit auf dem Weg zum Steuerport.
+* Es gab einen Zugriff zu viel auf den Datenport, der den Zeiger einmal extra
+  weitergestellt hat.
+
+#### Daten, die ihre eigene Adresse verraten
+
+Zwei Bytes sind zu wenig, um das zu trennen. Also schreibt die Probe jetzt
+sechzehn Bytes nach `$3FF0`–`$3FFF`, und **jedes Byte ist gleich seiner eigenen
+niederwertigen Adresse**: `$F0` nach `$3FF0`, `$F1` nach `$3FF1` und so fort.
+Danach liest sie vier Bytes ab `$3FF0` zurück.
+
+Damit sagt jedes gelesene Byte, woher es kommt:
+
+```
+N=0040 R .***.* M ......
+B 90 F1F2F3F4
+G 40 F0F1F2F3
+```
+
+* `F0F1F2F3` → alles richtig.
+* `F1F2F3F4` → der Lesezeiger startete eins zu hoch; das Schreiben war in
+  Ordnung.
+* `F1F2F3F4` **und** die guten Kopien zeigen dasselbe → dann liegt es nicht an
+  der Adresse.
+* Werte, die nicht aufeinander folgen → der Zeiger springt, und dann ist es
+  weder ein Bit noch ein Zugriff zu viel.
+* `EFF0F1F2` → eins zu *niedrig*, was das Schreiben verschoben hätte.
+
+`B` zeigt die erste ROM-Kopie, die in dieser Runde durchfällt, mit ihrem
+niederwertigen Byte davor; `G` zeigt `$40`, das bisher immer bestanden hat.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
