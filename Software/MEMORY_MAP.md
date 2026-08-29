@@ -1285,11 +1285,34 @@ Schrittweite `$08` statt `$10` über das interessante Band `$40`–`$B8`, also
 doppelt so fein. Und weil die erste Karte teilweise wackelte, läuft jede Kopie
 fünfzehnmal; berichtet wird die Zahl der Fehlschläge als eine Hexziffer.
 
+Gebrannt — und das Ergebnis war, dass es **kein** Ergebnis gibt: die beiden
+Zeilen unterscheiden sich, und sie zeigen bei jedem Kaltstart andere Werte.
+
+Das ist selbst der Befund und wichtiger als die Karte. **Der Fehler ist nicht
+deterministisch.** Damit misst ein einzelner Durchlauf Rauschen, und der saubere
+Schnitt der ersten Karte war zu einem guten Teil Glück — fünfzehn Durchläufe
+sind zu wenig, um eine Rate zu schätzen, wenn die Rate irgendwo zwischen null
+und eins liegt. Ein sporadischer Fehler ist außerdem für sich genommen ein
+Argument: reine Logik versagt reproduzierbar, Analoges nicht. Kopplung, Flanken,
+Laufzeiten — das versagt sporadisch.
+
+#### `vdp_lobyte2`, zweite Fassung: mitteln statt berichten
+
+Deshalb berichtet das ROM jetzt nicht mehr einmal, sondern läuft in Runden, bis
+der Strom ausgeht. Es zählt Fehlschläge je Kopie, sättigt bei 255, und frischt
+das LCD alle sechzehn Runden auf. Die Zahlen setzen sich mit wachsender
+Rundenzahl, und der Rundenzähler sagt, wie viel Belege dahinterstehen.
+
 ```
-LO 40-B8 STEP 8
-000000F0FFFFFFFF
-000000F0FFFFFFFF
+N=0140
+.....*A.*******
+.....*A.*******
+LO 40-B8 ST 8
 ```
+
+Ein Punkt heißt „nie fehlgeschlagen", eine Ziffer die Anzahl, ein Stern
+„sechzehn oder mehr". Zusammen mit `N` ist beides etwas wert; einzeln nichts.
+Eine Minute laufen lassen, dann ablesen.
 
 #### Und die Messung, die kein ROM braucht
 

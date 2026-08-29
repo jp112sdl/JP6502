@@ -1,44 +1,45 @@
+
 ;------------------------------------------------------------------------------
 ;
-; vdp_lobyte2 - the low byte again, without the two flaws in the first map
+; vdp_lobyte2 - the low byte, averaged, because a single pass is noise
 ;
 ; rom/vdp_lobyte put sixteen copies of a control-port probe at low bytes $00 to
-; $F0 and came back with this:
+; $F0 and came back with a clean-looking split:
 ;
 ;   00+ 10+ 20+ 30+
 ;   40+ 50- 60+ 70+      ($40, $60 and $70 also failed on the first cold start)
 ;   80- 90- A0- B0-
 ;   C0+ D0+ E0+ F0+
 ;
-; Sorted by the top two bits of the low byte that is a clean split. A7 and A6
-; equal - $00-$30 and $C0-$F0 - always passes. A7 and A6 different - $40-$70
-; and $80-$B0 - fails, solidly when A7 is the one set and unreliably when A6
-; is. That is what two coupled neighbouring lines look like: when they agree no
-; current flows between them, when they differ the weaker one is dragged.
+; Sorted by the top two bits of the low byte that divides perfectly: A7 and A6
+; equal always passed, A7 and A6 different always failed. That is the shape of
+; two coupled neighbouring lines, and it is still the leading explanation.
 ;
-; Two flaws in that burn, both mine, and this ROM fixes both.
+; But the first version of this ROM - fifteen runs per copy, one report - came
+; back with different numbers on every cold start. That is the real finding:
+; the fault is not deterministic. Which means a single pass measures noise, and
+; the tidy map above was partly luck.
 ;
-; The first is that page and low byte were the same variable: probe k sat at
-; $B0+k pages and low byte k*$10, so A11..A8 always equalled A7..A4 and the
-; split could just as well be A11 against A10. Here each low byte is linked
-; twice, once in page $D0+k and once in page $D0+((k+8) mod 16). If the two
-; sets agree, the low byte decides. If they follow their pages instead, the
-; page does.
+; So this does not report once. It runs the whole set over and over, counts
+; failures per copy, and refreshes the display every sixteen rounds. The
+; numbers settle as the rounds add up, and the round counter says how much
+; evidence is behind them. Leave it running for a minute before reading it.
 ;
-; The second is that the probe is 62 bytes long, so a copy at $50 actually
-; spends its time between $50 and $8D and straddles the split. Steps of 8
-; instead of 16, over the interesting band $40 to $B8, sample it twice as
-; finely.
+; Each low byte is linked twice, once in page $D0+k and once in page
+; $D0+((k+8) mod 16), so identical low bytes sit in different pages. If the two
+; rows converge to the same shape, the low byte decides and the pages are
+; innocent. If they stay apart, the page is in it too.
 ;
-; And because the first map was partly intermittent, each copy now runs fifteen
-; times and the report is the number of failures, one hex digit:
+; The display:
 ;
-;   LO 40-B8 STEP 8
-;   000000F0FFFFFFFF     set A, low byte $40 $48 $50 ... $B8
-;   000000F0FFFFFFFF     set B, same low bytes, different pages
+;   N=0140            rounds completed, in hex
+;   .....*A.*******   set A, low bytes $40 $48 $50 ... $B8
+;   .....*A.*******   set B, same low bytes, different pages
+;   LO 40-B8 ST 8
 ;
-; Two identical rows mean the low byte decides and the pages are innocent.
-; Rows that differ mean the page is in it after all, and the digits say where.
+; A dot is no failures at all. A digit or letter is that many. A star is
+; sixteen or more, so a star means "fails often" and a dot means "never seen to
+; fail" - and with the rounds counter beside them, both are worth something.
 ;
 ;------------------------------------------------------------------------------
 
@@ -56,7 +57,6 @@ PROBE_LO      = $FE                     ; $3FFE, clear of every table
 PROBE_HI      = $3F
 PROBE_V1      = $5A
 PROBE_V2      = $A5
-RUNS          = 15                      ; so the failure count is one hex digit
 
         .segment "VECTORS"
 
@@ -73,7 +73,7 @@ call_target:    .res 2
         .segment "BSS"
 
 result:         .res 32
-fail_count:     .res 1
+rounds:         .res 2
 
         .code
 
@@ -91,6 +91,17 @@ init:
         jsr vdp_boot_clear
         jsr vdp_boot_enable
 
+        ldx #31
+@clear:
+        stz result,x
+        dex
+        bpl @clear
+        stz rounds
+        stz rounds+1
+
+;--- round after round, until the power goes off -----------------------------
+
+@round:
         ldx #$00
 @next:
         phx
@@ -103,16 +114,12 @@ init:
         sta call_target+1
         plx
 
-        stz fail_count
-        ldy #RUNS
-@run:
-        phx
-        phy
         stz probe_r0
         stz probe_r1
+        phx
         jsr call_probe
-        ply
         plx
+
         lda probe_r0
         cmp #PROBE_V1
         bne @bad
@@ -120,27 +127,39 @@ init:
         cmp #PROBE_V2
         beq @good
 @bad:
-        inc fail_count
+        lda result,x
+        cmp #$FF                        ; saturate rather than wrap
+        beq @good
+        inc result,x
 @good:
-        dey
-        bne @run
-
-        lda fail_count
-        sta result,x
         inx
         cpx #32
         bne @next
 
-;--- report ------------------------------------------------------------------
+        inc rounds
+        bne @no_carry
+        inc rounds+1
+@no_carry:
+        lda rounds
+        and #$0f                        ; the LCD is slow, so not every round
+        bne @round
+        jsr report
+        bra @round
 
-        jsr _lcd_clear
-
+;------------------------------------------------------------------------------
+; report - the round counter and the two rows
+;------------------------------------------------------------------------------
+report:
         ldy #$00
         ldx #$00
         jsr lcd_set_position
-        lda #<msg_lo
-        ldx #>msg_lo
+        lda #<msg_n
+        ldx #>msg_n
         jsr _lcd_print
+        lda rounds+1
+        jsr print_hex
+        lda rounds
+        jsr print_hex
 
         ldy #$01
         ldx #$00
@@ -154,10 +173,12 @@ init:
         ldx #16
         jsr print_row
 
-        lda #(BLINK_LED_OFF)
-        jsr _blink_led
-@halt:
-        bra @halt
+        ldy #$03
+        ldx #$00
+        jsr lcd_set_position
+        lda #<msg_lo
+        ldx #>msg_lo
+        jmp _lcd_print
 
 call_probe:
         jmp (call_target)
@@ -171,7 +192,7 @@ print_row:
         plx
         phx
         lda result,x
-        jsr print_nibble
+        jsr print_count
         plx
         inx
         phx
@@ -182,10 +203,43 @@ print_row:
         rts
 
 ;------------------------------------------------------------------------------
-; print_nibble - the low four bits of A as one hex digit. X and Y are destroyed.
+; print_count - one counter as one character: a dot for none, a hex digit up to
+; fifteen, a star for sixteen or more. X and Y are destroyed.
 ;------------------------------------------------------------------------------
-print_nibble:
+print_count:
+        cmp #$00
+        bne @some
+        lda #'.'
+        jmp _lcd_print_char
+@some:
+        cmp #16
+        bcc @digit
+        lda #'*'
+        jmp _lcd_print_char
+@digit:
+        cmp #10
+        bcs @letter
+        clc
+        adc #'0'
+        jmp _lcd_print_char
+@letter:
+        clc
+        adc #('A'-10)
+        jmp _lcd_print_char
+
+;------------------------------------------------------------------------------
+; print_hex - A as two hex digits on the LCD. X and Y are destroyed.
+;------------------------------------------------------------------------------
+print_hex:
+        pha
+        lsr a
+        lsr a
+        lsr a
+        lsr a
+        jsr @nibble
+        pla
         and #$0f
+@nibble:
         cmp #10
         bcs @letter
         clc
@@ -198,7 +252,8 @@ print_nibble:
 
         .segment "RODATA"
 
-msg_lo:   .byte "LO 40-B8 STEP 8", $00
+msg_n:    .byte "N=", $00
+msg_lo:   .byte "LO 40-B8 ST 8", $00
 
 probe_addr:
         .word   pra_00, pra_01, pra_02, pra_03
