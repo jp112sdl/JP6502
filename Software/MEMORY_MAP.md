@@ -1539,6 +1539,71 @@ G 40 F0F1F2F3
 `B` zeigt die erste ROM-Kopie, die in dieser Runde durchfällt, mit ihrem
 niederwertigen Byte davor; `G` zeigt `$40`, das bisher immer bestanden hat.
 
+Gebrannt:
+
+```
+B 00 FFAFCB49
+G 40 F0F1F2F3
+```
+
+`B 00` heißt, dass gar keine ROM-Kopie durchgefallen ist — `$00` ist keins der
+sechs niederwertigen Bytes, und die vier Bytes daneben sind uninitialisiertes
+RAM, weshalb sie unverändert stehen bleiben. Mit dieser Probe versagt keine
+Adresse mehr.
+
+#### Woran es hängt: an der Bauform der Probe
+
+| Probe | Größe | fällt durch bei |
+|---|---|---|
+| A, mit `jsr`-Unterprogrammen | 62 B | `$50 $58 $80 $88 $90 $98` |
+| B, geradeaus, zwei Bytes | 69 B | `$60 $80 $90 $98` |
+| C, geradeaus, 16er-Schleife | 82 B | keiner |
+
+Dreimal derselbe Zweck, dreimal ein anderes Ergebnis. Es ist also nicht die
+Adresse eines Blocks, sondern wo die einzelnen Befehle darin liegen — und mit
+Probe C liegt offenbar keiner mehr ungünstig.
+
+Was über alle Brände hinweg steht:
+
+* Aus dem **RAM** fällt nie etwas durch, aus dem **ROM** schon — bei
+  buchstäblich denselben Bytes.
+* Das eine saubere Symptom war ein **Lesezeiger genau eins zu hoch**.
+* Der Fehler ist an manchen Adressen völlig reproduzierbar und an anderen
+  sporadisch.
+
+Das ist zusammen das Bild eines Zeitproblems am Bus, kein Logikfehler, und es
+weiter einzugrenzen braucht ein Oszilloskop an `/CS`, `/OE`, φ2 und dem
+Datenbus während eines VDP-Schreibzugriffs aus einer schlechten Adresse. Ein
+weiterer Brennvorgang bringt dafür nichts mehr.
+
+#### Was stattdessen jetzt im Baum steht: eine Zusicherung
+
+Solange das offen ist, muss die laufende Anordnung halten — und die hält
+bislang aus Versehen. `vdp_wait` liegt auf `$F05D` nur deshalb, weil `msbasic.o`
+zufällig `$45D` Bytes vor ihm zu `SDCODE` beiträgt. Jede Änderung an
+`db6502_sdbasic.s` oder an `CLS` verschiebt ihn, und das erste Anzeichen wäre
+ein Bildschirm voller falscher Zeichen auf einer Platine, die eine Stunde vorher
+lief.
+
+In `rom/microsoft_basic/standalone.s` steht deshalb jetzt:
+
+```asm
+        .import vdp_wait
+        .assert vdp_wait = $F05D, lderror, "vdp_wait has moved - new code belongs in EXTCODE2, see MEMORY_MAP.md 5.5"
+```
+
+Projektlokal, also ohne Wirkung auf `os1` und die Prüf-ROMs, und sie erzeugt
+kein einziges Byte — das Image bleibt byteidentisch zur Referenz. Nachgeprüft
+ist auch, dass sie auslöst: ein einzelnes Füllbyte vorn in `SDCODE` bringt
+
+```
+standalone.s:43: Error: Assertion failed: vdp_wait has moved - new code belongs in EXTCODE2, see MEMORY_MAP.md 5.5
+```
+
+Wenn sie zuschlägt, ist die Antwort **nicht**, die Zahl anzupassen, sondern den
+neuen Code nach `EXTCODE2` zu legen, das hinter allem anderen sitzt und nichts
+verschiebt.
+
 #### Und die Messung, die kein ROM braucht
 
 Wenn die Kopplung stimmt, liegt sie zwischen zwei benachbarten Adressleitungen,
