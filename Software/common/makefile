@@ -41,8 +41,17 @@ PICOCOM_BINARY=picocom
 PICOCOM_FLAGS=-b 19200 -fh --send-cmd 'sz -X'
 
 # Python binary
-PYTHON_BINARY=python2
+PYTHON_BINARY=python
 PYTHON_PROGRAM=../../common/loadtrim.py
+
+# Comparison against the ROM last confirmed on the hardware. The reference
+# files live in the project folder and are only meaningful for firmware builds.
+# This began as a guard against relocation, which used to kill the picture; that
+# fault was in the address decoder and is fixed - MEMORY_MAP.md 5.5 - so what
+# is left is a useful "is this the change I meant to make" report.
+ROMCHECK_PROGRAM=../../common/romcheck.py
+REFERENCE_BINARY=reference.$(ADDRESS_MODE).bin
+REFERENCE_SEGMENTS=reference.$(ADDRESS_MODE).segments
 
 # Build folder
 BUILD_ROOT=../../build
@@ -54,7 +63,7 @@ COMMON_LIB_FOLDER=$(BUILD_ROOT)/lib
 # Loadable module linking mode (dynamic/static)
 #ifneq ($(LOAD_LINK),static)
 #	LOAD_LINK=dynamic #Forced dynamic linking
-LOAD_LINK=static
+LOAD_LINK=dynamic
 #endif
 
 LCD_MODE=8bit
@@ -104,6 +113,8 @@ COMMON_SOURCE_FOLDER=$(COMMON_ROOT)/source
 BASE_LIBRARY=$(COMMON_ROOT)/none.lib
 
 # Common objects to be linked
+# msbasic.s is deliberately not here: it is a whole application, not a shared
+# routine, and it is built directly by the rom/microsoft_basic project.
 COMMON_SOURCES=syscalls.s	\
 							acia.s        \
 							blink.s       \
@@ -117,12 +128,14 @@ COMMON_SOURCES=syscalls.s	\
 							utils.s       \
 							via.s         \
 							via_utils.s   \
+							vdp.s         \
+							vdp_text_mode.s \
 							sound.s       \
 							tty.s         \
+							gtx_stub.s    \
 							parse.s       \
 							menu.s        \
-							sd.s          \
-							msbasic.s
+							sd.s
 
 
 COMMON_OBJECTS=$(COMMON_SOURCES:%.s=$(COMMON_BUILD_FOLDER)/%.o)
@@ -176,32 +189,38 @@ else
 	LOAD_LINK_LIBRARY = $(COMMON_LIBRARY)
 endif
 
+# Dependency tracking
+# ca65/cc65 write the list of files pulled in via .include / #include to a .d
+# file, which is fed back into make below. Without this, editing an included
+# file (defines_db6502.s, basic_zp.s, init.s, ...) does not trigger a rebuild.
+DEP_FLAG=--create-dep $(@:.o=.d)
+
 # Compile assembler sources
 $(BUILD_FOLDER)/%.o: %.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile C sources
 $(BUILD_FOLDER)/%.o: %.c $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
-	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $(@:.o=.s) $<
-	$(CA65_BINARY) $(CA65_FLAGS) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
+	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
+	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources
 $(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile common C sources
 $(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.c $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) -o $(@:.o=.s) $<
-	$(CA65_BINARY) $(CA65_FLAGS) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
+	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
+	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources for load module (shared objects)
 $(COMMON_BUILD_FOLDER)/%.load.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
-	$(CA65_BINARY) $(CA65_FLAGS) -Dload -I $(COMMON_INCLUDE_FOLDER) -o $@ -l $(@:.o=.lst) $<
+	$(CA65_BINARY) $(CA65_FLAGS) -Dload -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 $(COMMON_LIBRARY): $(COMMON_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
@@ -211,13 +230,22 @@ $(COMMON_LOAD_LIBRARY): $(COMMON_LOAD_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
 	$(AR65_BINARY) $(AR65_FLAGS) $(COMMON_LOAD_LIBRARY) $^
 
+# none.lib ships its own zeropage.o holding the whole cc65 runtime zero page.
+# This project defines that page itself, in zeropage.s and crt0.s, so the
+# library copy is never the one we want - and if ld65 ever did reach for it the
+# link would stop with "Duplicate external identifier: 'tmp4'". Drop it from the
+# working copy so it cannot be picked up by accident.
 $(COMMON_C_LIBRARY): $(COMMON_C_LIB_OBJECTS)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_LIB_FOLDER)
 	$(CP_BINARY) $(CP_FLAGS) $(BASE_LIBRARY) $@
+	@$(AR65_BINARY) d $@ zeropage.o
 	$(AR65_BINARY) $(AR65_FLAGS) $(COMMON_C_LIBRARY) $^
 
-# Standard build
+# Standard build. The empty recipe keeps make from announcing "Nothing to be
+# done" - the top level makefile now enters every project on every run, so an
+# up to date build would otherwise print that line once per project
 all: $(FIRMWARE_BINARY)
+	@:
 
 # Linking process
 ifeq ($(BUILD_TYPE),load)
@@ -242,9 +270,32 @@ endif
 	$(HEXDUMP_BINARY) $(HEXDUMP_FLAGS) $<
 	@$(MD5_BINARY) $<
 
+# Check the fresh image against the one confirmed on the hardware, and say what
+# moved. Moving things is no longer dangerous - MEMORY_MAP.md 5.5 - but knowing
+# that an edit shifted half the ROM is still worth the two seconds.
+ifeq ($(BUILD_TYPE),load)
+romcheck:
+	@echo "romcheck applies to firmware builds only"
+
+romfreeze:
+	@echo "romfreeze applies to firmware builds only"
+else
+ROMCHECK_ARGS=--config $(FIRMWARE_CFG) --reference $(REFERENCE_BINARY) \
+              --segments $(REFERENCE_SEGMENTS) --binary $(FIRMWARE_BINARY) \
+              --map $(FIRMWARE_MAP)
+
+romcheck: $(FIRMWARE_BINARY)
+	@$(PYTHON_BINARY) $(ROMCHECK_PROGRAM) $(ROMCHECK_ARGS)
+
+# Record the current build as the new reference. Only after it has run on the
+# board - the reference is a claim that this image works
+romfreeze: $(FIRMWARE_BINARY)
+	@$(PYTHON_BINARY) $(ROMCHECK_PROGRAM) --freeze $(ROMCHECK_ARGS)
+endif
+
 # Burn ROM to EEPROM
-install: $(FIRMWARE_BINARY)
-	$(MINIPRO_BINARY) -p $(EEPROM_MODEL) -w $<	
+install: romcheck $(FIRMWARE_BINARY)
+	$(MINIPRO_BINARY) -p $(EEPROM_MODEL) -w $(FIRMWARE_BINARY)
 
 # Emulate code
 emu: $(FIRMWARE_BINARY)
@@ -261,7 +312,16 @@ clean:
 	$(BUILD_FOLDER)/*.lst \
 	$(BUILD_FOLDER)/*.s \
 	$(BUILD_FOLDER)/*.map \
+	$(BUILD_FOLDER)/*.d \
+	$(BUILD_FOLDER)/*.cdep \
 	$(COMMON_BUILD_FOLDER)/*.o \
 	$(COMMON_BUILD_FOLDER)/*.lst \
 	$(COMMON_BUILD_FOLDER)/*.s \
+	$(COMMON_BUILD_FOLDER)/*.d \
+	$(COMMON_BUILD_FOLDER)/*.cdep \
 	$(COMMON_LIB_FOLDER)/*.lib
+
+# Pull in the generated dependency files (see DEP_FLAG above).
+# Wildcards, so the first build - when no .d files exist yet - just works.
+-include $(wildcard $(BUILD_FOLDER)/*.d) $(wildcard $(BUILD_FOLDER)/*.cdep)
+-include $(wildcard $(COMMON_BUILD_FOLDER)/*.d) $(wildcard $(COMMON_BUILD_FOLDER)/*.cdep)

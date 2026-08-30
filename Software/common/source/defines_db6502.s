@@ -1,4 +1,5 @@
 .import __USERRAM_START__
+.import __BAS_RAM_START__
 
 ; configuration
 CONFIG_2C := 1
@@ -8,6 +9,15 @@ CONFIG_NULL := 1
 CONFIG_PRINT_CR := 0 ; print CR when line end reached
 CONFIG_SCRTCH_ORDER := 3
 CONFIG_SMALL := 1
+
+; Skip the "MEMORY SIZE" and "TERMINAL WIDTH" questions at cold start. Both
+; only make sense on a machine whose RAM size and terminal are unknown at build
+; time; here the memory map is fixed and WIDTH/WIDTH2 below are the answer.
+; BASIC behaves as if both had been confirmed with an empty line: the RAM probe
+; runs and finds the top of USERRAM by itself.
+CONFIG_NO_INIT_PROMPTS := 1
+
+.include "banner.inc"
 
 ; zero page
 ZP_START1 = $00
@@ -19,7 +29,19 @@ ZP_START4 = $65
 USR             := $000A
 
 ; inputbuffer
-INPUTBUFFER     := $0900
+; Must stay an assembly-time constant: defines.s evaluates INPUTBUFFER in .if
+; expressions and derives INPUTBUFFERX = INPUTBUFFER & $FF00, so a linker
+; symbol cannot be used here. The pages are reserved by the BAS_RAM memory
+; area in firmware.ext.cfg; the assert below makes a mismatch a link-time
+; error. Was $0900, which sat inside the BSS segment (menu/modem/tty
+; variables).
+;
+; It sits in the *second* page of BAS_RAM because PUT_NEW_LINE assembles the
+; link pointer and the line number at INPUTBUFFER-4..INPUTBUFFER-1 - the page
+; below has to belong to BASIC as well. At $0E00 those four bytes fell into
+; the tail of the FAT32 sector buffer.
+INPUTBUFFER     := $0F00
+.assert INPUTBUFFER = __BAS_RAM_START__ + $0100, error, "INPUTBUFFER must be the second page of BAS_RAM in the linker config"
 STACK2          := TXTBUFFER
 ; constants
 ; STACK_TOP		:= $FC

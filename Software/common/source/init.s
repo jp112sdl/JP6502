@@ -222,25 +222,32 @@ L4098:
         ldx     #TEMPST
         stx     TEMPPT
 .ifndef CONFIG_CBM_ALL
+; CONFIG_NO_INIT_PROMPTS skips the "MEMORY SIZE" question and falls straight
+; into the RAM probe below - the same thing an empty answer does. The prompt
+; only exists so the user can keep the top of RAM away from BASIC; on a fixed
+; memory map (RAMSTART2 up to the hard limit $8000 in the probe) there is
+; nothing to decide, so the answer would always be the same.
+  .ifndef CONFIG_NO_INIT_PROMPTS
         lda     #<QT_MEMORY_SIZE
         ldy     #>QT_MEMORY_SIZE
         jsr     STROUT
-  .ifdef APPLE
+    .ifdef APPLE
         jsr     INLINX
-  .else
+    .else
         jsr     NXIN
-  .endif
+    .endif
         stx     TXTPTR
         sty     TXTPTR+1
         jsr     CHRGET
-  .ifndef AIM65
-    .ifndef SYM1
+    .ifndef AIM65
+      .ifndef SYM1
         cmp     #$41
         beq     PR_WRITTEN_BY
+      .endif
     .endif
-  .endif
         tay
         bne     L40EE
+  .endif
 .endif
 .ifndef CBM2
         lda     #<RAMSTART2
@@ -275,6 +282,14 @@ L40D7:
 ; AIM65: hard RAM top limit is $A000
         lda     LINNUM+1
         cmp     #$A0
+        beq     L40FA
+.endif
+.ifdef DB6502
+; DB6502: hard RAM top limit is $8000. Without this the probe walks past the
+; end of RAM and writes its $55/$aa test pattern into the VDP, VIA and ACIA
+; registers, which sit at $8080 and above.
+        lda     LINNUM+1
+        cmp     #$80
         beq     L40FA
 .endif
 L40DD:
@@ -317,17 +332,21 @@ L40FA:
 .endif
 L4106:
 .ifndef CONFIG_CBM_ALL
-  .ifdef APPLE
+; Skipped along with the "MEMORY SIZE" prompt: Z17/Z18 already hold the WIDTH /
+; WIDTH2 defaults from the cold start code above, which is what an empty answer
+; would leave them at anyway.
+  .ifndef CONFIG_NO_INIT_PROMPTS
+    .ifdef APPLE
         lda     #$FF
         jmp     L2829
         .word	STROUT ; PATCH!
         jsr     NXIN
-  .else
+    .else
         lda     #<QT_TERMINAL_WIDTH
         ldy     #>QT_TERMINAL_WIDTH
         jsr     STROUT
         jsr     NXIN
-  .endif
+    .endif
         stx     TXTPTR
         sty     TXTPTR+1
         jsr     CHRGET
@@ -342,21 +361,22 @@ L4106:
 L2829:
         sta     Z17
 L4129:
-  .ifdef AIM65
+    .ifdef AIM65
         sbc     #$0A
-  .else
+    .else
         sbc     #$0E
-  .endif
+    .endif
         bcs     L4129
         eor     #$FF
-  .ifdef AIM65
+    .ifdef AIM65
         sbc     #$08
-  .else
+    .else
         sbc     #$0C
-  .endif
+    .endif
         clc
         adc     Z17
         sta     Z18
+  .endif
 .endif
 L4136:
 .ifdef CONFIG_RAM
@@ -486,6 +506,7 @@ QT_WRITTEN_BY:
         .byte   CR,LF,0
     .endif
    .endif
+  .ifndef CONFIG_NO_INIT_PROMPTS
 QT_MEMORY_SIZE:
         .byte   "MEMORY SIZE"
         .byte   0
@@ -495,6 +516,7 @@ QT_TERMINAL_WIDTH:
     .endif
         .byte   "WIDTH"
         .byte   0
+  .endif
   .endif
 QT_BYTES_FREE:
         .byte   " BYTES FREE"
@@ -508,7 +530,10 @@ QT_BYTES_FREE:
   .endif
 QT_BASIC:
   .ifdef DB6502
-        .byte   "MICROSOFT BASIC"
+; One of three places that emit the machine name; the text itself is in
+; common/include/banner.inc. Everything else in this file is shared with the
+; other targets.
+        .byte   BASIC_BANNER
   .endif
   .ifdef OSI
         .byte   "OSI 6502 BASIC VERSION 1.0 REV 3.2"

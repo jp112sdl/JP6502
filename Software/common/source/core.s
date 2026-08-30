@@ -2,6 +2,7 @@
         .include "zeropage.inc"
         .include "utils.inc"
         .include "lcd.inc"
+        .include "vdp_text_mode.inc"
         .include "acia.inc"
         .include "blink.inc"
         .include "keyboard.inc"
@@ -67,7 +68,10 @@ _system_init:
         ; Initialize ACIA
         jsr _acia_init
         ; Initialize keyboard
-        jsr _keyboard_init  ; No keyboard
+        jsr _keyboard_init
+        ; Initialize Video Display Processor to Text mode
+        jsr vdp_boot_init
+
         ; Disable BCD mode
         cld
         ; Enable interrupt processing
@@ -75,8 +79,19 @@ _system_init:
         ; Turn off BLINK LED, init done
         lda #(BLINK_LED_OFF)
         jsr _blink_led
+        ; The card is deliberately not brought up here. _sd_mount runs the
+        ; whole sequence itself and LOAD/SAVE call it every time, so a boot
+        ; time mount buys nothing and costs the card timeout on every reset
+        ; when the slot is empty. Anything that instead uses _sd_load /
+        ; _sd_save, which only test sd_ready, has to call _sd_init for itself -
+        ; rom/os1 does.
+        ;
+        ; Where the "jsr _sd_init" used to be there were three padding nops,
+        ; because shortening core.o moved every library module behind it and
+        ; this board used to lose its picture when that happened. That was a
+        ; decoder glitch, fixed in hardware on 29.08.2026 - MEMORY_MAP.md 5.5 -
+        ; so the padding is gone.
         ; Done, return from subroutine
-        jsr _sd_init
         rts
 
 ; TENTATIVE C COMPLIANT

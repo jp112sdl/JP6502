@@ -5,6 +5,16 @@
         .include "keyboard.inc"
         .include "utils.inc"
         .include "macros.inc"
+        .include "vdp_text_mode.inc"
+        ; Every VDP output call goes through the gtx_* layer in db6502_extra.s,
+        ; which sends the character to the bitmap while SCREEN 1 is up and hands
+        ; it straight back to the routine named here otherwise. A jsr for a
+        ; jsr, so nothing here changed length - which mattered a great deal at
+        ; the time, and no longer does: MEMORY_MAP.md 5.5.
+        .import gtx_write_char
+        .import gtx_write_string
+        .import gtx_newline
+        .import gtx_backspace
         .include "blink.inc"
 
         .export _tty_init
@@ -22,6 +32,7 @@ TTY_CONFIG_INPUT_SERIAL   = %00000001
 TTY_CONFIG_INPUT_KEYBOARD = %00000010
 TTY_CONFIG_OUTPUT_SERIAL  = %00000100
 TTY_CONFIG_OUTPUT_LCD     = %00001000
+TTY_CONFIG_OUTPUT_VDP     = %00010000      
 TTY_CONFIG_DISABLE_SERIAL = %00001010
 
 ENTER                   = $0d
@@ -54,7 +65,7 @@ _tty_read_line:
         ply
         jsr tty_read_line
         inc_ptr sp, #$02
-
+        rts
 
 ; NEGATIVE C COMPLIANT
 ; Blocks until full line read (Enter pressed)
@@ -137,6 +148,7 @@ tty_read_line:
 
 ; POSITIVE C COMPLIANT
 ; Write null terminated string to output
+; Assume input pointer in A (lsb),X (msb)
 _tty_write:
         phy
         tay
@@ -156,6 +168,13 @@ _tty_write:
         tya
         jsr _lcd_print
 @skip_lcd:
+        lda tty_config
+        and #TTY_CONFIG_OUTPUT_VDP
+        beq @skip_vdp
+        tya
+        jsr gtx_write_string
+
+@skip_vdp:
         ply
         rts
 
@@ -219,6 +238,13 @@ tty_write_byte:
         txa 
         jsr _lcd_print_char
 @skip_lcd:
+        lda tty_config
+        and #TTY_CONFIG_OUTPUT_VDP
+        beq @skip_vdp
+        txa
+        jsr gtx_write_char
+
+@skip_vdp:
         ; either way, restore character
         txa
         plx
@@ -298,7 +324,14 @@ _tty_send_newline:
         ; lcd output disabled
         beq @skip_lcd
         jsr _lcd_newline
+
 @skip_lcd:
+        lda tty_config
+        and #TTY_CONFIG_OUTPUT_VDP
+        beq @skip_vdp
+        jsr gtx_newline
+
+@skip_vdp:
         pla
         rts
 
@@ -338,7 +371,12 @@ _tty_send_character:
         jsr _lcd_print_char
 @non_ascii:
 @skip_lcd:
+        lda tty_config
+        and #TTY_CONFIG_OUTPUT_VDP
+        beq @skip_vdp
         tya
+        jsr gtx_write_char
+@skip_vdp:
         ply
         rts
 @enteranewline:
@@ -373,6 +411,12 @@ tty_send_backspace:
         beq @skip_lcd
         jsr _lcd_backspace
 @skip_lcd:
+        lda tty_config
+        and #TTY_CONFIG_OUTPUT_VDP
+        beq @skip_vdp
+        jsr gtx_backspace
+
+@skip_vdp:
         pla
         rts
 
@@ -386,6 +430,13 @@ tty_enable_cursor:
         lda #(LCD_DM_DISPLAY_ON | LCD_DM_CURSOR_BLINK)
         jsr _lcd_display_mode
 @skip_lcd:
+        lda tty_config  
+        and #TTY_CONFIG_OUTPUT_VDP
+        bne @skip_vdp
+
+        ; jsr vdp_enble_cursor
+
+@skip_vdp:
         pla
         rts
 

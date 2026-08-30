@@ -3,7 +3,10 @@
 .zeropage
 
 .globalzp TXTPTR
-.globalzp INPUTBUFFER
+; INPUTBUFFER is absolute for DB6502 (a constant from defines_db6502.s), not a
+; zero page label like on the other targets - .globalzp would export it with the
+; wrong address size.
+.global INPUTBUFFER
 ;.org ZP_START1
 
 GORESTART:

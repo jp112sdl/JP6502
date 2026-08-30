@@ -1,3 +1,4 @@
+.globalzp c_sp
 .globalzp sp
 .globalzp sreg
 .globalzp regsave
@@ -27,6 +28,10 @@
 .globalzp user_break_address
 .globalzp user_break_sp
 .globalzp user_irq_address
+.globalzp vdp_scratch
+.globalzp vdp_buffer_address 
+.globalzp vdp_vram_address
+.globalzp vdp_char_count
 .globalzp zp_sd_address  ; 2 bytes
 .globalzp zp_sd_currentsector  ; 4 bytes
 .globalzp zp_fat32_variables  ; 24 bytes

@@ -4,6 +4,7 @@
       .include "core.inc"
       .include "acia.inc"
       .include "keyboard.inc"
+      .include "sd.inc"
       .include "syscalls.inc"
       .include "via.inc"
       .include "zeropage.inc"
@@ -37,7 +38,7 @@ init:
       ldx #$ff
       txs
       ; Run setup routine
-      jsr _system_init
+      jsr os1_init
       ; Display hello message
       write_lcd #os1_version
       jsr _lcd_newline
@@ -119,16 +120,30 @@ init:
       .segment "RODATA"
 
 os1_version:
-      .asciiz "Eunice OS 1.0"
+      .asciiz "JP OS 1.0"
 keyboard_disconnected:
       .asciiz "No keyboard"
 keyboard_connected:
       .asciiz "Keyboard connected"
 instruction:
-      .asciiz "Press any key to continue"
+      .asciiz "Press any key"
 shell_connected:
-      .asciiz "Eunice <---> Mac"
+      .asciiz "OS/1 <---> Mac"
 msg_no_acia:
     .asciiz "No serial"
 ;msg_has_acia:
 ;    .asciiz "Serial connected"          
+
+      .segment "EXTCODE"
+
+; _system_init no longer brings the card up - see the comment at the end of it.
+; The shell loads programs with _sd_load, which only checks sd_ready and never
+; mounts on its own, so OS/1 has to do it here.
+;
+; This sits in EXTCODE and replaces the "jsr _system_init" at init rather than
+; being a second call next to it, which kept CODE the same length and moved
+; nothing linked after os1.o. That was the point at the time - MEMORY_MAP.md
+; 5.5 - and it is a reasonable shape regardless.
+os1_init:
+      jsr _system_init
+      jmp _sd_init

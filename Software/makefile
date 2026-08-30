@@ -3,6 +3,8 @@ RM_FLAGS=-rf
 
 MD5_BINARY=md5sum
 
+PYTHON_BINARY=python
+
 BUILD_FOLDER=build
 ROM_FOLDER=$(BUILD_FOLDER)/rom
 LOAD_FOLDER=$(BUILD_FOLDER)/load
@@ -11,78 +13,68 @@ LOADABLE_PROJECTS_FOLDER=load
 
 ADDRESS_MODE=ext
 
-FIRMWARE_PROJECTS = 01_nop_fill          \
-                    02_nop_fffc          \
-                    03_first_code        \
-                    04_blink_s           \
-                    05_knight_rider      \
-                    06_lcd_test          \
-                    07_mem_test          \
-                    08_stack_test        \
-                    09_serial_test       \
-                    10_blink_c           \
-                    11_int_test          \
-                    12_handshake_test    \
-                    13_4bit_lcd          \
-                    14_irq_test          \
-                    15_serial_irq        \
-                    16_delay_test        \
-                    17_blink_test        \
-                    18_core_program      \
-                    19_keyboard_test     \
-                    20_convert_test      \
-                    21_serial_load_test  \
-                    22_modem_test        \
-                    23_blink_test        \
-										24_serial_wdc        \
-										25_serial_wdc_irq    \
-                    minimal_bootloader   \
-                    os1                  \
-										microsoft_basic
+FIRMWARE_PROJECTS = blink_c				\
+					blink_s				\
+					blink_test			\
+					d_pad_test			\
+					keyboard_test		\
+					lcd_test			\
+					microsoft_basic		\
+					minimal_bootloader	\
+					modem_test			\
+					nop_fill			\
+					os1					\
+					play_song			\
+					serial_load_test	\
+					serial_test			\
+					serial_wdc			\
+					serial_wdc_irq		\
+					vdp_diag			\
+					vdp_scope			\
 
-LOADABLE_PROJECTS = 01_blink_test        \
-                    02_hello_world       \
-                    03_string_test       \
-                    04_blink_large       \
-                    05_simple_shell      \
-                    06_memdump           \
-										07_keyboard_test     \
-										08_system_break_test \
-										09_monitor           \
-										10_menu              \
-										11_disasm            \
-										12_custom_chars      \
-										13_custom_chars_c    \
-										14_offset_math       \
-										15_menu_in_c         \
-										16_microchess        \
-										17_basic						 \
-										18_hello_world       \
-										19_hello_world_c     \
-										20_lcd_bug           \
-										21_sysinfo           \
-										22_msbasic           \
-										23_t1_test           \
-										24_user_irq_test     \
-										25_user_irq_c        \
-										26_duart_sync        \
-										d_pad_test           \
-                    27_duart_async
+LOADABLE_PROJECTS = d_pad_test			\
+					hello_world			\
+					hello_world_c		\
+					monitor				\
+					play_song			\
+					sysinfo
+					
+
 
 FIRMWARE_BINARIES=$(FIRMWARE_PROJECTS:%=$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin)
 
 LOADABLE_BINARIES=$(LOADABLE_PROJECTS:%=$(LOAD_FOLDER)/%.load.bin)
 
-$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin:
-	$(MAKE) -C $(@:$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin=$(FIRMWARE_PROJECTS_FOLDER)/%) ADDRESS_MODE=$(ADDRESS_MODE) all
+# FORCE makes these run every time. Without it make sees the .bin already on
+# disk, and since the rule names no prerequisites it declares the target up to
+# date and never enters the project - so an edit to anything under
+# common/source/ produced no rebuild at all, silently. The project makefiles do
+# track their sources properly, they just have to be asked
+$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin: FORCE
+	@$(MAKE) --no-print-directory -C $(@:$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin=$(FIRMWARE_PROJECTS_FOLDER)/%) ADDRESS_MODE=$(ADDRESS_MODE) all
 
-$(LOAD_FOLDER)/%.bin:
-	$(MAKE) -C $(@:$(LOAD_FOLDER)/%.load.bin=$(LOADABLE_PROJECTS_FOLDER)/%) all
+$(LOAD_FOLDER)/%.bin: FORCE
+	@$(MAKE) --no-print-directory -C $(@:$(LOAD_FOLDER)/%.load.bin=$(LOADABLE_PROJECTS_FOLDER)/%) all
+
+FORCE:
+
+.PHONY: all test mapdoc clean FORCE
 
 all: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 
 test: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 	@$(MD5_BINARY) $^ 
+
+# Projects whose layout MEMORY_MAP.md describes. The mapdoc: comments in the
+# document name the same ones - keep the two in step
+MAPDOC_PROJECTS = os1 microsoft_basic
+
+# Check that the address tables in MEMORY_MAP.md still describe what the linker
+# actually produces
+mapdoc: $(MAPDOC_PROJECTS:%=$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin)
+	@$(PYTHON_BINARY) common/mapdoc.py --doc MEMORY_MAP.md \
+		--config common/firmware.$(ADDRESS_MODE).cfg \
+		--build $(ROM_FOLDER) --address-mode $(ADDRESS_MODE)
 
 clean:
 	$(RM_BINARY) $(RM_FLAGS) $(BUILD_FOLDER)

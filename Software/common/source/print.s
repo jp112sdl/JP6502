@@ -179,7 +179,9 @@ L29D9:
   .endif
 .endif
 .else
-  jsr _tty_send_newline
+  ; Line ends do not go through OUTDO on this target, so SAVE would lose them.
+  ; sd_newline sends them to the card or to the screen as appropriate.
+  jsr sd_newline
 PRINTNULLS:
           lda     #$00
           sta     POSX

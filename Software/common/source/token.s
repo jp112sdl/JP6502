@@ -31,6 +31,11 @@
 .endif
 		keyword_rts "STOP", STOP
 		keyword_rts "ON", ON
+; NULL is back. It was dropped on 2026-08-25 to get this table under 256 bytes,
+; and it is the obvious thing to put back first now that the limit is gone: it
+; costs nothing to restore, and it takes the table to exactly 257 bytes - the
+; size at which the machine used to hang on the first ENTER. If it boots and
+; takes a line of input, the paging works at precisely the boundary that broke.
 .ifdef CONFIG_NULL
 		keyword_rts "NULL", NULL
 .endif
@@ -81,6 +86,21 @@
 		keyword_rts "PRT", PRT
 .endif
 		keyword_rts "NEW", NEW
+.ifdef DB6502
+; Appended after the last statement so that every token already in use keeps
+; its number. The function and operator tokens counted after this point do move
+; up by one, but those are immediates in the interpreter, not stored in
+; programs - a listing saved on the SD card still reads back correctly.
+		keyword_rts "SOUND", SOUND
+		keyword_rts "CLS", CLS
+		keyword_rts "COLOR", COLOR
+		keyword_rts "SCREEN", SCREEN
+		keyword_rts "PLOT", PLOT
+		keyword_rts "LINE", LINE
+		keyword_rts "CIRCLE", CIRCLE
+		keyword_rts "SPRITE", SPRITE
+		keyword_rts "VPOKE", VPOKE
+.endif
 
 		count_tokens
 
@@ -171,6 +191,7 @@ UNFNC_ATN:
 		keyword_addr "VAL", VAL
 		keyword_addr "ASC", ASC
 		keyword_addr "CHR$", CHRSTR
+		keyword_addr "KEY", KEYFN
 		keyword_addr "LEFT$", LEFTSTR, TOKEN_LEFTSTR
 		keyword_addr "RIGHT$", RIGHTSTR
 		keyword_addr "MID$", MIDSTR
@@ -189,6 +210,15 @@ UNFNC_ATN:
 .else
         .segment "BAS_VEC"
 .endif
+; This table used to be capped at 256 bytes, because program.s walked it with Y
+; and nothing else, so the terminating zero at offset 256 was unreachable and the
+; scan looped for ever - the machine hung on the first ENTER. The seven places
+; that read it now go through key_lda and its neighbours in db6502_extra.s, which
+; carry a page alongside Y, and the cap is gone. The assert below is only a
+; tripwire for something having gone badly wrong, not a real limit.
+.import __BAS_KEY_SIZE__
+.assert __BAS_KEY_SIZE__ <= 4096, lderror, "BAS_KEY has grown absurdly - check that this is intended"
+
 MATHTBL:
         .byte   $79
         .word   FADDT-1

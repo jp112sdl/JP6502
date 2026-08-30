@@ -37,21 +37,23 @@
         .import __VIA2_START__
         .import __VIA3_START__             
         .import __ACIA_START__   
+        .import __VDP_START__
         .import beep
         .import _start_msbasic
 
         .code
 _run_shell:
-        lda acia_conn
-        cmp #$00
-        beq @disable_serial
+ ;       lda acia_conn
+ ;       cmp #$00
+ ;       beq @disable_serial
       
 ;        write_lcd #msg_has_acia
 ;        jsr _lcd_newline
 ;        jsr _lcd_newline
 ;        lda #02
 ;        jsr _delay_sec   
-        lda #(TTY_CONFIG_INPUT_SERIAL | TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_SERIAL)  
+;        lda #(TTY_CONFIG_INPUT_SERIAL | TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_SERIAL)
+        lda #(TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_VDP)
         jsr _tty_init
         jsr _tty_send_newline
         writeln_tty #msghello2
@@ -63,7 +65,8 @@ _run_shell:
 ;         jsr _lcd_newline
 ;         lda #02
 ;         jsr _delay_sec 
-         lda #(TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_LCD)      
+;         lda #(TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_LCD)      
+         lda #(TTY_CONFIG_INPUT_KEYBOARD | TTY_CONFIG_OUTPUT_LCD | TTY_CONFIG_OUTPUT_VDP)      
          jsr _tty_init 
 ;         jsr _tty_send_newline
          write_lcd #lcd_hello
@@ -120,12 +123,30 @@ _process_run:
         rts
 
 _process_sd:
-        jsr _sd_read
+        ; Read the test file into user RAM and report the result. This used to
+        ; hang in an error loop whenever the card or the file was missing.
+        lda #<__USERRAM_START__
+        sta sd_address
+        lda #>__USERRAM_START__
+        sta sd_address+1
+
+        lda #<sd_test_filename
+        ldx #>sd_test_filename
+        jsr _sd_load
+        bcs @error
+
+        write_tty #msgsdloaded
+        write_tty_dec sd_length
+        jsr _tty_send_newline
+        rts
+
+@error:
+        writeln_tty #msgsderror
         rts
         
-_process_msbasic:
-        jsr _start_msbasic
-        rts        
+;_process_msbasic:
+;        jsr _start_msbasic
+;        rts        
         
 _process_blink:
         sta tokens_pointer
@@ -222,6 +243,10 @@ _process_info:
         write_tty #acia_addr_msg
         write_tty_address #__ACIA_START__
         jsr _tty_send_newline
+ 
+        write_tty #vdp_addr_msg
+        write_tty_address #__VDP_START__
+        jsr _tty_send_newline
         rts
 
 system_break_handler:
@@ -239,29 +264,36 @@ param_pointer:
         .res 2
 
         .segment "RODATA"
-;bannerh1:
-;        .asciiz "+------------------------------------------+"
-;bannerh2:
-;        .asciiz "|                                          |"
-;banner1:
-;        .asciiz "|  #####  #   #  #   #  ###   ###   #####  |"
-;banner2:
-;        .asciiz "|  #      #   #  ##  #   #   #   #  #      |"
-;banner3:
-;        .asciiz "|  ###    #   #  # # #   #   #      ###    |"
-;banner4:
-;        .asciiz "|  #      #   #  #  ##   #   #   #  #      |"
-;banner5:
-;        .asciiz "|  #####   ###   #   #  ###   ###   #####  |"
+bannerh1:
+        .asciiz "+---------------------------+"
+bannerh2:
+        .asciiz "|                           |"
+banner1:
+        .asciiz "|   ####   ####     #   #   |"
+banner2:
+        .asciiz "|  ##  ## ##       #   ##   |"
+banner3:
+        .asciiz "|  #    #  ###    #   # #   |"
+banner4:
+        .asciiz "|  ##  ##    ##  #      #   |"
+banner5:
+        .asciiz "|   ####  ####  #      ###  |"
 msghello1: 
         .asciiz " (Alpha)"
 msghello2: 
- ;       .asciiz "Welcome to Eunice OS"
-         .byte $1B, "[2J", $1B, "[1;1H",$1B, "[32m", "Welcome to ", $1B, "[1;31m", " Eunice OS ", $1B, "[0;32m", $00
+        .asciiz "Welcome to OS/1"
+ ;        .byte $1B, "[2J", $1B, "[1;1H",$1B, "[32m", "Welcome to ", $1B, "[1;31m", " OS/1 ", $1B, "[0;32m", $00
 lcd_hello:
-         .asciiz "Welcome to Eunice OS"
+         .asciiz "Welcome to OS/1"
 msghello3:
         .asciiz "Enter HELP to get list of possible commands"
+sd_test_filename:
+        ; Raw FAT 8.3 name - eight characters, three characters, space padded
+        .byte "DEEPFILETXT"
+msgsdloaded:
+        .asciiz "Bytes read from card: "
+msgsderror:
+        .asciiz "SD card read failed"
 msgload:
         .asciiz "Initiating load operation..."
 msgrun:
@@ -269,7 +301,7 @@ msgrun:
 msgmonitor:
         .asciiz "Running monitor application..."
 msginfo:
-        .asciiz "Eunice OS System Information"
+        .asciiz "OS/1 System Information"
 clock_msg1:
         .asciiz "System clock running at "
 clock_msg2:
@@ -302,8 +334,10 @@ via3_addr_msg:
         .asciiz "VIA3 address: 0x"        
 acia_addr_msg:
         .asciiz "ACIA address: 0x"
+vdp_addr_msg:
+        .asciiz "VDP address: 0x"
 os1prompt:
-        .asciiz "]"
+        .asciiz "OS/1>"
 msgemptyline:
         .byte $00
 blinkerror:
@@ -318,7 +352,7 @@ menu:
         menuitem beep_cmd,    1, beep_desc,    _process_beep
         menuitem info_cmd,    1, info_desc,    _process_info
         menuitem sd_cmd,      1, sd_desc,      _process_sd
-        menuitem msbasic_cmd, 1, msbasic_desc, _process_msbasic
+;        menuitem msbasic_cmd, 1, msbasic_desc, _process_msbasic
         endmenu 
 
 load_cmd:
@@ -349,10 +383,10 @@ sd_cmd:
         .asciiz "SD"
 sd_desc:
         .asciiz "SD - Read a TXT file"     
-msbasic_cmd:
-        .asciiz "BASIC"        
-msbasic_desc:
-        .asciiz "BASIC - Run Microsoft BASIC"                     
+;msbasic_cmd:
+;        .asciiz "BASIC"        
+;msbasic_desc:
+;        .asciiz "BASIC - Run Microsoft BASIC"                     
 ;msg_no_acia:
 ;    .asciiz "No ACIA"
 ;msg_has_acia:

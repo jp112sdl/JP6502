@@ -8,9 +8,9 @@
       .export _dpad_is_right
 
 BN_D = %01000000
-BN_U = %00100000
+BN_R = %00100000
 BN_L = %00010000
-BN_R = %00001000
+BN_U = %00001000
 DPAD_UP      = $00
 DPAD_DOWN    = $01
 DPAD_LEFT    = $02

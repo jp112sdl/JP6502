@@ -83,7 +83,7 @@ For serial communication you can use regular PuTTy, but it doesn't have the feat
 
 ### Running the simplest possible program
 
-Now you need to build the first program. Go to `Software/rom/01_nop_fill` folder and run:
+Now you need to build the first program. Go to `Software/rom/nop_fill` folder and run:
 
 ```shell
 make clean all test
@@ -94,37 +94,52 @@ You expect output similar to the following:
 ```text
 $ make clean all test
 rm -f ../../build/rom/*.bin \
-rm -f ../../build/rom/*.raw \
-../../build/rom/01_nop_fill/*.o \
-../../build/rom/01_nop_fill/*.lst \
-../../build/rom/01_nop_fill/*.s \
-../../build/rom/*.map \
-../../build/common/*.o \
-../../build/common/*.lst \
-../../build/common/*.s \
-../../build/common/*.lib
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/rom/01_nop_fill/nop_fill.o -l ../../build/rom/01_nop_fill/nop_fill.lst nop_fill.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/zeropage.o -l ../../build/common/zeropage.lst ../../common/source/zeropage.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/sysram_map.o -l ../../build/common/sysram_map.lst ../../common/source/sysram_map.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/syscalls.o -l ../../build/common/syscalls.lst ../../common/source/syscalls.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/acia.o -l ../../build/common/acia.lst ../../common/source/acia.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/blink.o -l ../../build/common/blink.lst ../../common/source/blink.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/core.o -l ../../build/common/core.lst ../../common/source/core.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/keyboard.o -l ../../build/common/keyboard.lst ../../common/source/keyboard.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/lcd.o -l ../../build/common/lcd.lst ../../common/source/lcd.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/modem.o -l ../../build/common/modem.lst ../../common/source/modem.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/string.o -l ../../build/common/string.lst ../../common/source/string.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/utils.o -l ../../build/common/utils.lst ../../common/source/utils.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/via.o -l ../../build/common/via.lst ../../common/source/via.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/via_utils.o -l ../../build/common/via_utils.lst ../../common/source/via_utils.s
-ca65 --cpu 65C02 -Dfastclock=1 -I ../../common/include -o ../../build/common/tty.o -l ../../build/common/tty.lst ../../common/source/tty.s
-ar65 r ../../build/lib/common.lib ../../build/common/zeropage.o ../../build/common/sysram_map.o ../../build/common/syscalls.o ../../build/common/acia.o ../../build/common/blink.o ../../build/common/core.o ../../build/common/keyboard.o ../../build/common/lcd.o ../../build/common/modem.o ../../build/common/string.o ../../build/common/utils.o ../../build/common/via.o ../../build/common/via_utils.o ../../build/common/tty.o
-ld65  -C ../../common/firmware.ext.cfg -m ../../build/rom/01_nop_fill/01_nop_fill.ext.map -o ../../build/rom/01_nop_fill.ext.bin ../../build/rom/01_nop_fill/nop_fill.o ../../build/lib/common.lib
-hexdump -C ../../build/rom/01_nop_fill.ext.bin
+	rm -f ../../build/rom/*.raw \
+	../../build/rom/nop_fill/*.o \
+	../../build/rom/nop_fill/*.lst \
+	../../build/rom/nop_fill/*.s \
+	../../build/rom/nop_fill/*.map \
+	../../build/rom/nop_fill/*.d \
+	../../build/rom/nop_fill/*.cdep \
+	../../build/common/*.o \
+	../../build/common/*.lst \
+	../../build/common/*.s \
+	../../build/common/*.d \
+	../../build/common/*.cdep \
+	../../build/lib/*.lib
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/zeropage.d -o ../../build/common/zeropage.o -l ../../build/common/zeropage.lst ../../common/source/zeropage.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sysram_map.d -o ../../build/common/sysram_map.o -l ../../build/common/sysram_map.lst ../../common/source/sysram_map.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/rom/nop_fill/nop_fill.d -o ../../build/rom/nop_fill/nop_fill.o -l ../../build/rom/nop_fill/nop_fill.lst nop_fill.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/syscalls.d -o ../../build/common/syscalls.o -l ../../build/common/syscalls.lst ../../common/source/syscalls.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/acia.d -o ../../build/common/acia.o -l ../../build/common/acia.lst ../../common/source/acia.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/blink.d -o ../../build/common/blink.o -l ../../build/common/blink.lst ../../common/source/blink.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/dpad.d -o ../../build/common/dpad.o -l ../../build/common/dpad.lst ../../common/source/dpad.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/core.d -o ../../build/common/core.o -l ../../build/common/core.lst ../../common/source/core.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/keyboard.d -o ../../build/common/keyboard.o -l ../../build/common/keyboard.lst ../../common/source/keyboard.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/lcd.d -o ../../build/common/lcd.o -l ../../build/common/lcd.lst ../../common/source/lcd.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/lcd8bit.d -o ../../build/common/lcd8bit.o -l ../../build/common/lcd8bit.lst ../../common/source/lcd8bit.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/modem.d -o ../../build/common/modem.o -l ../../build/common/modem.lst ../../common/source/modem.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/string.d -o ../../build/common/string.o -l ../../build/common/string.lst ../../common/source/string.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/utils.d -o ../../build/common/utils.o -l ../../build/common/utils.lst ../../common/source/utils.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/via.d -o ../../build/common/via.o -l ../../build/common/via.lst ../../common/source/via.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/via_utils.d -o ../../build/common/via_utils.o -l ../../build/common/via_utils.lst ../../common/source/via_utils.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/vdp.d -o ../../build/common/vdp.o -l ../../build/common/vdp.lst ../../common/source/vdp.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/vdp_text_mode.d -o ../../build/common/vdp_text_mode.o -l ../../build/common/vdp_text_mode.lst ../../common/source/vdp_text_mode.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sound.d -o ../../build/common/sound.o -l ../../build/common/sound.lst ../../common/source/sound.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/tty.d -o ../../build/common/tty.o -l ../../build/common/tty.lst ../../common/source/tty.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/parse.d -o ../../build/common/parse.o -l ../../build/common/parse.lst ../../common/source/parse.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/menu.d -o ../../build/common/menu.o -l ../../build/common/menu.lst ../../common/source/menu.s
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/sd.d -o ../../build/common/sd.o -l ../../build/common/sd.lst ../../common/source/sd.s
+ar65 r ../../build/lib/common.lib ../../build/common/syscalls.o ../../build/common/acia.o ../../build/common/blink.o ../../build/common/dpad.o ../../build/common/core.o ../../build/common/keyboard.o ../../build/common/lcd.o ../../build/common/lcd8bit.o ../../build/common/modem.o ../../build/common/string.o ../../build/common/utils.o ../../build/common/via.o ../../build/common/via_utils.o ../../build/common/vdp.o ../../build/common/vdp_text_mode.o ../../build/common/sound.o ../../build/common/tty.o ../../build/common/parse.o ../../build/common/menu.o ../../build/common/sd.o
+ca65 --cpu 65C02 -Dclock_mode_flag=2  -Dacia_tx_irq=1  -Ddb6502 -I ../../common/include --create-dep ../../build/common/crt0.d -o ../../build/common/crt0.o -l ../../build/common/crt0.lst ../../common/source/crt0.s
+cp -f ../../common/none.lib ../../build/lib/common.c.lib
+ar65 r ../../build/lib/common.c.lib ../../build/common/crt0.o
+ld65  -C ../../common/firmware.ext.cfg -m ../../build/rom/nop_fill/nop_fill.ext.map -o ../../build/rom/nop_fill.ext.bin ../../build/common/zeropage.o ../../build/common/sysram_map.o ../../build/rom/nop_fill/nop_fill.o ../../build/lib/common.lib ../../build/lib/common.c.lib
+hexdump -C ../../build/rom/nop_fill.ext.bin
 00000000  ea ea ea ea ea ea ea ea  ea ea ea ea ea ea ea ea  |................|
 *
 00008000
-49d01fd92a6a02370364f8eef2ee2c93 *../../build/rom/01_nop_fill.ext.bin
+49d01fd92a6a02370364f8eef2ee2c93  ../../build/rom/nop_fill.ext.bin
 ```
 
 If you remember Ben's video - this is the first program he uploads to ROM. Now, run `make install` to upload the binary to your EEPROM - I assume you put the ROM chip in TL866II+ programmer and it is connected to your machine.
@@ -136,7 +151,7 @@ make install
 You expect the following output:
 
 ```text
-minipro -p AT28C256 -w ../../build/rom/01_nop_fill.ext.bin
+minipro -p AT28C256 -w ../../build/rom/nop_fill.ext.bin
 Found TL866II+ 04.2.109 (0x26d)
 Erasing... 0.02Sec OK
 Protect off...OK
@@ -173,16 +188,11 @@ If you have any problems during build, installation or execution - check instruc
 
 ### More complex programs
 
-After having ran the first one, try executing the following programs:
-
-- `Software/rom/02_nop_fffc` - this one will jump to the beginning of the accessible ROM address space and will confirm your address decoder functions correctly,
-- `Software/rom/03_first_code` - this is another program taken directly from Ben's videos - it will store value 0x42 in the address 0x6000. Please note: this will have no effect whatsoever.
-
-Now, if the both above work as expected (when checked using bus analyzer), you can try connecting peripherals to your computer. If you want to follow Ben's videos, keep reading this section, otherwise, skip to [next one](#initiate-warp-speed).
+After having ran the first one, you can try connecting peripherals to your computer. If you want to follow Ben's videos, keep reading this section, otherwise, skip to [next one](#initiate-warp-speed).
 
 First, let's play with some LEDs. Using the connectors in bottom left corner of the PCB, connect 8 LEDs to VIA2 PORTB lines PB0-PB7, and then, using current limiting resistors of 220Ohm, connect these to ground (also from the VIA2 PORTB connector).
 
-Having these connected, upload `Software/rom/04_blink_s` or `Software/rom/05_knight_rider` to your ROM. After powering on, you should see LEDs blinking in a way similar to what Ben did in his videos. If it works correctly, you can move on to connecting LCD. For now, use it in 8-bit mode with slow clock - just as in Ben's videos.
+Having these connected, upload `Software/rom/blink_s` to your ROM. After powering on, you should see LEDs blinking in a way similar to what Ben did in his videos. If it works correctly, you can move on to connecting LCD. For now, use it in 8-bit mode with slow clock - just as in Ben's videos.
 
 To do this, connect LCD to breadboard (not to the dedicated LCD port on PCB), and then connect each line as listed below:
 
@@ -202,33 +212,33 @@ To do this, connect LCD to breadboard (not to the dedicated LCD port on PCB), an
 
 Also, connect A and VDD connectors to +5V, K and VSS to GND and connect V0 to a middle pin of 10KOhm potentiometer plugged between GND and +5V.
 
-Now upload program `Software/rom/06_lcd_test` to ROM - when executed, it should display "Merry Christmas!" message on the LCD.
+Now upload program `Software/rom/lcd_test` to ROM - when executed, it should display "Merry Christmas!" message on the LCD.
 
-If it works correctly, follow with `Software/rom/07_mem_test` and `Software/rom/08_stack_test` - these will test if RAM works as expected: first one will copy data from ROM to RAM, while the second will use stack routines. Congratulations, you have working CPU, ROM, RAM, VIA and address decoder!
+If it works correctly, you have a working CPU, ROM, VIA and address decoder.
 
 ### Initiate warp speed
 
 Now it's time to go a bit faster and test the more complex features. Please note: you could keep using the analyzer and external clock with these programs, you just have to remember to build them with `CLOCK_MODE=slow` flag. More details can be found in [building software section](#building-software).
 
-For now let's assume we move to 1MHz clock. To do it, put jumper on two leftmost pins of clock connector (J1). Disconnect external clock and bus analyzer - first one is not needed, second one will not work with high frequencies anyway. Connect your LCD to onboard LCD port and upload `Software/rom/13_4bit_lcd` to your ROM. Upon boot you expect to see message "Hello 4-bit! Chars!" on your screen. If it works, it means that the primary VIA works just fine and clock is OK.
+For now let's assume we move to 1MHz clock. To do it, put jumper on two leftmost pins of clock connector (J1). Disconnect external clock and bus analyzer - first one is not needed, second one will not work with high frequencies anyway. Connect your LCD to the onboard LCD port.
 
-Next one to test will be serial connection, so upload `Software/rom/15_serial_irq`. Now, depending on whether you soldered on FT230X chip or not, connect your board using USB cable to PC (using either MicroUSB or USB-B port), or use external USB->UART connector. Connect to your board using `picocom` with baud rate of 19200.
+First one to test will be serial connection, so upload `Software/rom/serial_wdc_irq`. Now, depending on whether you soldered on FT230X chip or not, connect your board using USB cable to PC (using either MicroUSB or USB-B port), or use external USB->UART connector. Connect to your board using `picocom` with baud rate of 19200.
 
 ```shell
 picocom -b 19200 /dev/tty.usbserial-HANF88HD
 ```
 
-When you get "Terminal ready" message, press any key - you should get a response of "Hello IRQ>". This means that two things are working correctly: interrupt handling and serial communication. Congratulations, you are almost ready to go.
+When you get "Terminal ready" message, you should see "Hello from WDC65C51 (irq), press any key...". This means that two things are working correctly: interrupt handling and serial communication. The polling counterpart is `Software/rom/serial_wdc`, useful when you want to take the interrupt path out of the picture. Congratulations, you are almost ready to go.
 
 ### Keyboard connection
 
 Even if you don't intend to use keyboard just yet, you still need to upload the controller sketch to ATtiny4313. Recommended way of doing that is to use onboard AVR-ISP connector and some kind of AVR programmer. I used USBasp programmer and it works lovely directly from Arduino IDE. The sketch to upload is in `Arduino/keyboard-4313` folder. **PLEASE NOTE:** by default, Arduino IDE will not set fuses of your ATtiny4313 to reflect your clock settings. This can result in unpredictable behavior and/or failure of keyboard connection. Make sure you invoke "Tools->Burn bootloader" before uploading the sketch to ensure correct operation. See [issue #50](https://github.com/dbuchwald/6502/issues/50) for additional details.
 
-After successful sketch upload, flash your rom with `Software/rom/19_keyboard_test`. Connect your PS/2 keyboard to the port and try pressing some keys - you should see messages on the LCD with confirmation.
+After successful sketch upload, flash your rom with `Software/rom/keyboard_test`. Connect your PS/2 keyboard to the port and try pressing some keys - you should see messages on the LCD with confirmation.
 
 ### Using the bootloader
 
-Currently only the minimal bootloader is provided, but it should be sufficient for software development without constant need to reflash the EEPROM. To use it, build ROM image in `Software/rom/minimal_bootloader` folder and flash it to EEPROM. To test this functionality, you have to build example loadable programs in `Software/load/01_blink_test` and `Software/load/02_hello_world`.
+Currently only the minimal bootloader is provided, but it should be sufficient for software development without constant need to reflash the EEPROM. To use it, build ROM image in `Software/rom/minimal_bootloader` folder and flash it to EEPROM. To test this functionality, you have to build an example loadable program in `Software/load/hello_world`.
 
 **PLEASE NOTE:** Both the bootloader and sample programs will be built automatically when invoking `make all` directly in `Software` folder.
 
@@ -240,9 +250,9 @@ Upon boot you will be prompted to connect to the PC via serial connection and pr
 
 In MacOS/Linux you can use `picocom` for this operation, under Windows I have successfully used [ExtraPuTTy](https://www.extraputty.com/).
 
-After connection is established you need to press enter as prompted (either on PS/2 keyboard or terminal window) and you will be prompted to initiate file transfer. In `picocom` this requires that your send command is set to `sz -X` (see `make terminal` target in `Software/common/makefile`) and you initiate transfer with Ctrl+A followed by Ctrl+S. Enter load file path (i.e. `Software/build/load/01_blink_test.load.bin`) and press enter. If the transfer fails, try again. `picocom` seems to fail every now and then, while ExtraPuTTy hardly ever has any issues.
+After connection is established you need to press enter as prompted (either on PS/2 keyboard or terminal window) and you will be prompted to initiate file transfer. In `picocom` this requires that your send command is set to `sz -X` (see `make terminal` target in `Software/common/makefile`) and you initiate transfer with Ctrl+A followed by Ctrl+S. Enter load file path (i.e. `Software/build/load/hello_world.load.bin`) and press enter. If the transfer fails, try again. `picocom` seems to fail every now and then, while ExtraPuTTy hardly ever has any issues.
 
-In ExtraPuTTy open "Files Transfer" menu item, then "Xmodem" and "Send". Point to loadable module (i.e. `Software/build/load/02_hello_world.load.bin`) and click "Open" button.
+In ExtraPuTTy open "Files Transfer" menu item, then "Xmodem" and "Send". Point to loadable module (i.e. `Software/build/load/hello_world.load.bin`) and click "Open" button.
 
 Program should load and be automatically executed. Congratulations, you got yourself working bootloader!
 
@@ -286,7 +296,7 @@ General rule is simple: `make` should be sufficient for all the build/installati
 
 Beside the targets, there are three very important build flags:
 
-- `ADDRESS_MODE` - with acceptable values `basic` and `ext` (the latter being default if omitted) that drives target addressing model. To build for Ben Eater's machine, use `basic` mode; for my build, use `ext` mode. If you want to support your own model, create additional configuration file, as explained in common sources section below,
+- `ADDRESS_MODE` - drives the target addressing model by selecting `common/firmware.$(ADDRESS_MODE).cfg`. The only value shipped today is `ext` (also the default if omitted). The `basic` mode for Ben Eater's machine has been **removed**: `common/source/via.s` unconditionally references the third VIA, and the VDP is mapped as well, so `firmware.basic.cfg` had not linked for a long time. If you want to support your own model, create an additional configuration file, as explained in the common sources section below,
 - `CLOCK_MODE` - used to control internal delay routines to work with different clock setups. The following modes are supported:
   - `slow` - to be used with external clock module, all delays are basically disabled,
   - `250k` - to be used with Arduino Mega Debugger (my own variant running at approx. 275kHz),
@@ -300,10 +310,10 @@ Beside the targets, there are three very important build flags:
 Build examples:
 
 ```shell
-make ADDRESS_MODE=basic CLOCK_MODE=slow clean all test install
+make CLOCK_MODE=slow clean all test install
 ```
 
-This will build sources with Ben's addressing scheme (16K RAM, 32K ROM, VIA at 0x6000), with support for slow clocking - any delay routines will be skipped. First, all the binaries will be removed, then built from scratch, hexdump of the resulting binary will be displayed and the binary uploaded to the EEPROM, assuming it's connected via minipro-compatible programmer.
+This will build sources with support for slow clocking - any delay routines will be skipped. First, all the binaries will be removed, then built from scratch, hexdump of the resulting binary will be displayed and the binary uploaded to the EEPROM, assuming it's connected via minipro-compatible programmer.
 
 ```shell
 make CLOCK_MODE=1m all test
@@ -319,91 +329,587 @@ There are quite many programs in the `Software` folder, making the navigation a 
 
 In the `rom` folder you will find the following ROM images:
 
-- `01_nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in firmware configuration files (`common/firmware.basic.cfg` and `common/firmware.ext.cfg`),
-- `02_nop_fffc` - extension of the above program by adding `VECTORS` segment, containing start address for 6502. Address of the `init` label depends on the firmware configuration used,
-- `03_first_code` - very simple program that actually executes some code, but there is no effect to be observed,
-- `04_blink_s` - first example of a program interfacing with external world, using VIA2 to drive LEDs, as in Ben's videos,
-- `05_knight_rider` - modification of the previous one to achieve classic effect,
-- `06_lcd_test` - modified version of Ben Eater's first LCD program. Modification involves using loops, but runs without RAM, only ROM is used. This program will work only on slow clock (not 1MHz), and will not work with onboard LCD connector. To execute this one, you need to connect LCD via breadboard to VIA2 connectors on the PCB. When compiled for BE6502 (with `ADDRESS_MODE = basic`) it will work out of the box,
-- `07_mem_test` - modification of the previous one, testing RAM module usage - message contents are copied first from ROM to RAM and only then displayed on the LCD,
-- `08_stack_test` - modification of the previous one, but this time stack is utilized for JSR/RTS operation showcase,
-- `09_serial_test` - simplest possible ACIA/serial testing program, using blocking send/receive operation to send simple message in response to each input on serial terminal,
-- `10_blink_c` - modification of `04_blink_s`, but mixing low-level ASM code for hardware handling and C code for "business logic", shows how to use software stack to write code in C,
-- `11_int_test` - illustration how to use VIA1 clock timer interrupt - basically displays text on LCD attached to VIA2 while changing LED (connected to VIA2 PA0) state each 50 cycles. Obviously needs to be executed in slow clock mode,
-- `12_handshake_test` - very simple program that shows how to use CA1/CA2 hardware handshake operation with keyboard controller, will print on the LCD screen (connected to onboard LCD connector in 4-bit mode!) keys pressed on the attached PS/2 keyboard. Requires 1MHz clock for smooth operation, and is not compatible with BE6502,
-- `13_4bit_lcd` - testing program for 4-bit LCD interface, hence not compatible with BE6502,
-- `14_irq_test` - small program to run with slow clock showing operation of the VIA1 timer interrupt,
-- `15_serial_irq` - interrupt-driven serial communication (both RX and TX), sends static message in response to each input from serial terminal,
-- `16_delay_test` - testing program for improved 4-bit LCD library for onboard port, using functions like line wrap and vertical screen scrolling, not compatible with BE6502 because of the 4-bit interface,
-- `17_blink_test` - another blink program, but this one uses common library functions to drive onboard LCD. Can be adapted to work with BE6502, you just need to connect the LCD to PB0,
-- `18_core_program` - test program used to verify operation of aggregated system init operation, uses onboard LCD to present contents of RX/TX buffer pointers (used in debugging of serial connection),
-- `19_keyboard_test` - more complex program presenting integration with onboard keyboard controller, with IRQ driven data transmission, hardware state change detection and pretty interface on the onboard LCD port,
-- `20_convert_test` - small testing program to test hex conversion function, aimed at x6502 emulator execution,
-- `21_serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
-- `22_modem_test` - barebone modem testing application, sort of bootloader without user interface,
-- `23_blink_test` - copy of `load/01_blink_test` to show how simple `makefile` change can be used to build the same source either as ROM image or bootloader-compatible loadable module,
-- `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection,
+- `nop_fill` - simplest possible program, composed of 32K of NOP (0xea) instructions. The source itself seems empty, because default fill is defined in the firmware configuration file (`common/firmware.ext.cfg`),
+- `blink_s` - first example of a program interfacing with external world, using VIA2 to drive LEDs, as in Ben's videos,
+- `blink_c` - modification of `blink_s`, but mixing low-level ASM code for hardware handling and C code for "business logic", shows how to use software stack to write code in C,
+- `blink_test` - another blink program, but this one drives the onboard LED through the common library functions instead of touching the VIA directly. The same source is also built as a loadable module, so it doubles as an illustration of what the `BUILD_TYPE=` flag in the `makefile` changes,
+- `lcd_test` - modified version of Ben Eater's first LCD program. Modification involves using loops, but runs without RAM, only ROM is used. This program will work only on slow clock (not 1MHz), and will not work with onboard LCD connector. To execute this one, you need to connect LCD via breadboard to VIA2 connectors on the PCB,
+- `d_pad_test` - reads the D-pad through the common `dpad` library and reports each direction on the onboard LCD. Built from the same source as `load/d_pad_test`, which is why the folder holds only a `makefile`,
+- `keyboard_test` - more complex program presenting integration with onboard keyboard controller, with IRQ driven data transmission, hardware state change detection and pretty interface on the onboard LCD port,
+- `serial_test` - simplest possible ACIA/serial testing program, using blocking send/receive operation to send simple message in response to each input on serial terminal,
+- `serial_wdc` - ACIA test using polled send and receive, prints "Hello from WDC65C51, press any key...",
+- `serial_wdc_irq` - the same test driven by interrupts, prints "Hello from WDC65C51 (irq), press any key...",
+- `serial_load_test` - attempt to implement testing program for high serial load, counting incoming characters,
+- `modem_test` - barebone modem testing application, sort of bootloader without user interface,
+- `play_song` - plays "Mary Had a Little Lamb" on the SN76489, driving the chip directly rather than through the common `sound` library. Shares its source with `load/play_song`,
+- `vdp_diag` - reports what the VDP actually does at a cold start, on the **LCD** rather than the screen, because the screen is the part under suspicion. Runs the cold start step by step, then prints text through the same routines BASIC uses, and after each stage checks whether the pattern table in VRAM still matches the ROM. Reach for it before theorising about a bad picture,
+- `microsoft_basic` - standalone version of MS Basic interpreter working over serial connection. Loads and saves programs on the SD card - see [BASIC on the SD card](#basic-on-the-sd-card) below,
 - `minimal_bootloader` - simplest possible bootloader application that can be used to simplify software development thanks to making ROM flashing unnecessary for each code change,
 - `os1` - **work in progress** - basic operating system.
 
-The following table summarizes compatibility of each program with different versions of the 6502 computers:
+The following table summarizes how each program behaves on this machine. The
+`BE6502` column that used to stand next to it is gone with `ADDRESS_MODE=basic`,
+which the build no longer supports.
 
-| Program                   | BE6502 execution notes            | DB6502 execution notes                                                              |
-| ------------------------- | --------------------------------- | ------------------------------------------------------------------ |
-| `rom/01_nop_fill`         | Works out of the box              | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/02_nop_fffc`         | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/03_first_code`       | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/04_blink_s`          | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/05_knight_rider`     | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/06_lcd_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/07_mem_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/08_stack_test`       | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD to VIA2, needs slow clock         |
-| `rom/09_serial_test`      | ACIA chip needs to be added       | Works out of the box with R6551, WDC65C51 needs slow clock         |
-| `rom/10_blink_c`          | Build with ADDRESS_MODE=basic     | Works out of the box, attach LEDs to VIA2, needs slow clock        |
-| `rom/11_int_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, attach LCD and LED to VIA2, needs slow clock |
-| `rom/12_handshake_test`   | Not supported                     | Works out of the box, 1MHz clock recommended, onboard LCD port     |
-| `rom/13_4bit_lcd`         | Not supported                     | Works out of the box, onboard LCD port                             |
-| `rom/14_irq_test`         | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/15_serial_irq`       | ACIA chip needs to be added       | Works out of the box with R6551, 1MHz recommended                  |
-| `rom/16_delay_test`       | Not supported                     | Works out of the box, 1MHz clock recommended, onboard LCD port     |
-| `rom/17_blink_test`       | ADDRESS_MODE=basic, LED on PB0    | Works out of the box                                               |
-| `rom/18_core_program`     | Not supported                     | Works out of the box                                               |
-| `rom/19_keyboard_test`    | Not supported                     | Works out of the box                                               |
-| `rom/20_convert_test`     | Build with ADDRESS_MODE=basic     | Works out of the box, slow clock and bus analyzer recommended      |
-| `rom/21_serial_load_test` | Not supported                     | Works out of the box                                               |
-| `rom/22_modem_test`       | ACIA chip needs to be added       | Works out of the box                                               |
-| `rom/23_blink_test`       | ADDRESS_MODE=basic, LED on PB0    | Works out of the box                                               |
-| `rom/microsoft_basic`     | Not supported                     | Works out of the box                                               |
-| `rom/minimal_bootloader`  | Not supported                     | Works out of the box                                               |
-| `rom/os1`                 | Not supported                     | Works out of the box                                               |
+| Program                  | Execution notes                                                |
+| ------------------------ | -------------------------------------------------------------- |
+| `rom/nop_fill`           | Works out of the box, slow clock and bus analyzer recommended  |
+| `rom/blink_s`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
+| `rom/blink_c`            | Works out of the box, attach LEDs to VIA2, needs slow clock    |
+| `rom/blink_test`         | Works out of the box                                           |
+| `rom/d_pad_test`         | Works out of the box                                           |
+| `rom/lcd_test`           | Works out of the box, attach LCD to VIA2, needs slow clock     |
+| `rom/keyboard_test`      | Works out of the box                                           |
+| `rom/serial_test`        | Works out of the box with R6551, WDC65C51 needs slow clock     |
+| `rom/serial_wdc`         | Works out of the box                                           |
+| `rom/serial_wdc_irq`     | Works out of the box                                           |
+| `rom/serial_load_test`   | Works out of the box                                           |
+| `rom/modem_test`         | Works out of the box                                           |
+| `rom/play_song`          | Works out of the box, needs the SN76489 fitted                 |
+| `rom/vdp_diag`           | Works out of the box, reports on the LCD                       |
+| `rom/microsoft_basic`    | Works out of the box                                           |
+| `rom/minimal_bootloader` | Works out of the box                                           |
+| `rom/os1`                | Works out of the box                                           |
+
+### BASIC on the SD card
+
+`rom/microsoft_basic` keeps programs on the card as **plain text**, one BASIC line per text
+line, exactly the way `LIST` prints them. There is no tokenised file format: `LOAD` feeds the
+file through the interpreter's own line input, and `SAVE` runs `LIST` with the output
+redirected. A saved program can therefore be edited on a PC, and it survives changes to the
+token table or to the load address.
+
+| Command | Effect |
+| --- | --- |
+| `LOAD` | read `BASIC.BAS` |
+| `LOAD "NAME.BAS"` | read `NAME.BAS` from the root directory |
+| `LOAD "$"` | replace the program with a listing of the card, then `LIST` it |
+| `LOAD "@"` | replace the program with one sent over the serial port, see below |
+| `SAVE "@"` | list the program out over the serial port |
+| `SAVE` | write `BASIC.BAS` |
+| `SAVE "NAME.BAS"` | write `NAME.BAS` |
+
+Both accept any string expression, so `LOAD F$` works too. Names are folded to upper case and
+cut down to 8.3; long file names on the card are ignored, only the short name matches.
+
+`LOAD` clears the program first, then inserts every line as if it had been typed - so a text
+line without a line number is *executed* rather than stored, and a syntax error stops the load
+with the usual message.
+
+`SAVE` creates the file if the card does not have it yet, and it rebuilds the cluster chain
+from scratch every time: the old chain is released first, then clusters are taken off the free
+list as the listing comes in. The file therefore always ends up exactly as long as the program,
+with no leftover tail and no size that disagrees with the chain. Both copies of the FAT are
+kept in step, and the free-space fields in the FSInfo block are marked "unknown" afterwards so
+a PC counts them again rather than trusting a stale number. A save that fails part way through
+gives its clusters back and leaves an empty file rather than something a `chkdsk` would have to
+find.
+
+Names that are about to create a new entry are checked first: control characters and the
+characters FAT reserves (`" * + , . / : ; < = > ? [ \ ] |`) are refused with `?SYNTAX ERROR`
+rather than written into the directory.
+
+Two things the card could do but this does not, on purpose - a 1541 does not do them either,
+and the point of `LOAD`/`SAVE`/`LOAD "$"` here is to feel like a C64:
+
+- **one flat directory.** Files live in the root and nowhere else; a subdirectory on the card
+  shows up in `LOAD "$"` as `DIR` and cannot be entered,
+- **no timestamps.** There is no clock in the machine, and CBM DOS has no date field at all, so
+  every entry gets the same fixed stamp of 2026-01-01 12:00. It is there only because a blank
+  date field makes some tools on a PC complain.
+
+Actual limitations:
+
+- **the root directory cannot grow.** Once its slots are used up, `SAVE` reports
+  `?DIRECTORY FULL` - the same wall a 1541 hits at 144 entries, just at a different number.
+  How many depends on how the card was formatted: one entry per 32 bytes of the root
+  directory's clusters, and long file names written by a PC eat several entries each.
+
+The card does **not** have to be in the slot when the machine is switched on. `LOAD` and `SAVE`
+each bring it up from scratch first - the same sequence that runs at power-on - so a card can
+be put in later, taken out and put back, or swapped for a different one between commands. The
+swap is the reason this happens every time rather than only after a failure: carrying one
+card's layout over to another would have `SAVE` writing over whatever lives at those sector
+numbers. It costs roughly 0.4 s per command at 1 MHz, and about twice that for `SAVE`, which
+reads the BPB again for the fields the boot-time init does not keep.
+
+Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
+`?DIRECTORY FULL`, `?WRITE ERROR`, `?CARD ERROR`.
+
+**The keyword table used to cap how many statements could exist**, at 256 bytes, because
+`program.s` walked it with an 8-bit index and the terminator at offset 256 was unreachable - the
+scan looped forever and the machine hung on the first ENTER, with everything up to that point
+looking perfectly healthy. The seven places that read it now carry a page alongside the index,
+so the cap is gone; section 5.3 of MEMORY_MAP.md has the mechanism. What is left as the real
+limit on new statements is the space in front of `EXTCODE` at $e700, which is 1014 bytes since
+the XMODEM tables left the ROM - section 5.4 of MEMORY_MAP.md.
+
+**If you extend this code, read [section 5.2 of MEMORY_MAP.md](MEMORY_MAP.md) first.** The body
+of `common/source/db6502_sdbasic.s` and the allocating write path at the end of
+`common/source/libfat32.s` are deliberately linked into their own ROM block `SDCODE` at `$ec00`
+instead of into `CODE`, and their variables into `BASBUF` instead of `BSS`. Growing `CODE` past
+roughly `$dc50` moves every library module behind `msbasic.o` to a new address, and on this
+board that alone kills the VDP picture - a ROM built from unchanged sources plus 1110 dead
+filler bytes reproduces it. That is a hardware-level effect, not a bug in this code.
+
+**Put new code in `EXTCODE2` at `$f900`, and nowhere else.** `SDCODE` and `EXTCODE` are both
+full in practice and, more to the point, inserting into either pushes everything behind it to a
+new address - which on this board is the failure above. `EXTCODE2` sits behind every other
+segment in the image, so an addition there moves nothing at all. It has 1761 bytes free and
+`COLOR` is its first tenant, confirmed on the hardware.
+
+That is not a style preference. `COLOR` was first written into `SDCODE`, where its 25 bytes
+push the rest of the block up: the machine comes up drawing the right characters through the
+wrong glyphs, permanently, and never recovers. The same statement in `EXTCODE2` runs. The
+effect is address-dependent rather than size-dependent - `CLS` shifting the same block by 37
+bytes is harmless, 62 bytes is not - so there is no safe amount to insert. Sections 5.1.1 and
+5.2.3 of MEMORY_MAP.md have the measurements, including what has already been ruled out on the
+hardware so it does not get chased again.
+
+`LOAD "$"` ends the way a C64 directory does, with a line saying how much room is left:
+
+```text
+0 "SD CARD"
+1 "HELLO.BAS        1"
+2 "PROG.BAS         6"
+3 "78566 BLOCKS FREE"
+```
+
+A block is 512 bytes, the same unit the size column uses. The figure comes out of the FSInfo
+block rather than from counting the FAT - on an 8 GB card that count would mean reading some
+eight thousand sectors, about thirteen minutes. `SAVE` therefore keeps the FSInfo count in step
+as it takes and returns clusters, instead of marking it unknown; `fsck_msdos` confirms the
+number afterwards. A card that arrives without a usable count is told apart from one with a
+real zero: the line then reads `??? BLOCKS FREE`.
+
+### Sending a program over the serial port
+
+`LOAD "@"` takes the program from the ACIA instead of the card, and `tools/basicsend.py`
+sends it from the Mac over an FTDI cable. It is the same plain text again - the same lines
+`LIST` prints, the same lines a `.BAS` file holds - so a program can be written in a proper
+editor, sent over, tried out, edited on the machine and saved to the card, with nothing
+converted anywhere along the way.
+
+```bash
+./tools/basicsend.py SNAKE.BAS
+```
+
+Then type `LOAD "@"` on the machine. `SAVE "@"` sends a program the other way,
+with `tools/basicrecv.py` catching it:
+
+```bash
+./tools/basicrecv.py SNAKE.BAS
+``` Either order works: the receiver repeats its "ready"
+every half second while it waits, so the tool picks one up whenever it arrives. The status
+line counts the lines as they land, and `OK` comes back when the last one is in.
+
+The tool takes a path, or a bare name it looks up in `basic/`:
+
+| | |
+| --- | --- |
+| `basicsend.py --list` | what is in `basic/`, with line and byte counts |
+| `basicsend.py HANOI.BAS` | send it |
+| `basicsend.py -p /dev/tty.usbserial-XXXX prog.bas` | pick the port by hand |
+| `basicsend.py --as-is prog.bas` | do not touch the case of anything |
+
+`basicrecv.py` refuses to overwrite a file unless you pass `-f`, and writes nothing at all if
+the listing stops without its end marker - half a program looks exactly like a whole one, and
+under the name of the real thing it would be worse than none. `-` writes to standard output
+instead of a file. Ctrl+C on the machine gets it out of a `SAVE "@"` with nothing listening.
+
+By default the sending tool upper-cases everything outside string literals, because the tokeniser only
+knows upper case keywords - `10 print "hello"` would be a syntax error, and `10 PRINT "hello"`
+is what you meant. Blank lines are dropped, and a line over 78 characters is refused before
+anything is sent rather than being silently cut short at the far end.
+
+`LOAD "@"` runs `NEW` first, exactly as `LOAD` from the card does, so what arrives replaces
+what was in memory. A line without a line number is *executed* rather than stored, and a
+syntax error ends the transfer with the usual message - the tool is told and stops rather than
+sitting out its timeout. Ctrl+C on the machine also ends it.
+
+One line at a time, each acknowledged before the next is sent. That is not for the sake of the
+wire - 19200 baud is nothing - but because inserting a line into a long program takes longer
+than sending one, and streaming would overrun the 256 byte receive buffer inside a second.
+
+Nothing appears on the machine until the tool has the port open, and that is the hardware
+rather than the software: the 6551 holds its transmitter off while `/CTS` is high, and `/CTS`
+comes from the far end's RTS. So `LOAD "@"` on its own sits quietly at `000` until something
+opens the port. Ctrl+C gets you out of it at any point, and starting a fresh `LOAD "@"` throws
+away anything a previous attempt left on the wire - no power cycle needed in between.
+
+### The `SOUND` statement
+
+`rom/microsoft_basic` adds one statement to the interpreter beyond `LOAD`, `SAVE` and `EXIT`:
+
+```basic
+SOUND frequency, duration
+```
+
+`frequency` is in Hz, `duration` in hundredths of a second. The note plays on channel 1 of the
+SN76489 at full volume, and `SOUND` returns once it has finished, so notes queue up naturally:
+
+```basic
+10 FOR N=1 TO 8
+20 READ F
+30 SOUND F,25
+40 NEXT N
+50 DATA 262,294,330,349,392,440,494,523
+```
+
+The chip is not given a frequency but a 10 bit divider, and the note it produces is
+`clock / (32 * divider)`. The part on this board runs at 2 MHz, so the divider is `62500 /
+frequency`, which `SOUND` works out for you. That puts the usable range at **62 Hz to about
+4 kHz** - a divider outside 1..1023 is `ILLEGAL QUANTITY`, and towards the top end the steps
+between neighbouring dividers get audible.
+
+The port directions are set up by `sound_init` during `_system_init`, long before the `OK`
+prompt, so nothing has to be prepared first. Every `SOUND` mutes the channel again when it
+returns.
+
+Channels 2 and 3 and the noise generator are not reachable from BASIC. They are one `POKE` away
+though - `PORTA` at 34817 carries the data bus and `PORTB` at 34816 the write strobe:
+
+```basic
+900 POKE 34817,B : POKE 34816,2 : POKE 34816,0 : POKE 34816,2 : RETURN
+```
+
+Add 32 for channel 2, 64 for channel 3 and 96 for noise to both the latch byte
+(`128 + (N AND 15)`) and the volume byte (`144` for full, `159` for off).
+
+### Example programs in the `basic` folder
+
+`basic/HANOI.BAS` is plain text in the format `LOAD` expects, so it goes onto the card as it
+is. Towers of Hanoi for 3 to 7 disks: pick `P` and you move the disks yourself, pick `W` and
+the machine solves it in front of you. The pegs are drawn after every move and the SN76489
+clicks as each disk lands, lower disks on a lower note.
+
+```
+   |       |       |
+  ***      |       |
+ *****     |       *
+------- ------- -------
+   1       2       3
+
+ 1 MOVES SO FAR, 7 IS THE BEST
+FROM,TO (0,0 GIVES UP)? 1,3
+A DISK CANNOT SIT ON A SMALLER ONE.
+```
+
+Two things in it are worth reading if you write BASIC on this machine.
+
+The watch mode has no recursion to work with - `GOSUB` takes no arguments and keeps no locals -
+so the frames of the usual `hanoi(k, from, to, via)` live in five arrays (`SN`/`SA`/`SC`/`SB`)
+with a stage number `ST` per frame: 0 means the disks above still have to be cleared away, 1
+that the big disk can move now, 2 that the frame is done.
+
+The move checker tests one thing per line and leaves as soon as something is wrong, rather than
+writing the conditions as one expression. `AND` here does not short-circuit, so a typed `4,1`
+in `IF ER=0 AND H(FP)=0` would still evaluate `H(4)` and stop the program with `?BS ERROR`.
+
+Nothing in it needs anything this BASIC does not have. `CONFIG_SMALL` removes `GET`, there is
+no `ELSE` and no `STRING$`, so input is line-based, every branch is a line number and the
+padding strings are built with `FOR` loops.
+
+### The `CLS` statement
+
+`CLS` clears the screen and puts the cursor in the top left corner. It takes no arguments.
+
+It is not what `CLEAR` does. `CLEAR` is stock MS-BASIC and has nothing to do with the display:
+it throws away every variable and array, hands the whole of string space back, resets the
+`DATA` pointer and unwinds the `FOR` and `GOSUB` stacks. The program text survives. Reach for
+it when a program has filled memory with strings, not when the screen is untidy.
+
+`tty_config` can have more than one output switched on, so `CLS` treats each one on its own
+terms: the VDP has a routine for it, and a serial terminal is sent `ESC[2J ESC[H`. That escape
+sequence goes straight to the ACIA rather than through the console writer, which would put the
+bracket and the letters on the VDP as text as well. The LCD is left alone - it is the panel,
+not a console.
+
+### The `COLOR` statement
+
+```basic
+COLOR foreground, background
+```
+
+Both are 0 to 15 out of the TMS9918A palette. Text mode has no colour table, so the background
+is the backdrop and these two are the only colours on the screen. Anything above 15 wraps.
+
+| | | | |
+|---|---|---|---|
+| 0 transparent | 4 dark blue | 8 medium red | 12 dark green |
+| 1 black | 5 light blue | 9 light red | 13 magenta |
+| 2 medium green | 6 dark red | 10 dark yellow | 14 gray |
+| 3 light green | 7 cyan | 11 light yellow | 15 white |
+
+`COLOR 15,4` is what the machine starts with.
+
+**This is one of the few things `POKE` cannot do.** Both halves of a VDP register write go to
+the same control port at 32897, so `POKE 32897,246 : POKE 32897,135` looks like it should set
+register 7 - and it does nothing at all, without an error. `POKE` assembles to
+`sta (LINNUM),y`, and the dummy read that addressing mode performs on the target one cycle
+before the write is itself a VDP access. The chip wants about 8 µs between two, so the write
+is lost and the pair never completes. It is the same access time that used to leave the screen
+dark at cold start. `COLOR` goes through `vdp_write_register`, which waits between the halves.
+
+### Graphics mode: `SCREEN` and `PLOT`
+
+```basic
+SCREEN 0            back to text, 40x24
+SCREEN 1            graphics, 256x192
+
+PLOT x, y, colour
+LINE x1, y1, x2, y2, colour
+CIRCLE x, y, radius, colour
+
+SPRITE n, x, y, pattern, colour
+VPOKE address, value
+```
+
+`x` is 0 to 255, `y` is 0 to 191, `colour` is 0 to 15 out of the palette listed under
+`COLOR`. Colour 0 clears the pixel and leaves the background showing; 1 to 15 set it.
+
+```basic
+10 SCREEN 1
+20 FOR X=0 TO 255
+30 PLOT X, 96+SIN(X/16)*80, 15
+40 NEXT X
+```
+
+**One colour per eight pixels.** The TMS9918A stores a foreground and a background colour for
+each horizontal run of eight pixels, not for each pixel. Plotting a red dot therefore recolours
+whatever else is already lit in the same group of eight. There is no way around it short of a
+full off-screen copy of the screen, and this machine has no 6 KB of RAM to spare for one. The
+background stays black, the way `SCREEN 1` leaves it.
+
+```basic
+10 SCREEN 1
+20 CIRCLE 128, 96, 60, 15
+30 PRINT "TEXT AND PICTURES AT ONCE"
+```
+
+**Sprites** are 8x8 and unmagnified, which leaves 256 shapes in the 2 KB at $1800 and keeps one
+shape down to eight bytes. `n` is 0 to 31; `y` of 192 or more parks a sprite off the screen,
+which is how one is hidden. `SCREEN 1` parks all 32 and blanks the shapes, so nothing appears
+until you put it there.
+
+Shapes go in with `VPOKE`, one byte at a time, because `POKE` cannot reach VRAM at all - the
+reason is under `COLOR` above. Pattern `p` lives at `6144 + p*8`:
+
+```basic
+10 SCREEN 1
+20 FOR I=0 TO 7
+30 READ B : VPOKE 6144+I, B
+40 NEXT I
+50 DATA 60,126,219,255,189,195,102,0
+60 FOR X=0 TO 248
+70 SPRITE 0, X, 90, 0, 15
+80 NEXT X
+```
+
+`VPOKE` writes anywhere in the 16 KB of VRAM, so it also reaches the bitmap, the colour table
+and the sprite attributes. That is useful and it will take the display apart just as readily as
+`POKE` takes the machine apart.
+
+Two details of the chip are dealt with rather than passed on: a sprite appears one line below
+the `y` in its attribute entry, so the stored value is one less than you asked for; and a stored
+`y` of 208 tells the chip to stop reading the table there, which would silently switch off every
+sprite after it, so that one value is nudged by a line. What is not dealt with, because it
+cannot be, is that only four sprites are drawn on any one scanline. The fifth simply is not
+there.
+
+**The console keeps working in graphics mode.** The bitmap occupies the VRAM the font lives in,
+so the two cannot both be the screen - but the font is still in the ROM, and characters are
+drawn into the bitmap instead, eight bytes at a time. `PRINT` works, and so does seeing what
+you type.
+
+The cell layout falls out of the bitmap addressing: for a character at column `c` and row `r`
+the eight rows of pixels are eight consecutive VRAM addresses, so one address gets written and
+eight bytes go out. The colour is written too, so text stays readable over whatever was drawn
+underneath.
+
+32 columns by 24 rows, against 40 by 24 in text mode. **It scrolls, and it is slow.** A
+character row is exactly one 256-byte page of the bitmap, so moving the picture up a row is 23
+page moves in the shape table and 23 in the colour table - 11776 bytes through the processor
+twice, about a third of a second. There is no way round it: the 9918 has no block move, and in
+this mode every cell has its own pattern, so the name table cannot be rotated the way it can on
+a text screen. What you see is the copy sweeping down the screen, which reads as the scroll it
+is.
+
+If a third of a second a line is too slow - a long `LIST` is the case that hurts - the jump is
+one constant, `GTX_SCROLL_ROWS` in `db6502_extra.s`. Jumping further moves nearly the same
+bytes but does it once every that many lines, so the cost per line falls with the jump: about
+90 ms at four rows, about 45 ms at eight. The screen then jumps rather than slides.
+
+`SCREEN 0` reloads the font and goes back to the 40 column text screen; so does the reset
+button, and after a power-on the console is always the text one.
+
+`LINE` takes both endpoints inclusive and is Bresenham, so it never strays more than half a
+pixel from the true line. `CIRCLE` is the midpoint algorithm and holds to the same half pixel.
+Both cost what `PLOT` costs, per pixel drawn.
+
+A circle may sit anywhere, including partly off the screen - it is clipped point by point and
+drawn as far as it fits. `CIRCLE x, y, 0, c` is one dot.
+
+```basic
+10 SCREEN 1
+20 FOR R=8 TO 88 STEP 8
+30 CIRCLE 128, 96, R, 15
+40 NEXT R
+```
+
+**Speed.** A single `PLOT` is a read-modify-write of the bitmap byte plus a write to the colour
+table, three VRAM addresses in all, about 250 µs. That is roughly 4000 pixels a second, so the
+example above draws in about a fifteenth of a second, a full width `LINE` takes about 64 ms,
+and filling the whole screen dot by dot would take ten seconds. `SCREEN 1` itself writes 13056
+bytes and takes about a quarter of a second, with the screen blanked while it does.
+
+Runs of eight pixels that fall inside one byte could be written whole - two VRAM addresses
+instead of twenty-four, worth roughly a factor of thirteen on horizontal lines. That is not
+implemented. It is not as simple as it sounds: in this mode consecutive bytes are eight
+addresses apart rather than adjacent, so it does not fall out of the VDP's auto-increment and
+needs its own path with masked ends.
+
+The VRAM layout is the usual full-screen bitmap: 6144 bytes for the bitmap at $0000, 6144 for
+the colour table at $2000, 768 for the name table at $3800. Sprites are switched off by putting
+$D0 in the first sprite's Y byte - the attribute table is not part of what `SCREEN 1` fills, and
+an uninitialised one has the chip drawing 32 sprites out of whatever the VRAM came up with. The
+2 KB hole between the bitmap and the colour table, $1800-$1FFF, is where a sprite pattern table
+would have to go: those need a 2 KB boundary, so the space behind the name table cannot hold
+one.
+
+### The `KEY` function
+
+```basic
+A = KEY(0)
+```
+
+The code of a key if one is waiting, zero if none is. It does not wait, which is the whole
+point: `INPUT` holds the machine until ENTER, so without this nothing written in BASIC can
+steer a sprite, poll for a fire button, or offer a way out of a loop.
+
+The argument is required by the way MS-BASIC dispatches functions and is ignored, the same way
+`RND(0)` reads.
+
+Both the serial port and the PS/2 keyboard feed it. Print the codes to find out what your
+keyboard sends:
+
+```basic
+10 K=KEY(0)
+20 IF K>0 THEN PRINT K
+30 GOTO 10
+```
+
+Upstream MS-BASIC has `GET` for this, but `CONFIG_SMALL` leaves its routine out of the build
+entirely, so restoring the keyword would mean compiling the routine and growing `CODE` - see
+section 5.2.3 of MEMORY_MAP.md for why that is the one change to avoid.
+
+### The console
+
+40 columns by 24 rows in text mode, 32 by 24 in graphics. A line that runs off the right edge
+wraps onto the next row, and the screen scrolls when it runs off the bottom - in graphics mode
+that scroll costs about a third of a second, see the note under the graphics statements.
+
+`PRINT` counts its own columns for the comma and `TAB` zones, and knows nothing about the
+console, so a very long line can wrap somewhere the zones did not expect.
+
+### Stopping a program
+
+`Ctrl+C` breaks a running program and a running `LIST`, and prints `BREAK IN` with the line
+number. `CONT` carries on from there.
+
+`Ctrl+X` is a different thing entirely and lives a level lower: the keyboard controller sends
+`$18` for it, the interrupt handler picks that off before it ever reaches the input buffer, and
+the machine restarts. It works no matter what BASIC is doing, including inside a `SOUND` that
+has not finished, which `Ctrl+C` cannot do - the check happens between statements.
+
+### The d-pad
+
+Four buttons on VIA2 port B, active low, so a pressed button reads as a zero bit. Nothing has
+to be set up first - `_blink_init` runs during boot and leaves those bits as inputs.
+
+```basic
+B = PEEK(34816)
+IF (B AND  8)=0 THEN REM up
+IF (B AND 64)=0 THEN REM down
+IF (B AND 16)=0 THEN REM left
+IF (B AND 32)=0 THEN REM right
+```
+
+`(B AND 120)=120` is "nothing pressed", which makes a serviceable "press any key to start" and,
+counted round a loop, a seed for `RND`. Bit 7 is the LED and bits 0 and 1 are outputs as well -
+writing to the port will turn the LED on and off, and is otherwise best left alone.
+
+`basic/DPAD.BAS` steers a sprite with it, which is about twenty lines. `basic/SNAKE.BAS` is a
+game on the graphics screen: the field is 8x8 cells, and each one is drawn with eight `VPOKE`s
+rather than sixty-four `PLOT`s, because a character row of the bitmap is one page of VRAM and
+its eight rows of pixels are eight consecutive addresses. Collisions come out of an occupancy
+array rather than by walking the body, so a long snake costs no more per move than a short one.
+
+Sprites are the fast way to move something: two bytes go to the attribute table and the chip
+does the rest, where the same movement drawn into the bitmap is a few hundred writes. What they
+will not do is a snake - only four sprites appear on any one scanline, and a snake lying flat
+is a row of segments on the same line.
+
+### Cold start and warm start
+
+After a **power-on** the machine goes straight into a cold start. There is nothing else it
+could sensibly do: the SRAM comes up holding whatever it feels like, so there is no program to
+keep and no prompt worth showing.
+
+After a **reset** the RAM still holds the program that was in it, and there the choice matters,
+so the question comes back:
+
+```text
+Cold start [C] or warm [W] start?
+```
+
+`C` clears the program and starts fresh, `W` keeps it and returns to the `OK` prompt.
+
+The two cases are told apart by a six-byte signature in `BASBUF`, stamped on the way into the
+first cold start and never cleared afterwards. Finding it again means the RAM survived, which
+means this was a reset. `BASBUF` works for this because nothing zeroes that page at boot - the
+same property that forces `_start_msbasic` to set `sd_loadmode` and `sd_savemode` by hand.
+
+Six bytes of ASCII rather than a two-byte bit pattern on purpose: an SRAM does not come up
+uniformly random, it comes up in patterns, and a short signature built from the kind of bytes
+an SRAM likes is exactly the one that appears by accident and sends the machine into a warm
+start over garbage.
+
+### The panel
+
+The 20x4 LCD is a four line panel, and the LED behaves like the one on a 1541 - lit while the
+card is in use, out again when the command finished, still lit if it did not:
+
+```text
+Microsoft BASIC
+21817 BYTES FREE
+SD READY
+SAVE PROG.BAS   120
+```
+
+The banner and the free memory line are repainted at every direct mode prompt, so the panel
+puts itself back together after anything that disturbs it; the card line follows each mount,
+and the bottom line follows the transfer. `BYTES FREE` is the figure `PRINT FRE(0)` gives.
+
+The counter is lines: read for `LOAD`, written for `SAVE`, listed for `LOAD "$"`. Lines rather
+than 512 byte blocks because that is the unit these files come in - a BASIC program of a few
+hundred bytes is nought blocks from beginning to end, and a counter that never moves is worse
+than no counter. It sticks at 999. Column 19 is
+never written: reaching the end of the last row makes `lcd_wrap_line` scroll the whole display
+and wait 150 ms, which would throw the line away and make every update slow. For the same
+reason the cursor is parked at the top of the display before the card is touched - `sd_init`
+prints `SD not initialized` wherever the cursor happens to be.
 
 ### Loadable programs in `load` folder
 
-All the programs in the `load` folder are to be uploaded to the 6502 computer over serial port with XMODEM protocol and require ROM to be flashed with software capable of receiving them. Currently this is `rom/22_modem_test` and `rom/minimal_bootloader`. Following list describes them in more detail:
+All the programs in the `load` folder are to be uploaded to the 6502 computer over serial port with XMODEM protocol and require ROM to be flashed with software capable of receiving them. Currently this is `rom/modem_test` and `rom/minimal_bootloader`. Following list describes them in more detail:
 
-- `load/01_blink_test` - simple program that blinks onboard LED 10 times, provided to illustrate loadable module build process. This one has been copied to `rom/23_blink_test` to illustrate differences between the two models,
-- `load/02_hello_world` - "Hello World" example in a loadable module version,
-- `load/03_string_test` - small program written to test string handling library functions,
-- `load/04_blink_large` - presents different model of linking loadable code (with included common modules),
-- `load/05_simple_shell` - simple shell program later moved to `os1` image,
-- `load/06_memdump` - initial implementation of simple memory monitor (dumps contents of the memory area used to load programs to verify load operation),
-- `load/07_keyboard_test` - modified version of the ROM keyboard test application, implemented mostly to test new key binding (CTRL+X) and required changes in the keyboard controller firmware,
-- `load/08_system_break_test` - very simple application: when started, it runs infinite loop. That's all. It was created to demonstrate new OS/1 feature - system break,
-- `load/09_monitor` - work in progress implementation of the monitor program (moved to OS/1 image),
-- `load/10_menu` - simple application used to test drive common menu library (now included in OS/1 image),
-- `load/11_disasm` - simple disassembler application, now included in OS/1 monitor application,
-- `load/12_custom_chars` - simple program that defines custom characters for LCD screen,
-- `load/13_custom_chars_c` - the same as above, but written using C library bindings,
-- `load/14_offset_math` - program written to test offset math operations (used to troubleshoot disassembly issues with relative addressing),
-- `load/15_menu_in_c` - another program to illustrate C bindings for OS/1 library functions,
-- `load/16_microchess` - original KIM-1 microchess program, ported to work in OS/1 environment, and with slightly improved user interface,
-- `load/17_basic` - my own implementation of BASIC interpreter, incomplete and still in progress. Might never be completed (see program `22_msbasic` below),
-- `load/18_hello_world` - simple program to illustrate difference between assembly and C code,
-- `load/19_hello_world_c` - as above, but written in C,
-- `load/20_lcd_bug` - program used to troubleshoot issues with LCD interface running at 8MHz clock,
-- `load/21_sysinfo` - simple program to display system information, now embedded in OS/1 image,
-- `load/22_msbasic` - port of original Microsoft BASIC code, updated to work as OS/1 loadable module. When all the bugs are solved, it will be embedded in OS/1 image,
-- `load/23_t1_test` - simple program demonstrating WDC 65C22 VIA timer operation.
+- `load/d_pad_test` - exercises the D-pad through the common `dpad` library and reports what it reads on the onboard LCD. Also built as a ROM image by `rom/d_pad_test` from this same source,
+- `load/hello_world` - simple program to illustrate difference between assembly and C code,
+- `load/hello_world_c` - as above, but written in C,
+- `load/monitor` - work in progress implementation of the monitor program (moved to OS/1 image),
+- `load/play_song` - plays "Mary Had a Little Lamb" on the SN76489. It talks to the chip itself and only takes the bit definitions from `sound.inc`, so it does not depend on the common `sound` library. Also built as a ROM image by `rom/play_song`,
+- `load/sysinfo` - simple program to display system information, now embedded in OS/1 image.
 
 As for software compatibility - all the loadable modules require bootloader, and this one, in turn, requires ACIA for operation, so by design these are not compatible with vanilla BE6502.
 
@@ -411,9 +917,20 @@ As for software compatibility - all the loadable modules require bootloader, and
 
 There is one thing important to consider when working with loadable modules. The idea behind them is to have the possibility to run the same code from RAM and ROM, preferably preserving the former if possible and reducing the loadable file size. The idea is to be able to execute common functions stored in ROM from the code running in RAM.
 
-There are two examples in the code repository demonstrating alternative approaches. Naive one, that assumes that all the code to be executed is included in the loadable module is available in `load/04_blink_large` folder. When built, you will notice it contains all the functions required: `_blink_init`, `_blink_led` and `_delay_ms` compiled and bundled. The only difference between this program and `rom/23_blink_test` is the value of `BUILD_TYPE=` flag in `makefile` resulting in different addressing model being used for code storage.
+The naive approach is to bundle every function the module calls into the module
+itself. It works, and it is what you get without doing anything special, but the
+binary then carries its own copy of code that already sits in ROM, and a ROM
+update leaves that copy behind.
 
-Now, the second example, provided in `load/01_blink_test` is much more interesting. The binary file is smaller (admittably, not by much, due to inclusion of the loadlib vector array!), but none of the code of the common functions (`_blink_init`, `_blink_led` and `_delay_ms`) is actually bundled in the binary. All these references are provided by stub functions, defined in `common/source/loadlib.s` - each of these functions really contains jump to vector defined in dedicated vector range in ROM (0xf800-0xfff9). This indirection layer enables updates to ROM without needing to recompile all the loadable modules. The only requirement is to keep the order of the calls intact and adding new functions to `common/source/syscalls.s` at the end so to keep previously defined addresses unchanged.
+The alternative is what `load/hello_world` does. It calls `writeln_tty`, so it
+uses `_tty_writeln` from the common library - and the whole binary is 286 bytes,
+nowhere near enough to contain it. None of the common code is bundled. The
+references are satisfied by stub functions defined in `common/source/loadlib.s`,
+each of which is a jump through a vector in the dedicated range in ROM
+(0xf800-0xfff9). This indirection layer enables updates to ROM without needing
+to recompile all the loadable modules. The only requirement is to keep the order
+of the calls intact and to add new functions to `common/source/syscalls.s` at the
+end, so that previously defined addresses stay where they are.
 
 Defining new shared function requires the following:
 
@@ -421,6 +938,6 @@ Defining new shared function requires the following:
 - implementation of the interface include in `common/include` folder,
 - adding this new function to `common/source/syscalls.s` module,
 - adding stub function to `common/source/loadlib.s` module,
-- adding new objects to `rom/minimal_bootloader/makefile` and `rom/22_modem_test/makefile`.
+- adding new objects to `rom/minimal_bootloader/makefile` and `rom/modem_test/makefile`.
 
 The list above should help you understand how this code reusability has been achieved.
