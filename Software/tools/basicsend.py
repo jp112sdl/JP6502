@@ -198,25 +198,31 @@ def drain(port, what):
         check_for_cancel(port.read(pending), what)
 
 
-def wait_for_ack(port, timeout, what):
+def wait_for_ack(port, timeout, what, stale_ok=False):
     """Wait for one ACK. True on ACK, False on timeout, exits on CAN.
 
     Read one byte at a time: read(n) waits for all n or for the timeout, and
     spending the timeout on every line would cost more than the transfer does.
+
+    With stale_ok a CAN is ignored rather than fatal. That is right before the
+    first line has been sent: there is nothing for the machine to be cancelling
+    yet, so a CAN at that point is left over from an earlier run and says
+    nothing about this one.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
         chunk = port.read(1)
         if not chunk:
             continue
-        check_for_cancel(chunk, what)
+        if not stale_ok:
+            check_for_cancel(chunk, what)
         if chunk[0] == ACK:
             return True
     return False
 
 
 def send_program(port, lines, quiet):
-    if not wait_for_ack(port, HANDSHAKE_TIMEOUT, "before it started"):
+    if not wait_for_ack(port, HANDSHAKE_TIMEOUT, "before it started", stale_ok=True):
         sys.exit(
             "No ACK from the machine. Type LOAD \"@\" on it, and check the "
             "port and that nothing else has it open."

@@ -71,6 +71,26 @@ SER_IDLE_RELOAD = 8000
 ser_load:
         jsr sd_ledon
 
+        ; Empty both rings before anything else. A transfer that was cut short
+        ; leaves an ACK and a CAN in the transmit ring that never went out -
+        ; the 6551 does not transmit while /CTS is high, and /CTS comes from
+        ; the far end's RTS, so with nothing holding the port open over there
+        ; not one byte leaves. Those two would then block every ACK this
+        ; transfer wants to send, and if they did go out, a CAN arriving late
+        ; tells the host that the transfer it has only just started is off.
+        ; Anything left in the receive ring would be read as the first line.
+        ; None of it belongs to this transfer.
+        ;
+        ; Briefly with interrupts off: the handler moves the other end of both
+        ; rings, and a write landing between the load and the store here would
+        ; leave a pointer one behind, which reads as 255 bytes outstanding.
+        sei
+        lda acia_tx_rptr
+        sta acia_tx_wptr
+        lda acia_rx_wptr
+        sta acia_rx_rptr
+        cli
+
         ; The status line is the card's own panel with a different name written
         ; into it, so the live line counter comes along for nothing
         ldx #10

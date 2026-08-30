@@ -523,7 +523,8 @@ than sending one, and streaming would overrun the 256 byte receive buffer inside
 Nothing appears on the machine until the tool has the port open, and that is the hardware
 rather than the software: the 6551 holds its transmitter off while `/CTS` is high, and `/CTS`
 comes from the far end's RTS. So `LOAD "@"` on its own sits quietly at `000` until something
-opens the port. Ctrl+C gets you out of it at any point.
+opens the port. Ctrl+C gets you out of it at any point, and starting a fresh `LOAD "@"` throws
+away anything a previous attempt left on the wire - no power cycle needed in between.
 
 ### The `SOUND` statement
 

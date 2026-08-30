@@ -223,10 +223,10 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DB89` | 15239 | `CODE` (darin 228 Bytes `db6502_serial.s`, siehe 5.6) |
-| `$DB8A` | `$E20F` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E210` | `$E3E0` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E3E1` | `$E6FF` | 799 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DB93` | 15249 | `CODE` (darin 238 Bytes `db6502_serial.s`, siehe 5.6) |
+| `$DB94` | `$E219` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E21A` | `$E3EA` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E3EB` | `$E6FF` | 789 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5193 Bytes von 24576.
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1143 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
+ROM frei gesamt 1133 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
 Block: es liegt fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht
 weiter nach hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten.
 Was dort noch dazukommt, muss also entweder klein sein oder in `CODE` gehören —
@@ -2034,7 +2034,7 @@ byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ### 5.6 `LOAD "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 228 Bytes in `CODE`, drei Bytes in `BASBUF`.
+`common/source/db6502_serial.s`, 238 Bytes in `CODE`, drei Bytes in `BASBUF`.
 Gegenstelle ist `tools/basicsend.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
@@ -2130,6 +2130,27 @@ zurückzukehren:
 
 Damit sieht der ACIA denselben Ablauf wie vor der Begrenzung, nur bleibt der
 Ring bei einem Byte stehen statt vollzulaufen.
+
+**Und der dritte Teil.** Der Deckel deckt nur zu, was dieser Transfer selbst
+einreiht. Ein abgebrochener Transfer hinterlässt zwei Bytes, die nie
+weggegangen sind — das ACK und das CAN von `ser_cancel` —, und beim nächsten
+`LOAD "@"` sieht `ser_ack` einen belegten Ring und schweigt, ohne dass ein
+Netzschalter dazwischen war. Gingen sie doch noch raus, wäre es noch
+schlimmer: ein verspätetes CAN sagt dem Sender, dass der Transfer, den er
+gerade erst angefangen hat, abgesagt ist.
+
+`ser_load` leert deshalb beide Ringe, bevor es irgendetwas anderes tut. Kurz
+mit gesperrten Interrupts, weil der Handler das jeweils andere Ende bewegt und
+ein Schreibzugriff zwischen `lda` und `sta` einen Zeiger um eins zurücklässt —
+was sich als 255 ausstehende Bytes liest.
+
+Der Sender ignoriert aus demselben Grund ein CAN, solange er noch keine Zeile
+geschickt hat: es gibt zu dem Zeitpunkt nichts abzusagen, also stammt es aus
+einem früheren Lauf.
+
+Drei Anläufe für eine Warteschleife, und alle drei Fehler waren derselbe
+Denkfehler — der Zustand einer Leitung überlebt den Befehl, der ihn erzeugt
+hat.
 
 Die Lehre ist allgemeiner als dieser Fall: keine Warteschleife auf der Leitung,
 aus der die Abbruchtaste nicht mehr erreichbar ist.
