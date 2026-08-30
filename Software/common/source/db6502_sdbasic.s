@@ -42,6 +42,10 @@ SD_MODE_FILE   = 1
 SD_MODE_DIR    = 2
 SD_MODE_SERIAL = 3              ; the lines come off the ACIA - db6502_serial.s
 
+SD_SAVE_OFF    = 0
+SD_SAVE_CARD   = 1
+SD_SAVE_SERIAL = 2              ; the listing goes out over the ACIA
+
 SD_NAME_COLUMN  = 13            ; width of the name field in a "$" line
 SD_SIZE_COLUMN  = 5             ; width of the block count field
 SD_DEC_DIGITS   = 5             ; digits rendered by sd_dec16
@@ -158,7 +162,7 @@ LOAD:
 ; ---------------------------------------------------------------------------
 SAVE:
         jsr sd_getname
-        bcs @syntax             ; neither SAVE "$" nor SAVE "@" is a thing
+        bcs @notaname           ; "$" or "@" - only one of them means anything
 
         ; A name that is about to bring a new entry into the directory has to
         ; be one that FAT accepts - see sd_checkname
@@ -183,7 +187,7 @@ SAVE:
         stz sd_wrcount+1
         stz sd_wrcount+2
         stz sd_wrcount+3
-        lda #$01
+        lda #SD_SAVE_CARD
         sta sd_savemode
 
         ; List the whole program with the output going to the card. LIST ends
@@ -201,6 +205,11 @@ SAVE:
         sta LINNUM
         sta LINNUM+1
         jmp L25A6
+
+@notaname:
+        cmp #'@'
+        bne @syntax
+        jmp ser_save            ; out of branch range - ser_save is in CODE
 
 @syntax:
         jmp SYNERR
@@ -701,6 +710,14 @@ sd_putbyte:
         ; column at zero turns the wrap off for as long as the save runs.
         stz POSX
 
+        ; A save to the serial port comes through here too, so that sd_newline
+        ; and every other caller stay as they are - only the destination of the
+        ; byte differs. ser_putbyte pops the two registers and returns the byte
+        ; the same way the tail below does.
+        lda sd_savemode
+        cmp #SD_SAVE_SERIAL
+        beq @towire
+
         lda sd_wrerror
         bne @out
 
@@ -739,6 +756,9 @@ sd_putbyte:
         lda sd_bytetmp
         rts
 
+@towire:
+        jmp ser_putbyte
+
 ; ---------------------------------------------------------------------------
 ; CRDO hook - one line end, to the card or to the screen
 ; ---------------------------------------------------------------------------
@@ -776,7 +796,15 @@ sd_flushsector:
 ;
 ; Reaching the direct mode prompt always means the transfer is over, whether
 ; LIST ran out of program or an error cut it short.
+;
+; In CODE rather than in SDCODE with the rest: SDCODE is boxed in between
+; EXTCODE and SYSCALLS, and SYSCALLS cannot move because loadables expect its
+; table at $f800. The block had twelve bytes left when SAVE "@" arrived, so
+; this routine - which has no reason to be in there - moved out to make room.
+; See MEMORY_MAP.md 5.1 and 5.6.
 ; ---------------------------------------------------------------------------
+        .segment "CODE"
+
 sd_finish:
         jsr sd_promptled
         lda sd_loadmode
@@ -792,7 +820,11 @@ sd_finish:
 
 @checksave:
         lda sd_savemode
+        beq @nothingopen
+        cmp #SD_SAVE_SERIAL
         bne @closefile
+        jmp ser_endsave         ; nothing to close, one byte to send
+@nothingopen:
         rts
 
 @closefile:
@@ -845,6 +877,8 @@ sd_finish:
         ; would find again
         jsr _sd_abortsave
         jmp sd_reporterror
+
+        .segment "SDCODE"
 
 ; ---------------------------------------------------------------------------
 ; The body and the message texts sit in the LCDCODE block further down, where

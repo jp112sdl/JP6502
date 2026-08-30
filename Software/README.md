@@ -385,6 +385,7 @@ token table or to the load address.
 | `LOAD "NAME.BAS"` | read `NAME.BAS` from the root directory |
 | `LOAD "$"` | replace the program with a listing of the card, then `LIST` it |
 | `LOAD "@"` | replace the program with one sent over the serial port, see below |
+| `SAVE "@"` | list the program out over the serial port |
 | `SAVE` | write `BASIC.BAS` |
 | `SAVE "NAME.BAS"` | write `NAME.BAS` |
 
@@ -493,7 +494,12 @@ converted anywhere along the way.
 ./tools/basicsend.py SNAKE.BAS
 ```
 
-Then type `LOAD "@"` on the machine. Either order works: the receiver repeats its "ready"
+Then type `LOAD "@"` on the machine. `SAVE "@"` sends a program the other way,
+with `tools/basicrecv.py` catching it:
+
+```bash
+./tools/basicrecv.py SNAKE.BAS
+``` Either order works: the receiver repeats its "ready"
 every half second while it waits, so the tool picks one up whenever it arrives. The status
 line counts the lines as they land, and `OK` comes back when the last one is in.
 
@@ -506,7 +512,12 @@ The tool takes a path, or a bare name it looks up in `basic/`:
 | `basicsend.py -p /dev/tty.usbserial-XXXX prog.bas` | pick the port by hand |
 | `basicsend.py --as-is prog.bas` | do not touch the case of anything |
 
-By default the tool upper-cases everything outside string literals, because the tokeniser only
+`basicrecv.py` refuses to overwrite a file unless you pass `-f`, and writes nothing at all if
+the listing stops without its end marker - half a program looks exactly like a whole one, and
+under the name of the real thing it would be worse than none. `-` writes to standard output
+instead of a file. Ctrl+C on the machine gets it out of a `SAVE "@"` with nothing listening.
+
+By default the sending tool upper-cases everything outside string literals, because the tokeniser only
 knows upper case keywords - `10 print "hello"` would be a syntax error, and `10 PRINT "hello"`
 is what you meant. Blank lines are dropped, and a line over 78 characters is refused before
 anything is sent rather than being silently cut short at the far end.

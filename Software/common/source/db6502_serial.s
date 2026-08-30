@@ -10,8 +10,9 @@
 ; anywhere along the way.
 ;
 ;   LOAD "@"    replace the program with whatever the host sends
+;   SAVE "@"    list the program out over the port
 ;
-; tools/basicsend.py is the other end of it.
+; tools/basicsend.py and tools/basicrecv.py are the other end of them.
 ;
 ; The protocol is one line at a time, paced by this end:
 ;
@@ -31,6 +32,11 @@
 ; While the receiver sits idle it repeats its ACK, so it does not matter which
 ; end is started first - a host that arrives late still hears one.
 ;
+; SAVE "@" needs no handshake at all. The machine is the slow end there - LIST
+; composes a line far slower than 19200 baud carries it away - and the host has
+; nothing to keep up with. It ends with one EOT, the same byte LOAD "@" takes
+; as "no more lines".
+;
 ; Nothing here may ever block on the wire. The 6551 holds its transmitter off
 ; while /CTS is high, and /CTS comes from the far end's RTS - so for as long as
 ; nothing has the port open over there, not one byte leaves, and the driver's
@@ -47,6 +53,7 @@
 ; which repeating the ACK is safe - see ser_readbyte
 ser_idle:       .res 1
 ser_timer:      .res 2
+ser_dropped:    .res 1          ; a save gave up - throw the rest of LIST away
 
         .segment "CODE"
 
@@ -71,36 +78,12 @@ SER_IDLE_RELOAD = 8000
 ser_load:
         jsr sd_ledon
 
-        ; Empty both rings before anything else. A transfer that was cut short
-        ; leaves an ACK and a CAN in the transmit ring that never went out -
-        ; the 6551 does not transmit while /CTS is high, and /CTS comes from
-        ; the far end's RTS, so with nothing holding the port open over there
-        ; not one byte leaves. Those two would then block every ACK this
-        ; transfer wants to send, and if they did go out, a CAN arriving late
-        ; tells the host that the transfer it has only just started is off.
-        ; Anything left in the receive ring would be read as the first line.
-        ; None of it belongs to this transfer.
-        ;
-        ; Briefly with interrupts off: the handler moves the other end of both
-        ; rings, and a write landing between the load and the store here would
-        ; leave a pointer one behind, which reads as 255 bytes outstanding.
-        sei
-        lda acia_tx_rptr
-        sta acia_tx_wptr
-        lda acia_rx_wptr
-        sta acia_rx_rptr
-        cli
+        jsr ser_flush
 
         ; The status line is the card's own panel with a different name written
         ; into it, so the live line counter comes along for nothing
-        ldx #10
-@name:
-        lda ser_panelname,x
-        sta sd_fatname,x
-        dex
-        bpl @name
         lda #$00                        ; the LOAD panel, not the SAVE one
-        jsr sd_lcdbegin
+        jsr ser_panel
 
         stz ser_idle
         lda #SD_MODE_SERIAL
@@ -194,12 +177,8 @@ ser_readbyte:
         cmp #ACIA_DATA_AVAILABLE
         beq @arrived
 
-        jsr _keyboard_is_data_available
-        cmp #KEYBOARD_DATA_AVAILABLE
-        bne @tick
-        jsr _keyboard_read_char
-        cmp #$03
-        beq @abort
+        jsr ser_break
+        bcs @abort
 
 @tick:
         lda ser_timer
@@ -258,11 +237,7 @@ ser_ack:
         ; that the ACIA can see, so this leaves the chip in the state the plain
         ; repeated write used to leave it in - with the ring held at one byte
         ; instead of filling up.
-        lda ACIA_COMMAND
-        and #ACIA_TX_MASK
-        ora #ACIA_TX_ARM
-        sta ACIA_COMMAND
-        rts
+        jmp ser_arm
 
 @queue:
         lda #SER_ACK
@@ -282,6 +257,179 @@ ser_cancel:
         jmp _acia_write_byte
 @full:
         rts
+
+; ---------------------------------------------------------------------------
+; "SAVE @" statement, reached from SAVE in db6502_sdbasic.s
+;
+; Nothing here writes anything: it points MONCOUT at the wire and lets LIST run
+; over the whole program, exactly the way a save to the card does. sd_putbyte
+; sends every character on, sd_newline ends every line, and RESTART arrives at
+; sd_finish, which comes back here for the EOT.
+; ---------------------------------------------------------------------------
+ser_save:
+        jsr sd_ledon
+        jsr ser_flush           ; a leftover ACK would be the first character
+        lda #$01                ; the SAVE panel
+        jsr ser_panel
+
+        stz ser_dropped
+        lda #SD_SAVE_SERIAL
+        sta sd_savemode
+
+        ; LIST ends in RESTART, where sd_finish sends the EOT and the prompt
+        ; comes back - so drop the statement dispatcher's return address the
+        ; way LIST itself does, instead of leaving it on the stack for good.
+        pla
+        pla
+
+        lda TXTTAB
+        sta LOWTRX
+        lda TXTTAB+1
+        sta LOWTRX+1
+        lda #$FF
+        sta LINNUM
+        sta LINNUM+1
+        jmp L25A6
+
+; ---------------------------------------------------------------------------
+; MONCOUT hook while a save to the wire is running
+;
+; Entered from sd_putbyte with X and Y already stacked and the byte waiting in
+; sd_bytetmp, and it has to leave things the way that routine's own tail does.
+; ---------------------------------------------------------------------------
+ser_putbyte:
+        lda ser_dropped
+        bne @out                ; given up - let LIST run itself out unheard
+        lda sd_bytetmp
+        jsr ser_send
+        bcc @out
+        lda #$01                ; Ctrl+C during the wait
+        sta ser_dropped
+@out:
+        ply
+        plx
+        lda sd_bytetmp
+        rts
+
+; ---------------------------------------------------------------------------
+; sd_finish hook - the listing is over
+; ---------------------------------------------------------------------------
+ser_endsave:
+        stz sd_savemode
+        lda ser_dropped
+        bne @gaveup
+        lda #SER_EOT
+        jmp ser_send            ; carry is nobody's business up here
+@gaveup:
+        ; A truncated listing is not a program. Say nothing and let the host
+        ; time out rather than end it with the byte that means "all of it".
+        rts
+
+; ---------------------------------------------------------------------------
+; One byte onto the wire, waiting for room in the transmit ring
+;
+; LIST composes characters faster than 19200 baud carries them, so this waits
+; on nearly every one of them, and the wait has to stay interruptible: with
+; nothing holding the port open at the other end the 6551 transmits nothing at
+; all, and a plain _acia_write_byte would sit in its own spin loop for good.
+;
+; Carry set means Ctrl+C ended the wait and the byte was not sent.
+; ---------------------------------------------------------------------------
+ser_send:
+        pha
+@room:
+        lda acia_tx_wptr
+        sec
+        sbc acia_tx_rptr
+        cmp #$ff
+        bcc @go
+        jsr ser_arm             ; nothing moving - make sure it can
+        jsr ser_break
+        bcc @room
+        pla
+        sec
+        rts
+@go:
+        pla
+        jsr _acia_write_byte
+        clc
+        rts
+
+; ---------------------------------------------------------------------------
+; Arms the transmitter without putting anything in the ring
+;
+; The write to the command register is the whole of what _acia_write_byte does
+; that the ACIA can see - the byte itself only ever reaches the chip from the
+; interrupt handler. A byte queued while /CTS was high has never been armed
+; with a transmitter that could act on it, and nothing else arms it again.
+; ---------------------------------------------------------------------------
+ser_arm:
+        lda ACIA_COMMAND
+        and #ACIA_TX_MASK
+        ora #ACIA_TX_ARM
+        sta ACIA_COMMAND
+        rts
+
+; ---------------------------------------------------------------------------
+; Carry set if Ctrl+C is waiting on the keyboard
+;
+; Anything else typed is thrown away, which is what a transfer from the card
+; does with it as well. May use X and Y - both callers have them stacked.
+; ---------------------------------------------------------------------------
+ser_break:
+        jsr _keyboard_is_data_available
+        cmp #KEYBOARD_DATA_AVAILABLE
+        bne @none
+        jsr _keyboard_read_char
+        cmp #$03
+        beq @yes
+@none:
+        clc
+        rts
+@yes:
+        sec
+        rts
+
+; ---------------------------------------------------------------------------
+; Empties both rings at the start of a transfer
+;
+; A transfer that was cut short leaves an ACK and a CAN in the transmit ring
+; that never went out - the 6551 does not transmit while /CTS is high, and
+; /CTS comes from the far end's RTS, so with nothing holding the port open over
+; there not one byte leaves. Left alone they block every ACK the next transfer
+; wants to send, and if they did go out, a CAN arriving late would tell the
+; host that the transfer it has only just started is off. Anything in the
+; receive ring would be read as the first line. None of it belongs to what is
+; about to happen.
+;
+; Briefly with interrupts off: the handler moves the other end of both rings,
+; and a write landing between the load and the store would leave a pointer one
+; behind, which reads as 255 bytes outstanding.
+; ---------------------------------------------------------------------------
+ser_flush:
+        sei
+        lda acia_tx_rptr
+        sta acia_tx_wptr
+        lda acia_rx_wptr
+        sta acia_rx_rptr
+        cli
+        rts
+
+; ---------------------------------------------------------------------------
+; Puts the card's own status panel up with SERIAL where the file name goes, so
+; that the live line counter comes along for nothing. A = 0 for LOAD, 1 for
+; SAVE, the same as sd_lcdbegin takes.
+; ---------------------------------------------------------------------------
+ser_panel:
+        pha
+        ldx #10
+@name:
+        lda ser_panelname,x
+        sta sd_fatname,x
+        dex
+        bpl @name
+        pla
+        jmp sd_lcdbegin
 
 ; Eleven characters of raw FAT name, which is the form the status line expects
 ser_panelname:

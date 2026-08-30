@@ -131,9 +131,9 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E65` | 102 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) und `db6502_serial.s` (`ser_idle`, `ser_timer`), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
-| `$0E66` | `$0E9B` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
-| `$0E9C` | `$0EFB` | 96 | ungenutzt |
+| `$0E00` | `$0E66` | 103 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) und `db6502_serial.s` (`ser_idle`, `ser_timer`, `ser_dropped`), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
+| `$0E67` | `$0E9C` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0E9D` | `$0EFB` | 95 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
 
@@ -223,26 +223,28 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DB93` | 15249 | `CODE` (darin 238 Bytes `db6502_serial.s`, siehe 5.6) |
-| `$DB94` | `$E219` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E21A` | `$E3EA` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E3EB` | `$E6FF` | 789 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DC84` | 15490 | `CODE` (darin 362 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
+| `$DC85` | `$E30A` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E30B` | `$E4DB` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4DC` | `$E6FF` | 548 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F7F4` | `$F7FF` | 12 | frei |
+| `$EC00` | `$F796` | 2967 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F797` | `$F7FF` | 105 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
 | `$F900` | `$FF23` | 1572 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1133 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
-Block: es liegt fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht
-weiter nach hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten.
-Was dort noch dazukommt, muss also entweder klein sein oder in `CODE` gehören —
+ROM frei gesamt 985 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
+fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach
+hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten. Was dort
+dazukommt, muss also entweder klein sein oder in `CODE` gehören —
 `db6502_serial.s` steht aus genau diesem Grund in `CODE` und nicht neben dem
-SD-Code, den es sich ansonsten teilt.
+SD-Code, den es sich ansonsten teilt. Als `SAVE "@"` dazukam, waren noch zwölf
+Bytes übrig; `sd_finish` ist deshalb ebenfalls nach `CODE` gezogen, was den
+Block wieder auf 105 Bytes Luft gebracht hat.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -2032,10 +2034,10 @@ geht deshalb noch einmal allein aufs Image: gegen das zuletzt laufende ROM sind
 `RODATA`, `BAS_*`, `SDCODE`, `EXTCODE`, `EXTCODE2`, `SYSCALLS` und `VECTORS`
 byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
-### 5.6 `LOAD "@"` — ein Programm über den ACIA
+### 5.6 `LOAD "@"` und `SAVE "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 238 Bytes in `CODE`, drei Bytes in `BASBUF`.
-Gegenstelle ist `tools/basicsend.py` auf dem Mac.
+`common/source/db6502_serial.s`, 362 Bytes in `CODE`, vier Bytes in `BASBUF`.
+Gegenstellen sind `tools/basicsend.py` und `tools/basicrecv.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
 die Zeilen laufen durch den Tokenizer des Interpreters, als wären sie getippt
@@ -2151,6 +2153,38 @@ einem früheren Lauf.
 Drei Anläufe für eine Warteschleife, und alle drei Fehler waren derselbe
 Denkfehler — der Zustand einer Leitung überlebt den Befehl, der ihn erzeugt
 hat.
+
+#### `SAVE "@"`
+
+Die Gegenrichtung braucht keinen Handschlag. Die Platine ist die langsame
+Seite: `LIST` setzt eine Zeile zusammen, während 19200 Baud sie längst
+weggetragen hätten, und der Mac muss mit nichts Schritt halten. Es reicht ein
+`EOT` am Ende, dasselbe Byte, das `LOAD "@"` als „keine Zeilen mehr" nimmt.
+
+Gewartet werden muss trotzdem, und zwar auf Platz im Sendering — bei praktisch
+jedem Zeichen. Dieselbe Falle wie oben: `_acia_write_byte` dreht sich für immer,
+wenn niemand den Port offen hat. `ser_send` wartet deshalb selbst, macht dabei
+den Sender scharf und fragt die Tastatur ab; Carry gesetzt heißt, Ctrl+C hat die
+Wartezeit beendet. Danach wirft `ser_putbyte` den Rest des Listings weg, statt
+zu warten, damit `LIST` schnell an sein Ende kommt — das `EOT` bleibt dann aus,
+denn ein halbes Listing ist kein Programm.
+
+Angeschlossen ist das mit drei Weichen, nicht mit einer neuen Ausgabekette:
+
+* `SAVE` prüft bei gesetztem Carry aus `sd_getname` auf `@` und springt.
+* `sd_putbyte` verteilt gleich nach `stz POSX` — damit bleiben `MONCOUT` und
+  vor allem `sd_newline` unverändert, das schon `sd_lcdstep` und `CR`/`LF`
+  erledigt.
+* `sd_finish` ruft für den seriellen Fall `ser_endsave` statt die Datei zu
+  schließen.
+
+`sd_finish` selbst ist bei dieser Gelegenheit nach `CODE` gezogen. `SDCODE`
+hatte noch zwölf Bytes, und die Routine hat dort nichts zu suchen — sie hängt an
+`RESTART`, nicht an der Karte. Das hat den Block auf 105 Bytes Luft gebracht.
+
+Der Empfänger auf dem Mac schreibt nichts, wenn kein `EOT` kam. Ein halbes
+Listing sieht aus wie ein ganzes, und unter dem Namen des echten Programms
+abgelegt wäre es schlimmer als gar keins.
 
 Die Lehre ist allgemeiner als dieser Fall: keine Warteschleife auf der Leitung,
 aus der die Abbruchtaste nicht mehr erreichbar ist.
