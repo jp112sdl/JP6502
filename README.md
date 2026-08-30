@@ -53,7 +53,107 @@ ACIA - Serial
 - [x] use Graphics Mode in Microsoft BASIC
 - [x] use DPAD in Microsoft BASIC
 
+## Getting the sources
+
+`FlashPROMv2` is a submodule, so a plain `git clone` leaves it empty:
+
+```
+git clone --recurse-submodules https://github.com/jp112sdl/JP6502.git
+```
+
+For a checkout that is already there:
+
+```
+git submodule update --init --recursive
+```
+
+## What's in the repo
+
+### `Software`
+
+The programs the machine runs, and the toolchain that builds them. `rom` holds
+the ROM projects - among them `os1`, `microsoft_basic` and `minimal_bootloader`
+- and `load` the loadable modules that a running machine can be sent without
+reflashing. `common` has the shared sources, include files and linker configs,
+`basic` a few example BASIC listings, `tools` the Python scripts that talk to
+the machine over the serial port, and `build` is where everything lands.
+
+One `makefile` in `Software` builds all of it:
+
+```
+cd Software
+make all        # every ROM image and every loadable program
+make test       # the same, then an md5 of each binary
+make mapdoc     # check the addresses in MEMORY_MAP.md against the linker output
+make clean
+```
+
+`ADDRESS_MODE` picks the address decoder and defaults to `ext`.
+
+`tools/basicsend.py` and `tools/basicrecv.py` move a BASIC listing over the
+6551's serial port, with `LOAD "@"` or `SAVE "@"` typed on the machine at the
+other end:
+
+```
+./tools/basicsend.py SNAKE.BAS
+./tools/basicrecv.py SNAKE.BAS
+```
+
+[Software/README.md](Software/README.md) is the long version, and
+[Software/MEMORY_MAP.md](Software/MEMORY_MAP.md) has the layout down to the
+individual zero page byte.
+
+### `FlashPROMv2`
+
+Submodule, from [jp112sdl/FlashPROMv2](https://github.com/jp112sdl/FlashPROMv2).
+An ATmega128 sketch that drives a parallel flash device, plus
+`tools/flashtool.py`, which is what writes a ROM image to the chip:
+
+```
+./FlashPROMv2/tools/flashtool.py write Software/build/rom/os1.ext.bin
+```
+
+It also verifies, dumps, erases whole chips or single sectors, and reports what
+is in the socket. The chip names it knows come from `FlashPROMv2/Device.h`.
+
+### `macOS`
+
+A macOS front end for the three things above - `make`, the flash tool and the
+two BASIC transfer scripts. It does not reimplement any of them; it runs the
+same `make` and the same Python scripts that are in this repository. A built
+copy is committed at `macOS/dist/JP6502Control.app`, so it can be started
+without opening Xcode. See [macOS/README.md](macOS/README.md).
+
+### `Schematics`
+
+KiCAD projects for the board:
+
+- `65C02_Computer` - the main schematic and PCB,
+- `DB6502_v002` - the earlier revision it grew out of,
+
+plus the bills of material. There is a dedicated
+[README](Schematics/README.md) in the folder with the build-related details.
+
+### `Arduino`
+
+`keyboard_168P` - the sketch behind the PS/2 keyboard port, which turns the
+keyboard into something the 6502 can read over a VIA. It is built for an
+ATmega168P; the KiCAD schematic in `Schematics/65C02_Computer` still carries the
+ATtiny4313 the upstream design used, so the board and the sketch disagree about
+that chip until the schematic is redrawn.
+
+### `Datasheets`
+
+Every datasheet used while designing the machine, kept here so a pinout is
+never more than one folder away.
+
+
 # DB6502 - Dawid Buchwald's 6502 Computer
+
+JP6502 is built on Dawid Buchwald's DB6502, and what follows is his own README,
+kept because it is where the design and the reasoning behind it are explained.
+It is written in his voice and describes his repository: for what is actually in
+*this* one, see [What's in the repo](#whats-in-the-repo) above.
 
 This repository contains all the work in progress during my build of Ben Eater's inspired 6502 8-bit computer similar to typical machines of the early 1980s. If you haven't seen Ben's videos, I would strongly suggest you start there:
 
@@ -87,7 +187,7 @@ Compared to Ben's 6502 build I introduced the following changes:
 4. Added [additional VIA chip](Schematics/README.md#extra-via-chip) to provide easy expansion of the system,
 5. Added [ACIA chip for serial communication](Schematics/README.md#extra-acia-chip-for-serial-communication),
 6. Added (**optional - more on that later**) [USB-UART interface](Schematics/README.md#extra-usb-uart-interface-chip) for easy connectivity with PC,
-7. Added [PS/2 keyboard port and ATmega168P-based keyboard controller with German Keyboard Layout](Schematics/README.md#ps2-keyboard-interface-and-atmega168p-based-controller) to provide proper replacement for five pushbuttons in Ben's design
+7. Added [PS/2 keyboard port and keyboard controller with German Keyboard Layout](Schematics/README.md#ps2-keyboard-interface-and-attiny4313-based-controller) to provide proper replacement for five pushbuttons in Ben's design
 
 You might be wondering if this means that you can't run Ben's programs on DB6502 - and the answer is **YES YOU CAN**. Indeed, some changes to the code are necessary, but thanks to the additional VIA chip and with some changes to the addressing mode you can run any program from Ben's videos. If you want to use LCD in 8-bit mode, you can also use the additional VIA for it, ignoring the built-in LCD connector.
 
@@ -123,57 +223,13 @@ Most of the decisions made during the schematic design were explained above. Jus
 
 This will be explained in the most detail, obviously. Start with getting [the PCBs](Schematics/README.md#ordering-pcb). **Please note:** clock module is entirely optional, but really useful for single stepping or slow clocking required by Ben Eater's design of Arduino Mega based bus analyzer. As explained in number of places here, you can either order PCBs from PCBWay directly or use your manufacturer of choice - it should have no impact on the final result.
 
-## What's in the repo
-
-Everything, basically. Schematics of the 6502 board, modified clock module, address decoder and other circuits I built during the project. Arduino sketches I used for debugging and simple programs used to test different features.
-
-And, last but not least, full set of sample programs to follow Ben's videos on DB6502 plus my own bootloader/OS. The last two things are coming soon :)
-
-### `Arduino` folder
-
-There are several sketches there, and their full description is available is [separate README](Arduino/README.md).
-
-### `AVR` folder
-
-There are several projects there, used to experiment with pure `avr-gcc` development for Atmel AVR chips. While it has been interesting adventure that I plan to explore further in the future, it was easier to stick to standard Arduino tools for now and simply restructure code to work there.
-
-### `Datasheets` folder
-
-All the datasheets I used when designing DB6502, attached for reference.
-
-### `Schematics` folder
-
-All the KiCAD schematics for the 6502 computer, modified clock module and several others:
-
-- 65C02_Computer - main schematic, including PCB design for DB6502 computer,
-- Clock_module - schematic for the modified clock module, including PCB design,
-- 555_troubleshoot - schematic of circuit used in [troubleshooting of clock module monostable noise issue](https://www.reddit.com/r/beneater/comments/edp1ls/noise_issue_in_monostable_mode_of_ben_eaters/),
-- Address_decoder_basic - schematic of Ben Eater's address decoder for 6502 project,
-- Address_decoder_basic_v2 - slightly modified version of the above,
-- Address_decoder_extended - schematic of my own address decoder, used in the DB6502 computer.
-
-There is dedicated [README](Schematics/README.md) in the folder, containing all the build-related details.
-
-### `Software` folder
-
-This one is the most important folder, as it contains range of different programs to play with the 6502 computer. Large subset of this programs can be built for Ben Eater's version of the 6502 computer without any changes. Some of them, however, use features available only in DB6502, like ACIA or keyboard connector. These can still be ran on Ben Eater's 6502 computer, assuming that compatible hardware is added to it.
-
-The `Software` folder is currently divided into four main parts:
-
-- `build` - temporary folder where all the build artifacts are created, including ROM binaries to be uploaded to EEPROM,
-- `common` - common sources: include files with common constants, sources with shared function, configuration files for different address decoder logic modes, shared makefile used by all projects and small python script to optimize size of loadable modules,
-- `rom` - set of projects used to create various ROM images to follow Ben's videos, test different features of the board and **some day** complete operating system for the computer,
-- `load` - set of project containing loadable modules. These can be uploaded at runtime, without the need to flash the EEPROM. Basic bootloader is required, obviously, and the usage instructions are provided below.
-
-There is also one "master" makefile located directly in the `Software` folder - it will build all the projects in `rom` and `load` subfolders.
-
-There is dedicated [README](Software/README.md) in the folder, containing all the software-related details.
 
 ## Credits
 
 This project would not be possible if not inspiration, support and help from many, many people:
 
 - [Ben Eater](https://eater.net) - his videos inspired me to learn all this,
+- [Dawid Buchwald](https://github.com/dbuchwald) - DB6502, the design and the software JP6502 is built on,
 - [Dirk Grappendorf](https://grappendorf.net) - awesome documentation of his own 6502 project,
 - [Wilson Mines Co.](http://wilsonminesco.com) - the best source of 6502-related information,
 - [Dane Creek Photography](https://github.com/danecreekphotography) - for all his support and test driving the project,
