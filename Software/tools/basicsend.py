@@ -103,6 +103,31 @@ def pick_port():
     sys.exit(1)
 
 
+def open_port(port_name, baud):
+    """Open the port, and say something useful when macOS will not have it.
+
+    A wedged USB serial driver refuses every tcsetattr, including one that
+    writes back exactly what it just read, and pyserial passes that up as a
+    bare termios error from inside its constructor. It is not a bad argument
+    and it is not this tool - `stty -f <port> 19200` fails the same way - so
+    say so, and say what actually clears it.
+    """
+    try:
+        return serial.Serial(port_name, baud, timeout=0.1)
+    except serial.SerialException as error:
+        sys.exit("Cannot open %s: %s" % (port_name, error))
+    except Exception as error:
+        sys.exit(
+            "%s will not take its settings (%s).\n"
+            "The driver, not this tool - `stty -f %s %d` fails the same way.\n"
+            "Unplug the adapter and plug it back in, ideally into a different "
+            "USB port and without a hub. If it keeps failing, try another USB "
+            "cable, and try the adapter with nothing wired to the 6502 - a "
+            "board fighting it for power can knock its USB side over."
+            % (port_name, error, port_name, baud)
+        )
+
+
 def upcase_outside_quotes(line):
     """Uppercase everything that is not inside a string literal.
 
@@ -256,7 +281,7 @@ def main():
               % (os.path.basename(path), port_name, args.baud, len(lines)))
         print('  waiting for the machine - type LOAD "@" on it')
 
-    with serial.Serial(port_name, args.baud, timeout=0.1) as port:
+    with open_port(port_name, args.baud) as port:
         port.reset_input_buffer()
         port.reset_output_buffer()
         send_program(port, lines, args.quiet)
