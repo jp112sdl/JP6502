@@ -519,7 +519,11 @@ sitting out its timeout. Ctrl+C on the machine also ends it.
 One line at a time, each acknowledged before the next is sent. That is not for the sake of the
 wire - 19200 baud is nothing - but because inserting a line into a long program takes longer
 than sending one, and streaming would overrun the 256 byte receive buffer inside a second.
-A three wire cable is therefore enough: RX, TX and ground, no handshake lines.
+
+Nothing appears on the machine until the tool has the port open, and that is the hardware
+rather than the software: the 6551 holds its transmitter off while `/CTS` is high, and `/CTS`
+comes from the far end's RTS. So `LOAD "@"` on its own sits quietly at `000` until something
+opens the port. Ctrl+C gets you out of it at any point.
 
 ### The `SOUND` statement
 

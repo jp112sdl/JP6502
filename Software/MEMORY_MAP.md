@@ -223,10 +223,10 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DB6D` | 15211 | `CODE` (darin 200 Bytes `db6502_serial.s`, siehe 5.6) |
-| `$DB6E` | `$E1F3` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E1F4` | `$E3C4` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E3C5` | `$E6FF` | 827 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DB7F` | 15229 | `CODE` (darin 218 Bytes `db6502_serial.s`, siehe 5.6) |
+| `$DB80` | `$E205` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E206` | `$E3D6` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E3D7` | `$E6FF` | 809 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5193 Bytes von 24576.
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1171 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
+ROM frei gesamt 1153 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
 Block: es liegt fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht
 weiter nach hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten.
 Was dort noch dazukommt, muss also entweder klein sein oder in `CODE` gehören —
@@ -2034,7 +2034,7 @@ byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ### 5.6 `LOAD "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 200 Bytes in `CODE`, drei Bytes in `BASBUF`.
+`common/source/db6502_serial.s`, 218 Bytes in `CODE`, drei Bytes in `BASBUF`.
 Gegenstelle ist `tools/basicsend.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
@@ -2079,6 +2079,38 @@ von einem unterscheiden, das nur langsam ist. Ctrl+C bricht ab. Der Empfänger
 schickt dann `CAN` ($18), damit der Sender nicht sein eigenes Zeitlimit absitzt;
 dasselbe tut `sd_finish`, wenn ein Syntaxfehler in einer empfangenen Zeile den
 Interpreter mitten im Laden auf die Eingabeaufforderung zurückwirft.
+
+**Was den ersten Lauf aufgehängt hat.** `/CTS` des 6551 kommt vom Stecker, nicht
+von Masse — Netz 61 der Netzliste verbindet U5 Pin 9 mit J2 Pin 4. Der Chip
+sperrt seinen Sender, solange die Leitung high ist, also solange am anderen Ende
+niemand den Port offen hat; `_handle_acia_irq` weiß das und steigt bei
+`cmp #$80 / beq cts_high` sofort wieder aus. Nichts läuft aus dem Sendering ab,
+und `_acia_write_byte` hat für den vollen Ring keinen Ausgang:
+
+```asm
+@compare_with_read_pointer:
+        lda acia_tx_wptr
+        sec
+        sbc acia_tx_rptr
+        cmp #$ff
+        beq @compare_with_read_pointer
+```
+
+Ein wiederholtes ACK alle 0,54 s füllt die 256 Bytes in gut zwei Minuten.
+Danach steht die Maschine dort — und zwar vor der Stelle, an der Ctrl+C geprüft
+wird. Genau so ist der erste Versuch am 30.08. gestorben: Ctrl+C tot, Ctrl+X
+ging noch, weil der Tastatur-IRQ von alledem nichts weiß.
+
+`ser_ack` schaut deshalb erst in den Ring und schickt nur, wenn nichts mehr
+darin wartet. Ein Gegenüber, das auf ein ACK wartet, ist mit dem längst
+eingereihten genauso bedient, und ein einzelnes ausstehendes Byte kann den Ring
+nicht füllen. Während eines laufenden Transfers ist der Ring an dieser Stelle
+ohnehin immer leer: der Sender schickt eine Zeile erst, wenn er das ACK für die
+vorige hat. `ser_cancel` braucht nur Platz, nicht einen leeren Ring — es muss
+nicht das einzige Byte unterwegs sein.
+
+Die Lehre ist allgemeiner als dieser Fall: keine Warteschleife auf der Leitung,
+aus der die Abbruchtaste nicht mehr erreichbar ist.
 
 **Warum in `CODE`.** `SDCODE` hat nach 5.1 noch 12 Bytes. Der Block liegt fest
 zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach hinten,

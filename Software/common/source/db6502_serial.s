@@ -30,6 +30,15 @@
 ;
 ; While the receiver sits idle it repeats its ACK, so it does not matter which
 ; end is started first - a host that arrives late still hears one.
+;
+; Nothing here may ever block on the wire. The 6551 holds its transmitter off
+; while /CTS is high, and /CTS comes from the far end's RTS - so for as long as
+; nothing has the port open over there, not one byte leaves, and the driver's
+; interrupt handler bails out early (its own "cts_high" branch). Meanwhile
+; _acia_write_byte spins forever once the 256 byte transmit ring is full, with
+; no way out. An idle receiver repeating its ACK fills that ring in about two
+; minutes and hangs the machine past any Ctrl+C. ser_ack and ser_cancel below
+; look at the ring first, and that is why.
 ; ---------------------------------------------------------------------------
 
         .segment "BASBUF"
@@ -90,8 +99,7 @@ ser_getline:
         ; asks for the next, so every line begins by sending it - the first one
         ; included, which is how the host learns the receiver is up.
         stz ser_idle
-        lda #SER_ACK
-        jsr _acia_write_byte
+        jsr ser_ack
 
         ldx #$00
 @char:
@@ -180,8 +188,7 @@ ser_readbyte:
 @expired:
         lda ser_idle
         bne @reload                     ; mid-line: keep waiting, keep quiet
-        lda #SER_ACK
-        jsr _acia_write_byte
+        jsr ser_ack
         bra @reload
 
 @arrived:
@@ -198,13 +205,40 @@ ser_readbyte:
         rts
 
 ; ---------------------------------------------------------------------------
+; The only two bytes this end sends, and neither of them may block
+;
+; A repeated ACK is worth sending only when the ring is empty. A host waiting
+; for one is served just as well by the ACK already queued, and one byte
+; outstanding can never fill the ring - which is what keeps Ctrl+C reachable
+; while the far end has the port closed and nothing can leave at all.
+;
+; In a transfer that is running the ring is always empty here: the host does
+; not send a line until it has had the ACK for the one before, so that byte is
+; long gone by the time the next one is due.
+; ---------------------------------------------------------------------------
+ser_ack:
+        lda acia_tx_wptr
+        cmp acia_tx_rptr
+        bne @queued                     ; an ACK is still waiting to go out
+        lda #SER_ACK
+        jmp _acia_write_byte
+@queued:
+        rts
+
 ; Tells the host the transfer is off. Called for Ctrl+C above, and from
 ; sd_finish when an error in a received line drops the interpreter back to the
-; direct mode prompt with the load only half done.
-; ---------------------------------------------------------------------------
+; direct mode prompt with the load only half done. Room for it is all this
+; needs - it does not have to be the only byte in flight.
 ser_cancel:
+        lda acia_tx_wptr
+        sec
+        sbc acia_tx_rptr
+        cmp #$ff
+        beq @full                       ; blocking here would hang the machine
         lda #SER_CAN
         jmp _acia_write_byte
+@full:
+        rts
 
 ; Eleven characters of raw FAT name, which is the form the status line expects
 ser_panelname:
