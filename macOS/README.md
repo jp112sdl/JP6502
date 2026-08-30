@@ -8,6 +8,21 @@ happens in a Terminal cannot drift apart.
 
 Open `JP6502Control.xcodeproj` in Xcode and run it. Requires macOS 14.
 
+A built copy is in `dist/JP6502Control.app`, universal and signed to run
+locally, so the app can be started without opening Xcode at all. It is signed
+ad hoc, which means it runs on the machine that built it: another Mac will hold
+it at Gatekeeper until it is opened once from the context menu, or rebuilt
+there. It is a committed build rather than a released one, so it is only as
+current as the last time somebody remembered to refresh it:
+
+    xcodebuild -project JP6502Control.xcodeproj -scheme JP6502Control \
+        -configuration Release -derivedDataPath build/DerivedData build
+    rm -rf dist/JP6502Control.app
+    cp -R build/DerivedData/Build/Products/Release/JP6502Control.app dist/
+
+The app looks for the checkout at the path it was built from. If that is not
+where it is, Settings is where to point it.
+
 ## What each tab does
 
 **Build** runs `make` in `Software`. Everything, everything with checksums
