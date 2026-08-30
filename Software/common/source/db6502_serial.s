@@ -319,11 +319,16 @@ ser_endsave:
         lda ser_dropped
         bne @gaveup
         lda #SER_EOT
-        jmp ser_send            ; carry is nobody's business up here
+        jsr ser_send            ; carry is nobody's business up here
 @gaveup:
-        ; A truncated listing is not a program. Say nothing and let the host
-        ; time out rather than end it with the byte that means "all of it".
-        rts
+        ; A truncated listing is not a program, so nothing is sent for it - the
+        ; host is better off timing out than being handed the byte that means
+        ; "all of it".
+        ;
+        ; The drive light is this routine's to put out either way. sd_finish
+        ; opens with sd_promptled, which leaves the light alone while a save is
+        ; still running - and at that moment this one still is.
+        jmp sd_ledoff
 
 ; ---------------------------------------------------------------------------
 ; One byte onto the wire, waiting for room in the transmit ring

@@ -223,10 +223,10 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DC84` | 15490 | `CODE` (darin 362 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
-| `$DC85` | `$E30A` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E30B` | `$E4DB` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E4DC` | `$E6FF` | 548 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DC86` | 15492 | `CODE` (darin 364 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
+| `$DC87` | `$E30C` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E30D` | `$E4DD` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4DE` | `$E6FF` | 546 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F796` | 2967 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5193 Bytes von 24576.
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 985 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
+ROM frei gesamt 983 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
 fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach
 hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten. Was dort
 dazukommt, muss also entweder klein sein oder in `CODE` gehören —
@@ -2036,7 +2036,7 @@ byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ### 5.6 `LOAD "@"` und `SAVE "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 362 Bytes in `CODE`, vier Bytes in `BASBUF`.
+`common/source/db6502_serial.s`, 364 Bytes in `CODE`, vier Bytes in `BASBUF`.
 Gegenstellen sind `tools/basicsend.py` und `tools/basicrecv.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
