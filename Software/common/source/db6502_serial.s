@@ -54,6 +54,12 @@ SER_ACK = $06
 SER_EOT = $04
 SER_CAN = $18
 
+; Command register bits, spelled out here because acia.s keeps its own copies
+; to itself. Transmit interrupt enabled, RTS low - the same value
+; _acia_write_byte writes, and the only thing it does that the ACIA can see.
+ACIA_TX_ARM = %00000100
+ACIA_TX_MASK = %11110011
+
 ; Poll loop iterations between one ACK and the next while idle. Something under
 ; a second at 1 MHz; the figure is not critical, it only decides how long a host
 ; that was started late waits before it sees the receiver.
@@ -219,11 +225,28 @@ ser_readbyte:
 ser_ack:
         lda acia_tx_wptr
         cmp acia_tx_rptr
-        bne @queued                     ; an ACK is still waiting to go out
+        beq @queue                      ; nothing waiting - a fresh ACK can go
+
+        ; One is already waiting. Adding another would eventually fill the ring
+        ; and block, but leaving it entirely alone is worse: the 6551 arms its
+        ; transmit interrupt on the write to the command register, and a byte
+        ; queued while /CTS was high has never been armed with a transmitter
+        ; that could act on it. Nothing else re-arms it, so when /CTS finally
+        ; drops the byte sits there for good and the transfer never starts.
+        ;
+        ; The command register write is the whole of what _acia_write_byte does
+        ; that the ACIA can see, so this leaves the chip in the state the plain
+        ; repeated write used to leave it in - with the ring held at one byte
+        ; instead of filling up.
+        lda ACIA_COMMAND
+        and #ACIA_TX_MASK
+        ora #ACIA_TX_ARM
+        sta ACIA_COMMAND
+        rts
+
+@queue:
         lda #SER_ACK
         jmp _acia_write_byte
-@queued:
-        rts
 
 ; Tells the host the transfer is off. Called for Ctrl+C above, and from
 ; sd_finish when an error in a received line drops the interpreter back to the

@@ -223,10 +223,10 @@ ROM frei gesamt 5193 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DB7F` | 15229 | `CODE` (darin 218 Bytes `db6502_serial.s`, siehe 5.6) |
-| `$DB80` | `$E205` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E206` | `$E3D6` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E3D7` | `$E6FF` | 809 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DB89` | 15239 | `CODE` (darin 228 Bytes `db6502_serial.s`, siehe 5.6) |
+| `$DB8A` | `$E20F` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E210` | `$E3E0` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E3E1` | `$E6FF` | 799 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F7F3` | 3060 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -237,7 +237,7 @@ ROM frei gesamt 5193 Bytes von 24576.
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1153 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
+ROM frei gesamt 1143 Bytes von 24576. `SDCODE` ist mit 12 Bytes Rest der engste
 Block: es liegt fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht
 weiter nach hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten.
 Was dort noch dazukommt, muss also entweder klein sein oder in `CODE` gehören —
@@ -2034,7 +2034,7 @@ byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ### 5.6 `LOAD "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 218 Bytes in `CODE`, drei Bytes in `BASBUF`.
+`common/source/db6502_serial.s`, 228 Bytes in `CODE`, drei Bytes in `BASBUF`.
 Gegenstelle ist `tools/basicsend.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
@@ -2101,13 +2101,35 @@ Danach steht die Maschine dort — und zwar vor der Stelle, an der Ctrl+C geprü
 wird. Genau so ist der erste Versuch am 30.08. gestorben: Ctrl+C tot, Ctrl+X
 ging noch, weil der Tastatur-IRQ von alledem nichts weiß.
 
-`ser_ack` schaut deshalb erst in den Ring und schickt nur, wenn nichts mehr
+`ser_ack` schaut deshalb erst in den Ring und legt nur nach, wenn nichts mehr
 darin wartet. Ein Gegenüber, das auf ein ACK wartet, ist mit dem längst
 eingereihten genauso bedient, und ein einzelnes ausstehendes Byte kann den Ring
 nicht füllen. Während eines laufenden Transfers ist der Ring an dieser Stelle
 ohnehin immer leer: der Sender schickt eine Zeile erst, wenn er das ACK für die
 vorige hat. `ser_cancel` braucht nur Platz, nicht einen leeren Ring — es muss
 nicht das einzige Byte unterwegs sein.
+
+**Und der Nachschlag dazu, am selben Tag.** Nur den Ring zu begrenzen hat den
+Transfer ganz abgeschaltet. `_acia_write_byte` tut mit `acia_tx_irq=1` genau
+eine Sache, die der ACIA sieht: es schreibt das Kommandoregister und macht damit
+den Sende-Interrupt scharf. Gesendet wird ausschließlich im IRQ-Handler. Die
+alte Fassung schrieb das Register alle 0,54 s neu, die begrenzte nur ein
+einziges Mal — und dieses eine Mal fiel in die Zeit, in der `/CTS` high war und
+kein Sender darauf reagieren konnte. Fällt `/CTS` später, macht niemand mehr
+scharf, und das eingereihte Byte bleibt für immer liegen.
+
+`ser_ack` macht deshalb bei belegtem Ring den Sender wieder scharf, statt nur
+zurückzukehren:
+
+```asm
+        lda ACIA_COMMAND
+        and #ACIA_TX_MASK
+        ora #ACIA_TX_ARM
+        sta ACIA_COMMAND
+```
+
+Damit sieht der ACIA denselben Ablauf wie vor der Begrenzung, nur bleibt der
+Ring bei einem Byte stehen statt vollzulaufen.
 
 Die Lehre ist allgemeiner als dieser Fall: keine Warteschleife auf der Leitung,
 aus der die Abbruchtaste nicht mehr erreichbar ist.

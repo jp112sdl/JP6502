@@ -16,6 +16,7 @@
       .import text_screen_buffer
       .import sn_send
       .import ACIA_STATUS
+      .import ACIA_COMMAND
       .import ACIA_DATA
 ;      .import ACIA_STATUS_RX_FULL
       .export _start_msbasic
