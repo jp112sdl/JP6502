@@ -1,17 +1,19 @@
-![Image of Eunice Computer](/images/eunice.jpg "Eunice Computer")
-# Eunice - a 6502-based breadboard computer
+![Image of JP6502 Monitor](/images/monitor.jpeg "JP6502 Computer Monitor")
+![Image of JP6502 Breadboard](/images/breadboard_full.jpeg "JP6502 Computer Breadboard")
+
+# JP6502 - a 6502-based breadboard computer inspired by EUNICE
 
 ## Specifications
 ```
 WDC 65C02 CPU @1MHz
-Atmel AT28C256 EEPROM 32K
-Alliance AS6C62256A SRAM 32K
+Winbond W29C020 Flash PROM
+HMS62256A SRAM 32K
 WDC 65C22 VIA
 Rockwell R6551 ACIA
 TI SN76489 PSG
 FTDI FT232R USB UART
 2004 LCD display
-PS2 Keyboard
+PS2 Keyboard with German Layout
 D-pad
 SD Card slot
 ```
@@ -36,23 +38,20 @@ ACIA - Serial
 ```
 ## TO-DO
 
-- [ ] GFoot Simple VGA board
-- [ ] 4004 LCD board
-- [ ] Load/save Basic program from SD
+- [x] Load/save Basic program from SD
+- [x] Load/save Basic program via Serial (FTDI)
 - [x] BASIC in ROM
-- [ ] TMS9918 VDP
-- [ ] Yamaha Sound board
-- [ ] Test 555 Clock board with Scope
-- [x] GFoot SD card FAT32 support
+- [x] TMS9918 VDP
+- [x] SD card FAT32 support
 - [x] SD card program storage
-- [x] DS1813 reset IC to replace 555
-- [x] Program SN76489 PSG in OS1
+- [x] SN76489 PSG in OS1
 - [x] Handle IRQ
 - [x] PS/2 keyboard interface
 - [x] Add the 3rd 6522 VIA
-- [x] Install Forth
 - [x] Install OS/1
 - [x] On-board LEDs connect to VIA
+- [x] use Graphics Mode in Microsoft BASIC
+- [x] use DPAD in Microsoft BASIC
 
 # DB6502 - Dawid Buchwald's 6502 Computer
 
@@ -88,11 +87,7 @@ Compared to Ben's 6502 build I introduced the following changes:
 4. Added [additional VIA chip](Schematics/README.md#extra-via-chip) to provide easy expansion of the system,
 5. Added [ACIA chip for serial communication](Schematics/README.md#extra-acia-chip-for-serial-communication),
 6. Added (**optional - more on that later**) [USB-UART interface](Schematics/README.md#extra-usb-uart-interface-chip) for easy connectivity with PC,
-7. Added [PS/2 keyboard port and ATtiny4313-based keyboard controller](Schematics/README.md#ps2-keyboard-interface-and-attiny4313-based-controller) to provide proper replacement for five pushbuttons in Ben's design,
-8. Added [expansion port](Schematics/README.md#expansion-port) (not really deviation from Ben's build, save for one detail - unlike Ben's build, my version can support various interrupt sources, including the expansion port),
-9. Modified [clock module](Schematics/README.md#modified-clock-module) (external),
-10. Changed [compilator from VASM to CC65](Schematics/README.md#migration-from-vasm-to-cc65),
-11. Added [simple way to choose clock source](Schematics/README.md#clock-input).
+7. Added [PS/2 keyboard port and ATmega168P-based keyboard controller with German Keyboard Layout](Schematics/README.md#ps2-keyboard-interface-and-atmega168p-based-controller) to provide proper replacement for five pushbuttons in Ben's design
 
 You might be wondering if this means that you can't run Ben's programs on DB6502 - and the answer is **YES YOU CAN**. Indeed, some changes to the code are necessary, but thanks to the additional VIA chip and with some changes to the addressing mode you can run any program from Ben's videos. If you want to use LCD in 8-bit mode, you can also use the additional VIA for it, ignoring the built-in LCD connector.
 
