@@ -50,15 +50,26 @@ LOADABLE_BINARIES=$(LOADABLE_PROJECTS:%=$(LOAD_FOLDER)/%.load.bin)
 # date and never enters the project - so an edit to anything under
 # common/source/ produced no rebuild at all, silently. The project makefiles do
 # track their sources properly, they just have to be asked
-$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin: FORCE
+$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin: FORCE | shared
 	@$(MAKE) --no-print-directory -C $(@:$(ROM_FOLDER)/%.$(ADDRESS_MODE).bin=$(FIRMWARE_PROJECTS_FOLDER)/%) ADDRESS_MODE=$(ADDRESS_MODE) all
 
-$(LOAD_FOLDER)/%.bin: FORCE
+$(LOAD_FOLDER)/%.bin: FORCE | shared
 	@$(MAKE) --no-print-directory -C $(@:$(LOAD_FOLDER)/%.load.bin=$(LOADABLE_PROJECTS_FOLDER)/%) all
+
+# What the projects share - the memory map objects and the libraries in
+# build/lib - is built first, once, by a single make. Left to the projects, a
+# parallel build had each of them assembling the same files into the same place
+# at the same time: six clean builds with -j4 out of eight stopped with ar65
+# calling common.c.lib corrupt. It takes one ROM and one loadable project
+# because the two kinds depend on different linker configs, and the shared
+# objects are rebuilt whenever either config is newer than they are.
+shared: FORCE
+	@$(MAKE) --no-print-directory -C $(FIRMWARE_PROJECTS_FOLDER)/$(firstword $(FIRMWARE_PROJECTS)) ADDRESS_MODE=$(ADDRESS_MODE) shared
+	@$(MAKE) --no-print-directory -C $(LOADABLE_PROJECTS_FOLDER)/$(firstword $(LOADABLE_PROJECTS)) shared
 
 FORCE:
 
-.PHONY: all test mapdoc clean FORCE
+.PHONY: all test mapdoc clean shared FORCE
 
 all: $(FIRMWARE_BINARIES) $(LOADABLE_BINARIES)
 

@@ -195,30 +195,47 @@ endif
 # file (defines_db6502.s, basic_zp.s, init.s, ...) does not trigger a rebuild.
 DEP_FLAG=--create-dep $(@:.o=.d)
 
+# The flags every object is built with, kept in a file of their own that every
+# object depends on. Without it a build with another CLOCK_MODE or ACIA_TX_IRQ
+# reassembled nothing but what had changed on disk and linked the rest as it
+# was built for the old setting - a 2m ROM with 1 MHz delays, and no warning.
+# The file is only written when the flags differ from what it holds, so a build
+# that changes nothing still rebuilds nothing.
+#
+# The make that comes with macOS (3.81) keeps file times to the second. A stamp
+# written in the same second as the last objects would not count as newer than
+# them, and a quick switch would go on linking the old ones - one full second
+# first puts it past everything already in build/. That second is only paid
+# when the flags do change, and not at all when build/ is empty.
+FLAGS_STAMP=$(BUILD_ROOT)/build.flags
+BUILD_FLAGS=ca65 $(CA65_FLAGS) | cc65 $(CC65_FLAGS)
+# (the rule that writes it is further down, after "shared" - here it would
+# become the default goal of every project makefile)
+
 # Compile assembler sources
-$(BUILD_FOLDER)/%.o: %.s $(FIRMWARE_CFG)
+$(BUILD_FOLDER)/%.o: %.s $(FIRMWARE_CFG) $(FLAGS_STAMP)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
 	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile C sources
-$(BUILD_FOLDER)/%.o: %.c $(FIRMWARE_CFG)
+$(BUILD_FOLDER)/%.o: %.c $(FIRMWARE_CFG) $(FLAGS_STAMP)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_FOLDER)
 	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
 	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources
-$(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
+$(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG) $(FLAGS_STAMP)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
 	$(CA65_BINARY) $(CA65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
 # Compile common C sources
-$(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.c $(FIRMWARE_CFG)
+$(COMMON_BUILD_FOLDER)/%.o: $(COMMON_SOURCE_FOLDER)/%.c $(FIRMWARE_CFG) $(FLAGS_STAMP)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
 	$(CC65_BINARY) $(CC65_FLAGS) -I $(COMMON_INCLUDE_FOLDER) --create-dep $(@:.o=.cdep) --dep-target $@ -o $(@:.o=.s) $<
 	$(CA65_BINARY) $(CA65_FLAGS) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $(@:.o=.s)
 
 # Compile common assembler sources for load module (shared objects)
-$(COMMON_BUILD_FOLDER)/%.load.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG)
+$(COMMON_BUILD_FOLDER)/%.load.o: $(COMMON_SOURCE_FOLDER)/%.s $(FIRMWARE_CFG) $(FLAGS_STAMP)
 	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(COMMON_BUILD_FOLDER)
 	$(CA65_BINARY) $(CA65_FLAGS) -Dload -I $(COMMON_INCLUDE_FOLDER) $(DEP_FLAG) -o $@ -l $(@:.o=.lst) $<
 
@@ -246,6 +263,22 @@ $(COMMON_C_LIBRARY): $(COMMON_C_LIB_OBJECTS)
 # up to date build would otherwise print that line once per project
 all: $(FIRMWARE_BINARY)
 	@:
+
+# Only what every project links: the system memory map objects and the three
+# libraries in build/lib. The top level makefile builds this once, before any
+# project, so that a parallel build does not have them all assembling the same
+# files at the same time - see "shared" there
+shared: $(SYSTEM_MEMORY_MAP_OBJECT) $(COMMON_LIBRARY) $(COMMON_LOAD_LIBRARY) $(COMMON_C_LIBRARY)
+	@:
+
+# Writes FLAGS_STAMP - see there
+$(FLAGS_STAMP): FLAGS_FORCE
+	@$(MKDIR_BINARY) $(MKDIR_FLAGS) $(BUILD_ROOT)
+	@echo '$(BUILD_FLAGS)' | cmp -s - $@ || { \
+		if [ -n "$$(ls -A $(BUILD_ROOT))" ]; then sleep 1; fi; \
+		echo '$(BUILD_FLAGS)' > $@; }
+
+FLAGS_FORCE:
 
 # Linking process
 ifeq ($(BUILD_TYPE),load)
