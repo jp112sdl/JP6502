@@ -2,6 +2,7 @@
     .include "vdp_macro.inc"
     .include "zeropage.inc"
     .include "blink.inc"
+    .include "clock.inc"
 
     .import __VDP_START__
     
@@ -446,8 +447,27 @@ no_writechar_carry:
 
       .segment "SDCODE"
 
-; 16 cycles including the call, against the 8 us the chip asks for at 1 MHz
+; The chip wants up to 8 us between two accesses - the worst case in table 2-2
+; of the TMS9918A manual, Graphics I and II with the display on.
+;
+; The shortest way through here is a tail call, jmp vdp_wait straight after an
+; access, followed by an absolute lda or sta, which does its bus cycle last:
+; 3 for the jmp, 10 for the two nops and the rts, 4 for that instruction -
+; 17 cycles, which is 17 us at 1 MHz and 8.5 us at 2 MHz. Faster than that the
+; gap is made up with further nops, sized from the clock the ROM is built for,
+; so it is 8 us at every CLOCK_MODE and the 1 and 2 MHz code stays as it was.
+VDP_WAIT_CYCLES_NEEDED   = 8 * clock_mhz
+VDP_WAIT_CYCLES_BUILT_IN = 17
+.if VDP_WAIT_CYCLES_NEEDED > VDP_WAIT_CYCLES_BUILT_IN
+VDP_WAIT_EXTRA_NOPS = (VDP_WAIT_CYCLES_NEEDED - VDP_WAIT_CYCLES_BUILT_IN + 1) / 2
+.else
+VDP_WAIT_EXTRA_NOPS = 0
+.endif
+
 vdp_wait:
+      .repeat VDP_WAIT_EXTRA_NOPS
+      nop
+      .endrepeat
       nop
       nop
       rts

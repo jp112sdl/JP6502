@@ -12,6 +12,8 @@
       .include "vdp_text_mode.inc"
       .include "vdp.inc"
       .include "vdp_const.inc"
+      .include "vdp_macro.inc"
+      .include "clock.inc"
       .import _tty_init
       .import text_screen_buffer
       .import sn_send
@@ -1428,12 +1430,14 @@ gtx_write_string:
 ; pattern, so the name table cannot be rotated the way a text mode screen can -
 ; a cell can only reach the 2 KB pattern block belonging to its third of the
 ; screen, and scrolling crosses those boundaries. It costs about a third of a
-; second per line.
+; second per line at 1 MHz, a fifth at 2.
 ;
 ; The loops pace themselves. The chip asks for eight microseconds between
-; accesses and the tightest loop here leaves thirteen, so there is no vdp_wait
-; in them and the display can stay on. What that shows is the copy sweeping
-; down the screen, which reads as the scroll it is.
+; accesses and the tightest loop here takes thirteen cycles - thirteen
+; microseconds at 1 MHz, but only six and a half at 2. vdp_pace adds what the
+; clock the ROM is built for leaves short: nothing at 1 MHz, a nop or two at 2.
+; So there is still no vdp_wait in them and the display can stay on. What that
+; shows is the copy sweeping down the screen, which reads as the scroll it is.
 ;
 ; text_screen_buffer holds the page in transit. It belongs to the text mode
 ; scroll, which cannot be running while this is.
@@ -1490,6 +1494,7 @@ gtx_scroll_table:
 @read:
         lda     VDP_VRAM
         sta     text_screen_buffer,y
+        vdp_pace 14                     ; sta 5, iny 2, bne 3, lda 4
         iny
         bne     @read
 
@@ -1501,6 +1506,7 @@ gtx_scroll_table:
 @write:
         lda     text_screen_buffer,y
         sta     VDP_VRAM
+        vdp_pace 13                     ; iny 2, bne 3, lda 4, sta 4
         iny
         bne     @write
 

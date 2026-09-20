@@ -1,6 +1,25 @@
         .include "zeropage.inc"
         .include "utils.inc"
         .include "via.inc"
+        .include "clock.inc"
+
+; The panel needs a moment after E rises before it drives the data bus, and the
+; HD44780 datasheet allows it 360 ns. The read below lands four cycles after
+; the edge, which is a microsecond at 4 MHz but only 500 ns at 8 MHz - too
+; close to the limit to rely on, so at 8 MHz it is padded back out to a
+; microsecond. Below that nothing is emitted.
+LCD_READ_SETTLE_CYCLES = clock_mhz
+.if LCD_READ_SETTLE_CYCLES > 4
+LCD_READ_SETTLE_NOPS = (LCD_READ_SETTLE_CYCLES - 4 + 1) / 2
+.else
+LCD_READ_SETTLE_NOPS = 0
+.endif
+
+.macro  lcd_read_settle
+        .repeat LCD_READ_SETTLE_NOPS
+        nop
+        .endrepeat
+.endmacro
   ;      .include "lcd.inc"
 
         .export _lcd_init
@@ -211,6 +230,7 @@ lcd_read_byte:
         ; Give it a while
         ora #(LCD_ENABLE_FLAG)
         sta LCD_CONTROL_PORT
+        lcd_read_settle
         ; Read result
         lda LCD_DATA_PORT
         sta lcd_temp_char1
@@ -221,13 +241,35 @@ lcd_read_byte:
         lda lcd_temp_char1
         rts
 
+; How long to poll the busy flag before giving up on it. The slowest
+; instructions, CLEAR and HOME, take 1.52 ms at the usual 270 kHz and about
+; 2.2 ms at the slowest oscillator the HD44780 allows. One poll below takes 45
+; cycles while the flag is set, so a page of 256 is 11.5 ms at 1 MHz - and one
+; page per MHz keeps it there at every CLOCK_MODE, five times the slowest
+; instruction.
+.if clock_mhz > 1
+LCD_BUSY_TIMEOUT_PAGES = clock_mhz
+.else
+LCD_BUSY_TIMEOUT_PAGES = 1
+.endif
+
+; Wait for the controller to finish what it was last given. A controller that
+; never lets go of the flag - none plugged in, DB7 stuck high, one that missed
+; its reset - used to hang the machine here, early in _system_init with the
+; BLINK LED still on. It is given up on after the timeout above instead, and
+; the caller goes ahead: a garbled LCD, but a machine that starts.
+; A is destroyed, X and Y are kept - _lcd_init carries its index in X.
 lcd_wait_bf_clear:
+        phx
+        phy
         ; Set flags
         lda #(LCD_READ_MODE | LCD_COMMAND_MODE)
         ; Change DDR to input
         lda LCD_DATA_DDR
         and #(LCD_DATA_DDR_READ_MASK)
         sta LCD_DATA_DDR
+        ldy #$00
+        ldx #LCD_BUSY_TIMEOUT_PAGES
 @wait_loop:
         ; Preserve status of remaining via pins
         lda LCD_CONTROL_PORT
@@ -236,6 +278,7 @@ lcd_wait_bf_clear:
         sta LCD_CONTROL_PORT
         ora #(LCD_ENABLE_FLAG)
         sta LCD_CONTROL_PORT
+        lcd_read_settle
         ; Read result
         lda LCD_DATA_PORT
         sta lcd_temp_char1
@@ -244,7 +287,14 @@ lcd_wait_bf_clear:
         eor #(LCD_ENABLE_FLAG)
         sta LCD_CONTROL_PORT
         lda lcd_temp_char1
-        bmi @wait_loop
+        bpl @done
+        dey
+        bne @wait_loop
+        dex
+        bne @wait_loop
+@done:
+        ply
+        plx
         rts
 
         .SEGMENT "RODATA"

@@ -15,3 +15,18 @@
     jsr vdp_write_address
     ply
 .endmacro
+
+; Stretch a loop that talks to the VDP out to the 8 us the chip wants between
+; two accesses - vdp_wait says where the figure comes from. Cycles is what the
+; loop already spends from one access to the next; the nops make up whatever
+; the clock the ROM is built for leaves short, and there are none at all where
+; the loop is slow enough on its own. Put it straight after the access, so the
+; last pass pays it too and the gap to whatever follows the loop is covered.
+; Needs clock.inc in the unit that uses it.
+.macro  vdp_pace Cycles
+    .if 8 * clock_mhz > (Cycles)
+        .repeat (8 * clock_mhz - (Cycles) + 1) / 2
+            nop
+        .endrepeat
+    .endif
+.endmacro
