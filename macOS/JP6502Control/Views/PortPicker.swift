@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Picks a serial port, and keeps offering the one that was picked even after
