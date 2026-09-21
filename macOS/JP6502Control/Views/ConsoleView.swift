@@ -37,15 +37,27 @@ struct ConsoleView: View {
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(color(for: line.kind))
                                 .textSelection(.enabled)
+                                // The gutter belongs to each line rather than
+                                // to the stack around them. Scrolling aligns a
+                                // line's own leading edge with the left of the
+                                // view, so padding outside it would be scrolled
+                                // straight back off and the text would sit
+                                // against the edge.
+                                .padding(.horizontal, 8)
                                 .id(line.id)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(.vertical, 8)
                 }
                 .onChange(of: runner.lines.last?.id) { _, id in
                     guard let id else { return }
-                    withAnimation(.none) { proxy.scrollTo(id, anchor: .bottom) }
+                    // .bottom is UnitPoint(0.5, 1), which centres the new line
+                    // horizontally: the long lines flashtool writes then hang
+                    // off both sides with the scrollbar parked in the middle.
+                    // Leading pins every line to the left instead, and the
+                    // horizontal scrollbar is there for reading the rest.
+                    withAnimation(.none) { proxy.scrollTo(id, anchor: .bottomLeading) }
                 }
             }
             .background(Color(nsColor: .textBackgroundColor))
