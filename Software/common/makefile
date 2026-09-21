@@ -100,7 +100,7 @@ else ifeq ($(CLOCK_MODE), 4m)
 else ifeq ($(CLOCK_MODE), 8m)
 	CLOCK_MODE_FLAG=5
 else
-	$(error Incorrect clock mode selected: $(CLOCK_MODE))
+$(error Incorrect clock mode selected: $(CLOCK_MODE))
 endif
 
 # Include folders
