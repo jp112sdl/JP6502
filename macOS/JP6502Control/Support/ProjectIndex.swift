@@ -21,6 +21,11 @@ final class ProjectIndex {
     /// What the makefile calls it: the .ext in build/rom/os1.ext.bin.
     private(set) var addressMode = "ext"
 
+    /// The clock modes common/makefile translates into a clock_mode_flag, in
+    /// the order it lists them, and the one it falls back on.
+    private(set) var clockModes: [String] = []
+    private(set) var defaultClockMode = ""
+
     private let settings: AppSettings
 
     init(settings: AppSettings) {
@@ -44,6 +49,12 @@ final class ProjectIndex {
                               .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
         flashDevices = deviceNames()
+
+        let common = settings.softwareDirectory
+            .appendingPathComponent("common").appendingPathComponent("makefile")
+        let commonText = (try? String(contentsOf: common, encoding: .utf8)) ?? ""
+        clockModes = clockModeNames(in: commonText)
+        defaultClockMode = variable("CLOCK_MODE", in: commonText).first ?? ""
     }
 
     /// The firmware binary the makefile would produce for a project, whether
@@ -96,6 +107,25 @@ final class ProjectIndex {
             }
         }
         return joined.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+    }
+
+    /// The clock modes, taken from the conditional that turns each one into a
+    /// clock_mode_flag. Reading them rather than listing them here is what
+    /// keeps a mode added to the makefile from needing a change in this app -
+    /// and keeps one that was removed out of a picker that would then build
+    /// nothing.
+    private func clockModeNames(in makefile: String) -> [String] {
+        var names: [String] = []
+        for line in makefile.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("ifeq") || trimmed.hasPrefix("else ifeq"),
+                  let open = trimmed.range(of: "$(CLOCK_MODE)") else { continue }
+            var rest = trimmed[open.upperBound...].drop(while: { $0 == "," || $0 == " " })
+            if let close = rest.firstIndex(of: ")") { rest = rest[..<close] }
+            let name = rest.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty && !names.contains(name) { names.append(name) }
+        }
+        return names
     }
 
     /// The chip names in the firmware's FLASH_TYPES table. They are the last

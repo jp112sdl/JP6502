@@ -65,6 +65,25 @@ struct BuildView: View {
                 }
 
                 Section("Options") {
+                    Picker("Clock", selection: bindingClockMode) {
+                        Text(index.defaultClockMode.isEmpty
+                             ? "As the makefile has it"
+                             : "As the makefile has it - \(clockLabel(index.defaultClockMode))")
+                            .tag("")
+                        ForEach(index.clockModes, id: \.self) { mode in
+                            Text(clockLabel(mode)).tag(mode)
+                        }
+                        if !settings.clockMode.isEmpty
+                            && !index.clockModes.contains(settings.clockMode) {
+                            Text("\(settings.clockMode) - the makefile does not offer this")
+                                .tag(settings.clockMode)
+                        }
+                    }
+                    .disabled(target == .clean)
+                    Text("What the delay loops are timed for. Changing it rebuilds "
+                         + "everything: each object records the flags it was built "
+                         + "with, so a mixed build cannot go unnoticed.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Toggle("Build in parallel", isOn: $parallel)
                     if parallel {
                         Stepper("\(jobs) jobs at a time", value: $jobs, in: 2...16)
@@ -130,6 +149,20 @@ struct BuildView: View {
         return "\(size) bytes, \(stamp)"
     }
 
+    /// "2m" is what the makefile wants to be handed; "2 MHz" is what is on
+    /// the board. Derived from the name rather than listed, so a mode added to
+    /// the makefile reads properly here without being named twice.
+    private func clockLabel(_ mode: String) -> String {
+        if mode.hasSuffix("k"), let value = Int(mode.dropLast()) { return "\(value) kHz" }
+        if mode.hasSuffix("m"), let value = Int(mode.dropLast()) { return "\(value) MHz" }
+        if mode == "slow" { return "slow - no delay loops" }
+        return mode
+    }
+
+    private var bindingClockMode: Binding<String> {
+        Binding(get: { settings.clockMode }, set: { settings.clockMode = $0 })
+    }
+
     private func build() {
         var argv = [settings.makePath]
         if parallel && target != .clean { argv += ["-j", String(jobs)] }
@@ -140,6 +173,11 @@ struct BuildView: View {
         case .clean:    argv.append("clean")
         case .firmware: argv.append(index.makeTarget(firmware: firmwareProject))
         case .loadable: argv.append(index.makeTarget(loadable: loadableProject))
+        }
+        // clean takes the whole build folder either way, so the mode would
+        // only be noise on the command line.
+        if !settings.clockMode.isEmpty && target != .clean {
+            argv.append("CLOCK_MODE=\(settings.clockMode)")
         }
         argv += settings.makeOverrides
 

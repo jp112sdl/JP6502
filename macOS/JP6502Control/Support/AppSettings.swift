@@ -16,6 +16,11 @@ final class AppSettings {
     var pythonPath: String      { didSet { defaults.set(pythonPath, forKey: "pythonPath") } }
     var makePath: String        { didSet { defaults.set(makePath, forKey: "makePath") } }
 
+    /// The clock the ROMs are built for. "" leaves it to the makefile, which
+    /// is the right answer until the board runs at something else - and the
+    /// board does not change often, so it is worth remembering.
+    var clockMode: String       { didSet { defaults.set(clockMode, forKey: "clockMode") } }
+
     /// "" means "let the tool pick the port itself", which both flashtool.py
     /// and basicsend.py do when exactly one USB adapter is plugged in.
     var flashPort: String       { didSet { defaults.set(flashPort, forKey: "flashPort") } }
@@ -33,6 +38,7 @@ final class AppSettings {
             ?? URL(fileURLWithPath: bundled ?? "").standardizedFileURL.path
         pythonPath = defaults.string(forKey: "pythonPath") ?? Shell.pythonWithPySerial()
         makePath = defaults.string(forKey: "makePath") ?? Shell.findFirst(["make"])
+        clockMode = defaults.string(forKey: "clockMode") ?? ""
 
         flashPort = defaults.string(forKey: "flashPort") ?? ""
         flashBaud = defaults.object(forKey: "flashBaud") as? Int ?? 225000

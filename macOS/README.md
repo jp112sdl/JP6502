@@ -32,6 +32,15 @@ produces, so a single project goes through the same rule as a full build.
 The project lists come from `Software/makefile`, so adding one there is enough
 for it to appear in the picker.
 
+The clock the ROM is timed for is picked here too, and handed to make as
+`CLOCK_MODE`. The modes come from the conditional in `Software/common/makefile`
+that turns each one into a `clock_mode_flag`, so the picker offers exactly what
+the makefile accepts. Leaving it on "as the makefile has it" passes nothing and
+takes its default. Changing it rebuilds everything, which is the makefile's
+doing rather than this app's: every object depends on a file holding the flags
+it was built with, so a 2 MHz ROM cannot end up with 1 MHz delay loops linked
+into it.
+
 **Flash** runs `FlashPROMv2/tools/flashtool.py`: write, verify, read, erase,
 blank check, chip info, device selection and data protection, with the
 programmer's port, baud rate, bootloader wait and chip override. The file to
