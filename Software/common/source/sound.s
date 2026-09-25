@@ -33,6 +33,7 @@
 ; a label costs no bytes in the object, so sound.o keeps the size it has.
     .export sn_send
 
+    .import _delay_ms
 
     .include "sound.inc"
     .include "via.inc"   
@@ -185,46 +186,25 @@ ready_done:
     PLA
     RTS
 
+; The two pauses below used to be counted loops, 2311 cycles per pass of the
+; outer one - 37 ms and 592 ms at 1 MHz, and a quarter of that at 4, which
+; played the startup chord and the song four times as fast. _delay_ms is scaled
+; with CLOCK_MODE, so they are now the same lengths at every clock. It keeps X
+; and Y, which play_a_song carries its index in.
 song_sleep:
-    PHX
-    PHY 
-    LDX #$00
-    LDY #$00
-song_sleep_inner_loop:
-    CPX #$FF
-    BEQ song_sleep_outer_loop
-    INX
-    JMP song_sleep_inner_loop
-song_sleep_outer_loop:
-    LDX #$00
-    CPY #$FF
-    BEQ song_sleep_done
-    INY
-    JMP song_sleep_inner_loop
-song_sleep_done:
-    PLY
-    PLX 
+    PHA
+    LDA #197
+    JSR _delay_ms
+    JSR _delay_ms
+    JSR _delay_ms               ; 3 x 197 ms, as long as it was at 1 MHz
+    PLA
     RTS
-    
+
 sleep:
-    PHX
-    PHY 
-    LDX #$00
-    LDY #$00
-sleep_inner_loop:
-    CPX #$FF
-    BEQ sleep_outer_loop
-    INX
-    JMP sleep_inner_loop
-sleep_outer_loop:
-    LDX #$00
-    CPY #$0F
-    BEQ sleep_done
-    INY
-    JMP sleep_inner_loop
-sleep_done:
-    PLY
-    PLX 
+    PHA
+    LDA #37
+    JSR _delay_ms
+    PLA
     RTS
 
 play_a_song:
