@@ -1,3 +1,6 @@
+; Included by several headers - only the first include counts
+.ifndef clock_mhz
+
 ; Translate clock mode flag to compilation parameters
 .if clock_mode_flag=0 ; slow
   fastclock=0
@@ -20,4 +23,6 @@
       clock_mhz=8
     .endif
   .endif
+.endif
+
 .endif

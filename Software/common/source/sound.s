@@ -39,15 +39,15 @@
     .include "via.inc"   
     
 
-; Some notes
-C5_BYTE_1       = $07
-C5_BYTE_2       = $07
-D5_BYTE_1       = $0a
-D5_BYTE_2       = $06
-E5_BYTE_1       = $0E
-E5_BYTE_2       = $05
-G5_BYTE_1       = $0F
-G5_BYTE_2       = $04
+; Some notes - from the table in sound.inc, which follows the clock
+C5_BYTE_1       = Cn5_1
+C5_BYTE_2       = Cn5_2
+D5_BYTE_1       = Dn5_1
+D5_BYTE_2       = Dn5_2
+E5_BYTE_1       = En5_1
+E5_BYTE_2       = En5_2
+G5_BYTE_1       = Gn5_1
+G5_BYTE_2       = Gn5_2
 
     .code
     

@@ -158,12 +158,13 @@ StartupMessage:
 ;
 ; The chip is not given a frequency but a 10 bit divider, and the note it then
 ; produces is clock / (32 * divider). SOUND_CLOCK below is that clock divided
-; by 32, so the divider is simply SOUND_CLOCK / frequency. Its value follows
-; from the note table in sound.inc: A4 is listed as $0e,$08, a divider of 142,
-; and 142 * 440 Hz = 62480 - a 2 MHz part.
+; by 32, so the divider is simply SOUND_CLOCK / frequency. The chip runs on
+; the CPU oscillator, so the clock is SN_CLOCK from sound.inc, which follows
+; the CLOCK_MODE the ROM is built for.
 ;
 ; Anything outside a divider of 1..1023 is ILLEGAL QUANTITY, which puts the
-; usable range at 62 Hz to about 4 kHz before the steps get audible.
+; usable range at clock / 32736 to about clock / 500 before the steps get
+; audible - at 4 MHz, 122 Hz to 8 kHz.
 ;
 ; sound_init has already run out of _system_init by the time BASIC starts, so
 ; the port directions and the initial silence are taken care of.
@@ -214,11 +215,24 @@ SOUND_OFF:
 SOUND_RANGE:
         jmp     IQERR
 
-; 2000000 / 32, in the four byte float format CONFIG_SMALL selects: exponent
-; biased by 128, then three mantissa bytes whose top bit carries the sign.
-; 62500 = 0.95367431640625 * 2^16 -> $90, and $F42400 with bit 7 cleared.
+; SN_CLOCK / 32 (sound.inc), in the four byte float format CONFIG_SMALL
+; selects: exponent biased by 128, then three mantissa bytes whose top bit
+; carries the sign. 62500 = 0.95367431640625 * 2^16 -> $90, and $F42400 with
+; bit 7 cleared. For the clocks there are the value is 62500 times a power of
+; two - 31250, 62500, 125000, 250000 - so only the exponent differs.
+.if SN_CLOCK = 1000000
+SOUND_CLOCK_EXP = $8F
+.elseif SN_CLOCK = 2000000
+SOUND_CLOCK_EXP = $90
+.elseif SN_CLOCK = 4000000
+SOUND_CLOCK_EXP = $91
+.elseif SN_CLOCK = 8000000
+SOUND_CLOCK_EXP = $92
+.else
+.error "SOUND_CLOCK: no BASIC number for this SN_CLOCK"
+.endif
 SOUND_CLOCK:
-        .byte   $90,$74,$24,$00
+        .byte   SOUND_CLOCK_EXP,$74,$24,$00
 
 .segment "SDCODE"
 

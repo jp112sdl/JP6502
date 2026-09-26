@@ -557,10 +557,13 @@ SN76489 at full volume, and `SOUND` returns once it has finished, so notes queue
 ```
 
 The chip is not given a frequency but a 10 bit divider, and the note it produces is
-`clock / (32 * divider)`. The part on this board runs at 2 MHz, so the divider is `62500 /
-frequency`, which `SOUND` works out for you. That puts the usable range at **62 Hz to about
-4 kHz** - a divider outside 1..1023 is `ILLEGAL QUANTITY`, and towards the top end the steps
-between neighbouring dividers get audible.
+`clock / (32 * divider)`. The SN76489 runs on the same oscillator as the CPU, so the clock is
+the one the ROM is built for (`CLOCK_MODE`), and `SOUND` works the divider out for it - at
+4 MHz that is `125000 / frequency`. A divider outside 1..1023 is `ILLEGAL QUANTITY`, which
+puts the usable range at **122 Hz to about 8 kHz at 4 MHz** (31 Hz to 2 kHz at 1 MHz, 61 Hz
+to 4 kHz at 2 MHz); towards the top end the steps between neighbouring dividers get audible.
+The note table in `common/include/sound.inc`, which the startup chord and the OS/1 `BEEP`
+play from, is worked out for the clock the same way.
 
 The port directions are set up by `sound_init` during `_system_init`, long before the `OK`
 prompt, so nothing has to be prepared first. Every `SOUND` mutes the channel again when it
