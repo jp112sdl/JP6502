@@ -46,6 +46,10 @@ final class AppSettings {
     /// What the Makefile calls SHELLS: "" for both shells, or the define that
     /// leaves one of them out.
     var geckosShells: String    { didSet { defaults.set(geckosShells, forKey: "geckosShells") } }
+    /// The colours of the text screen, TMS9918 numbers passed as FG and BG.
+    /// "" leaves them to the makefile.
+    var geckosFG: String        { didSet { defaults.set(geckosFG, forKey: "geckosFG") } }
+    var geckosBG: String        { didSet { defaults.set(geckosBG, forKey: "geckosBG") } }
     /// Where the card was last mounted. Volumes come and go, so this is a
     /// starting guess rather than a setting.
     var sdCardPath: String      { didSet { defaults.set(sdCardPath, forKey: "sdCardPath") } }
@@ -71,6 +75,8 @@ final class AppSettings {
         flashFilePath = defaults.string(forKey: "flashFilePath") ?? ""
         geckosClock = defaults.string(forKey: "geckosClock") ?? ""
         geckosShells = defaults.string(forKey: "geckosShells") ?? ""
+        geckosFG = defaults.string(forKey: "geckosFG") ?? ""
+        geckosBG = defaults.string(forKey: "geckosBG") ?? ""
         sdCardPath = defaults.string(forKey: "sdCardPath") ?? ""
 
         basicPort = defaults.string(forKey: "basicPort") ?? ""

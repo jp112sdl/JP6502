@@ -27,9 +27,12 @@ final class ProjectIndex {
     private(set) var defaultClockMode = ""
 
     /// GeckOS: the programs waiting in boot/sdcard to be put on a card, and
-    /// the clock its makefile builds for when it is not told otherwise.
+    /// the clock and the screen colours its makefile builds with when it is
+    /// not told otherwise.
     private(set) var geckosPrograms: [URL] = []
     private(set) var defaultGeckosClock = ""
+    private(set) var defaultGeckosFG = ""
+    private(set) var defaultGeckosBG = ""
 
     /// The clocks GeckOS accepts. Unlike CLOCK_MODE there is no conditional to
     /// read them out of - CLOCK goes straight to xa as -DCLOCK_MHZ, and the
@@ -68,6 +71,8 @@ final class ProjectIndex {
 
         let geckosText = (try? String(contentsOf: settings.geckosMakefile, encoding: .utf8)) ?? ""
         defaultGeckosClock = variable("CLOCK", in: geckosText).first ?? ""
+        defaultGeckosFG = variable("FG", in: geckosText).first ?? ""
+        defaultGeckosBG = variable("BG", in: geckosText).first ?? ""
         geckosPrograms = programs(in: settings.geckosCardDirectory)
     }
 

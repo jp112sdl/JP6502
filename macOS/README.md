@@ -44,10 +44,12 @@ into it.
 **GeckOS** runs `make` in `GeckOS-V2/arch/jp6502`, which is its own makefile
 with its own way of naming things: the clock is whole MHz passed as `CLOCK`,
 not a `CLOCK_MODE` name, and `SHELLS` decides whether the OS comes up with a
-shell on the VDP console, on the serial line, or on both. It builds the ROM
-image (`boot/geckos.bin`), or the programs for the card (`make sdcard`), or
-cleans. The ROM is reassembled on every build, so the two switches take effect
-without anything being edited. `make run`, which puts the emulator's serial
+shell on the VDP console, on the serial line, or on both. `FG` and `BG` are
+the colours of the text screen, picked from the sixteen of the TMS9918 with a
+preview of the boot screen next to them. It builds the ROM image
+(`boot/geckos.bin`), or the programs for the card (`make sdcard`), or cleans.
+The ROM is reassembled on every build, so the switches take effect without
+anything being edited. `make run`, which puts the emulator's serial
 line on a terminal, is the one target the tab leaves out - it needs a Terminal.
 
 The same tab copies the programs onto the card. Removable volumes are offered

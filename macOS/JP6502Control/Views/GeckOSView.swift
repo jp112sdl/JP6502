@@ -42,6 +42,45 @@ struct GeckOSView: View {
         }
     }
 
+    /// A colour of the TMS9918, by the number FG and BG take. 0 is left out:
+    /// it is transparent, so text in it would take the colour of the
+    /// background, and a background in it shows black.
+    struct VDPColour: Identifiable {
+        let number: Int
+        let name: String
+        let rgb: UInt32
+        var id: Int { number }
+
+        var nsColor: NSColor {
+            NSColor(srgbRed: CGFloat(rgb >> 16 & 0xff) / 255,
+                    green: CGFloat(rgb >> 8 & 0xff) / 255,
+                    blue: CGFloat(rgb & 0xff) / 255, alpha: 1)
+        }
+        var color: Color { Color(nsColor: nsColor) }
+
+        static let all: [VDPColour] = [
+            VDPColour(number: 1, name: "black", rgb: 0x000000),
+            VDPColour(number: 2, name: "medium green", rgb: 0x21c842),
+            VDPColour(number: 3, name: "light green", rgb: 0x5edc78),
+            VDPColour(number: 4, name: "dark blue", rgb: 0x5455ed),
+            VDPColour(number: 5, name: "light blue", rgb: 0x7d76fc),
+            VDPColour(number: 6, name: "dark red", rgb: 0xd4524d),
+            VDPColour(number: 7, name: "cyan", rgb: 0x42ebf5),
+            VDPColour(number: 8, name: "medium red", rgb: 0xfc5554),
+            VDPColour(number: 9, name: "light red", rgb: 0xff7978),
+            VDPColour(number: 10, name: "dark yellow", rgb: 0xd4c154),
+            VDPColour(number: 11, name: "light yellow", rgb: 0xe6ce80),
+            VDPColour(number: 12, name: "dark green", rgb: 0x21b03b),
+            VDPColour(number: 13, name: "magenta", rgb: 0xc95bba),
+            VDPColour(number: 14, name: "grey", rgb: 0xcccccc),
+            VDPColour(number: 15, name: "white", rgb: 0xffffff),
+        ]
+
+        static func numbered(_ text: String) -> VDPColour? {
+            all.first { String($0.number) == text }
+        }
+    }
+
     let settings: AppSettings
     let index: ProjectIndex
     let runner: ProcessRunner
@@ -53,7 +92,7 @@ struct GeckOSView: View {
     @State private var rebuildBeforeCopy = true
 
     var body: some View {
-        VSplitView {
+        OptionsAndOutput(runner: runner) {
             Form {
                 buildSection
                 romSection
@@ -61,10 +100,6 @@ struct GeckOSView: View {
                 toolchainSection
             }
             .formStyle(.grouped)
-            .frame(minHeight: 300)
-
-            ConsoleView(runner: runner)
-                .frame(minHeight: 140)
         }
         .onAppear { refreshCards() }
     }
@@ -95,8 +130,23 @@ struct GeckOSView: View {
             }
             .disabled(target == .clean)
 
-            Text("The ROM is reassembled on every build, so the clock and the "
-                 + "shells take effect without anything being touched on disk. "
+            colourPicker("Text colour", selection: bindingFG,
+                         makefileDefault: index.defaultGeckosFG)
+            colourPicker("Background", selection: bindingBG,
+                         makefileDefault: index.defaultGeckosBG)
+            LabeledContent("Screen") {
+                screenPreview
+            }
+            .disabled(target == .clean)
+            if foreground.number == background.number {
+                Label("Text and background are the same colour - nothing on the "
+                      + "screen could be read.",
+                      systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange).font(.caption)
+            }
+
+            Text("The ROM is reassembled on every build, so the clock, the "
+                 + "shells and the colours take effect without anything being touched on disk. "
                  + "make run, which puts the emulator's serial line on a "
                  + "terminal, is the one target this tab leaves out.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -109,6 +159,77 @@ struct GeckOSView: View {
                 build()
             }
         }
+    }
+
+    // MARK: - Colours
+
+    private func colourPicker(_ title: String, selection: Binding<String>,
+                              makefileDefault: String) -> some View {
+        Picker(title, selection: selection) {
+            Text(VDPColour.numbered(makefileDefault).map {
+                    "As the makefile has it - \($0.number) \($0.name)"
+                } ?? "As the makefile has it")
+                .tag("")
+            ForEach(VDPColour.all) { colour in
+                Label {
+                    Text("\(colour.number) \(colour.name)")
+                } icon: {
+                    swatch(colour)
+                }
+                .tag(String(colour.number))
+            }
+        }
+        .disabled(target == .clean)
+    }
+
+    /// The colour a build gets: the one picked, else the makefile's, else
+    /// what jp6502def.i65 falls back on.
+    private func effective(_ picked: String, _ makefileDefault: String,
+                           _ fallback: Int) -> VDPColour {
+        VDPColour.numbered(picked) ?? VDPColour.numbered(makefileDefault)
+            ?? VDPColour.numbered(String(fallback))!
+    }
+
+    private var foreground: VDPColour {
+        effective(settings.geckosFG, index.defaultGeckosFG, 15)
+    }
+    private var background: VDPColour {
+        effective(settings.geckosBG, index.defaultGeckosBG, 4)
+    }
+
+    /// How init shows the time of the clock.
+    private static let bootTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    /// The first lines GeckOS puts on the screen, in the colours picked.
+    private var screenPreview: some View {
+        let now = Self.bootTime.string(from: .now)
+        return Text("Init V1.0 booting\n\(now)\nStart \"fsdev\": ok!\n#")
+            .font(.system(.body, design: .monospaced))
+            .foregroundStyle(foreground.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(background.color, in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    /// A little square of the colour for the menu. A menu draws SF Symbols
+    /// as templates, in the text colour, so this is a bitmap of its own.
+    private func swatch(_ colour: VDPColour) -> Image {
+        let image = NSImage(size: NSSize(width: 16, height: 11), flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5),
+                                    xRadius: 2, yRadius: 2)
+            colour.nsColor.setFill()
+            path.fill()
+            NSColor.gray.setStroke()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return Image(nsImage: image)
     }
 
     // MARK: - ROM
@@ -248,6 +369,8 @@ struct GeckOSView: View {
         if target != .clean {
             if !settings.geckosClock.isEmpty { argv.append("CLOCK=\(settings.geckosClock)") }
             if !settings.geckosShells.isEmpty { argv.append("SHELLS=\(settings.geckosShells)") }
+            if !settings.geckosFG.isEmpty { argv.append("FG=\(settings.geckosFG)") }
+            if !settings.geckosBG.isEmpty { argv.append("BG=\(settings.geckosBG)") }
         }
         return argv
     }
@@ -347,6 +470,12 @@ struct GeckOSView: View {
     }
     private var bindingShells: Binding<String> {
         Binding(get: { settings.geckosShells }, set: { settings.geckosShells = $0 })
+    }
+    private var bindingFG: Binding<String> {
+        Binding(get: { settings.geckosFG }, set: { settings.geckosFG = $0 })
+    }
+    private var bindingBG: Binding<String> {
+        Binding(get: { settings.geckosBG }, set: { settings.geckosBG = $0 })
     }
     private var bindingCard: Binding<String> {
         Binding(get: { settings.sdCardPath }, set: { settings.sdCardPath = $0 })
