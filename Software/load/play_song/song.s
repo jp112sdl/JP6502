@@ -53,6 +53,7 @@ VIA2_PORTB = __VIA2_START__ + VIA_REGISTER_PORTB
 VIA2_PORTA = __VIA2_START__ + VIA_REGISTER_PORTA
 VIA2_DDRB  = __VIA2_START__ + VIA_REGISTER_DDRB
 VIA2_DDRA  = __VIA2_START__ + VIA_REGISTER_DDRA
+VIA2_PCR   = __VIA2_START__ + VIA_REGISTER_PCR
 
     .code
 init:
@@ -71,6 +72,13 @@ init:
       ; nothing in front of us to do it.
       lda #%11111111
       sta VIA2_DDRA
+      ; Quiet first, then the speaker on (see sound.inc) - as a ROM, nothing
+      ; has done that before us either
+      jsr silence_all
+      lda VIA2_PCR
+      and #<~SPEAKER_PCR
+      ora #SPEAKER_ON
+      sta VIA2_PCR
       pla
 play_a_song:
     ; Play Mary Had a Little Lamb located

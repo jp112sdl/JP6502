@@ -66,6 +66,10 @@ sound_init:
     ORA #SN_WE                  ; Set CE low (inactive), WE high (inactive)
     STA VIA2_PORTB
     JSR silence_all             ; Stop it from making noise
+    LDA VIA2_PCR                ; Now the speaker can go on
+    AND #<~SPEAKER_PCR
+    ORA #SPEAKER_ON
+    STA VIA2_PCR
     PLA
     RTS
 

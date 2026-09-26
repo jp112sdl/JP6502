@@ -203,9 +203,9 @@ sagen dem Prüfer, welcher Build gemeint ist.
 
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
-| `$A000` | `$CD2E` | 11567 | `CODE` |
-| `$CD2F` | `$E01E` | 4848 | `RODATA` |
-| `$E01F` | `$E0FF` | 225 | frei |
+| `$A000` | `$CD38` | 11577 | `CODE` |
+| `$CD39` | `$E028` | 4848 | `RODATA` |
+| `$E029` | `$E0FF` | 215 | frei |
 | `$E100` | `$E2FF` | 512 | `RODATA_PA` (XMODEM-CRC-Tabellen, page-aligned) |
 | `$E300` | `$E6FF` | 1024 | frei |
 | `$E700` | `$E853` | 340 | `EXTCODE` — `os1_init` sowie die Anteile aus `vdp.o` und `sd.o` |
@@ -218,7 +218,7 @@ sagen dem Prüfer, welcher Build gemeint ist.
 | `$F90C` | `$FFF9` | 1774 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` — NMI `$0000`, RESET `init`, IRQ `_interrupt_handler` |
 
-ROM frei gesamt 5211 Bytes von 24576.
+ROM frei gesamt 5201 Bytes von 24576.
 
 ### 5.1 Build `rom/microsoft_basic`
 
@@ -227,10 +227,10 @@ ROM frei gesamt 5211 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DC74` | 15474 | `CODE` (darin 364 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
-| `$DC75` | `$E2FA` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E2FB` | `$E4CB` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E4CC` | `$E6FF` | 564 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DC7E` | 15484 | `CODE` (darin 364 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
+| `$DC7F` | `$E304` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E305` | `$E4D5` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E4D6` | `$E6FF` | 554 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F796` | 2967 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -241,7 +241,7 @@ ROM frei gesamt 5211 Bytes von 24576.
 | `$FF24` | `$FFF9` | 214 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 1001 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
+ROM frei gesamt 991 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
 fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach
 hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten. Was dort
 dazukommt, muss also entweder klein sein oder in `CODE` gehören —
