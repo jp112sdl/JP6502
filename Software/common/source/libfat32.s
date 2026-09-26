@@ -54,7 +54,7 @@ fat32_init:
   ; Read the MBR and extract pertinent information
 
   lda #0
-  sta fat32_errorstage
+  sta fat32_errorstage ; stage 0 = reading the MBR
 
   ; Sector 0
   lda #0
@@ -69,8 +69,10 @@ fat32_init:
   lda #>fat32_readbuffer
   sta zp_sd_address+1
 
-  ; Do the read
+  ; Do the read. A failed read has to stop here: the checks below would
+  ; otherwise look at whatever the buffer held before
   jsr sd_readsector
+  bcs fail
 
 
   inc fat32_errorstage ; stage 1 = boot sector signature check
@@ -109,6 +111,7 @@ fail:
   jmp error
 
 foundpart:
+  inc fat32_errorstage ; stage 3 = reading the BPB
 
   ; Read the FAT32 BPB
   lda fat32_readbuffer+$1c6,x
@@ -121,9 +124,10 @@ foundpart:
   sta zp_sd_currentsector+3
 
   jsr sd_readsector
+  bcs fail
 
 
-  inc fat32_errorstage ; stage 3 = BPB signature check
+  inc fat32_errorstage ; stage 4 = BPB signature check
 
   ; Check some things
   lda fat32_readbuffer+510 ; BPB sector signature 55
@@ -133,19 +137,19 @@ foundpart:
   cmp #$aa
   bne fail
 
-  inc fat32_errorstage ; stage 4 = RootEntCnt check
+  inc fat32_errorstage ; stage 5 = RootEntCnt check
 
   lda fat32_readbuffer+17 ; RootEntCnt should be 0 for FAT32
   ora fat32_readbuffer+18
   bne fail
 
-  inc fat32_errorstage ; stage 5 = TotSec16 check
+  inc fat32_errorstage ; stage 6 = TotSec16 check
 
   lda fat32_readbuffer+19 ; TotSec16 should be 0 for FAT32
   ora fat32_readbuffer+20
   bne fail
 
-  inc fat32_errorstage ; stage 6 = SectorsPerCluster check
+  inc fat32_errorstage ; stage 7 = bytes per sector check
 
   ; Check bytes per filesystem sector, it should be 512 for any SD card that supports FAT32
   lda fat32_readbuffer+11 ; low byte should be zero

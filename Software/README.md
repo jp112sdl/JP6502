@@ -439,10 +439,30 @@ Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 The card needs an MBR partition table with a FAT32 partition in one of its four entries, of
 type `$0C` (FAT32 LBA, what Windows and most new cards use) or `$0B` (what macOS writes when it
 formats a card; `diskutil list` calls it `DOS_FAT_32`). A card formatted without a partition
-table is `?NO CARD`, as is one that does not answer. `POKE 73,99` before the `LOAD` and
-`PEEK(73)` after it say how far the mount got: 99 means the card did not answer at all, 1 that
-its first sector could not be read or has no boot signature, 2 that no FAT32 partition was
-found, 3 to 6 that its boot sector is not one this can use.
+table is `?NO CARD`, as is one that does not answer. After a `?NO CARD`, `PEEK(73)` says how
+far the mount got:
+
+- 100 and up: the card did not come up - 100 plus the number of the command it gave the wrong
+  answer to (100 CMD0, 108 CMD8, 155 CMD55, 141 ACMD41), and `PEEK(74)` is that answer, 255
+  for none at all. 100 with 255 is also what an empty slot gives.
+- 0: its first sector could not be read,
+- 1: the first sector has no boot signature,
+- 2: no FAT32 partition was found,
+- 3: the partition's boot sector could not be read,
+- 4 to 7: that boot sector is not one this can use.
+
+A card that came up leaves 7 there. After a failed read (0 or 3), `PEEK(74)` is what the card
+sent instead of its answer or the start of the data, 255 for nothing.
+
+A card may take up to 100 ms to deliver a sector. The wait for it is scaled with the clock
+the ROM is built for, to the same 320 ms at every clock - it used to be a fixed count, which
+was 320 ms at 1 MHz but only 80 ms at 4 MHz, too short for some cards.
+
+The card is driven the way GeckOS does it: CMD0 is sent up to ten times, as some cards ignore
+the first ones after power-up; every command - reads and writes of sectors too - is preceded by
+a byte of clocks with the card selected and followed by eight clocks with it deselected; and
+the two CRC bytes after a sector that is read are clocked out, though not checked. Some cards
+do not mind either way; one here, an 8 GB card, missed every command that came without.
 
 **The keyword table used to cap how many statements could exist**, at 256 bytes, because
 `program.s` walked it with an 8-bit index and the terminator at offset 256 was unreachable - the

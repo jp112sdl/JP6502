@@ -8,6 +8,7 @@
       .include "sysram_map.inc"
       .include "sys_const.inc"
       .include "acia.inc"
+      .include "clock.inc"
 ;      .import TXTPTR
 ;      .import INPUTBUFFER
       
@@ -426,19 +427,41 @@ sd_init:
   bne @preinitloop
   
   
+; Which command sd_init is at, as 100 + its number, and on a failure the
+; answer the card gave to it ($ff: none at all) in the byte after. Both stay
+; there for PEEK(73) and PEEK(74) after a ?NO CARD; fat32_init starts its own
+; stages at 0 in the same byte once the card is up.
+sd_initstage = fat32_errorstage
+
 cmd0: ; GO_IDLE_STATE - resets card to idle state, and SPI mode
+  ; Some cards only answer idle to the second or a later CMD0 - one that
+  ; worked in GeckOS, which tries ten times, did not here with a single try.
+  lda #100
+  sta sd_initstage
+  lda #10
+@again:
+  pha
   lda #<sd_cmd0_bytes
   sta zp_sd_address
   lda #>sd_cmd0_bytes
   sta zp_sd_address+1
 
   jsr sd_sendcommand
+  jsr sd_deselect
 
   ; Expect status response $01 (not initialized)
-  cmp #$01
-  bne initfailed
+  tay
+  pla
+  cpy #$01
+  beq cmd8
+  dec
+  bne @again
+  tya
+  jmp initfailed
 
 cmd8: ; SEND_IF_COND - tell the card how we want it to operate (3.3V, etc)
+  lda #108
+  sta sd_initstage
   lda #<sd_cmd8_bytes
   sta zp_sd_address
   lda #>sd_cmd8_bytes
@@ -450,32 +473,40 @@ cmd8: ; SEND_IF_COND - tell the card how we want it to operate (3.3V, etc)
   cmp #$01
   bne initfailed
 
-  ; Read 32-bit return value, but ignore it
+  ; Read 32-bit return value, but ignore it - still selected, it is part of
+  ; the same answer
   jsr sd_readbyte
   jsr sd_readbyte
   jsr sd_readbyte
   jsr sd_readbyte 
+  jsr sd_deselect
 
 
 cmd55: ; APP_CMD - required prefix for ACMD commands
+  lda #155
+  sta sd_initstage
   lda #<sd_cmd55_bytes
   sta zp_sd_address
   lda #>sd_cmd55_bytes
   sta zp_sd_address+1
 
   jsr sd_sendcommand
+  jsr sd_deselect
 
   ; Expect status response $01 (not initialized)
   cmp #$01
   bne initfailed
 
 cmd41: ; APP_SEND_OP_COND - send operating conditions, initialize card
+  lda #141
+  sta sd_initstage
   lda #<sd_cmd41_bytes
   sta zp_sd_address
   lda #>sd_cmd41_bytes
   sta zp_sd_address+1
 
   jsr sd_sendcommand
+  jsr sd_deselect
 
   ; Status response $00 means initialised
   cmp #$00
@@ -504,6 +535,8 @@ initialized:
   rts
 
 initfailed:
+  jsr sd_deselect
+  sta sd_initstage+1
 ;  lda #'X'
 ;  jsr _lcd_print_char
   write_lcd #SD_not_initialized
@@ -576,6 +609,25 @@ sendbit:
 SD_RESPONSE_TIMEOUT = 1024
 SD_BUSY_TIMEOUT     = 8192
 
+; The data of a read can take the card much longer than the answer to a
+; command - up to 100 ms for an SDHC card, while it looks for the block. A pass
+; of the wait loop is about 310 cycles, so the 1024 passes that are plenty for
+; an answer were 320 ms at 1 MHz but only 80 ms at 4 MHz, and a card that was
+; slow to find a sector was taken for one that is not there (?NO CARD). This
+; count is scaled with the clock to keep the 320 ms.
+.if clock_mhz > 0
+SD_DATA_TIMEOUT     = 1024 * clock_mhz
+.else
+SD_DATA_TIMEOUT     = 1024
+.endif
+
+sd_waitdata:
+  ; Wait for the data token of a read - the same as sd_waitresult, for up to
+  ; SD_DATA_TIMEOUT attempts
+  lda #<SD_DATA_TIMEOUT
+  ldx #>SD_DATA_TIMEOUT
+  bra sd_waitfor
+
 sd_waitresult:
   ; Wait for the SD card to return something other than $ff.
   ;
@@ -587,9 +639,10 @@ sd_waitresult:
   ; every existing "cmp #expected" at the call sites fails on its own and
   ; takes its normal error path.
   lda #<SD_RESPONSE_TIMEOUT
+  ldx #>SD_RESPONSE_TIMEOUT
+sd_waitfor:
   sta sd_timeout
-  lda #>SD_RESPONSE_TIMEOUT
-  sta sd_timeout+1
+  stx sd_timeout+1
 @wait:
   jsr sd_readbyte
   cmp #$ff
@@ -630,6 +683,15 @@ sd_sendcommand:
   lda (zp_sd_address,x)
 ;  jsr print_hex
 
+  ; Sends the six bytes at (zp_sd_address) and returns the card's first
+  ; answer byte in A. The card stays selected, so that the caller can read
+  ; the rest of a longer answer; sd_deselect ends the command. Only sd_init
+  ; uses this - reading and writing sectors have their own code.
+  ;
+  ; One byte of clocks with the card selected first, as GeckOS does: some
+  ; cards miss a command that starts on the first clock after CS goes low
+  jsr sd_readbyte
+
   lda #SD_MOSI           ; pull CS low to begin command
   sta SD_PORTB
 
@@ -653,16 +715,31 @@ sd_sendcommand:
   jsr sd_writebyte
 
   jsr sd_waitresult
-  pha
 
   ; Debug print the result code
  ; jsr print_hex
 
-  ; End command
-  lda #(SD_CS | SD_MOSI)   ; set CS high again
-  sta SD_PORTB
+  rts
 
-  pla   ; restore result code
+
+sd_deselect:
+  ; Ends a command: CS high, then eight clocks, which the card needs to let go
+  ; of MISO and finish the command. Keeps A.
+  ;
+  ; Every command starts with a byte of clocks with the card selected and ends
+  ; here - sd_sendcommand, sd_readsector and sd_writesector alike - the way
+  ; the GeckOS driver has always done it. Without that, a card that is strict
+  ; about it misses the next command: one here read the MBR, the first sector
+  ; after sd_init, and then did not answer the read of the next one.
+  pha
+  lda #(SD_CS | SD_MOSI)
+  ldx #16
+@clock:
+  eor #SD_SCK
+  sta SD_PORTB
+  dex
+  bne @clock
+  pla
   rts
 
 sd_readsector:
@@ -672,6 +749,8 @@ sd_readsector:
   ;    zp_sd_currentsector   32-bit sector number
   ;    zp_sd_address     address of buffer to receive data
   
+  jsr sd_readbyte               ; a byte of clocks first, see sd_deselect
+
   lda #SD_MOSI
   sta SD_PORTB
 
@@ -694,7 +773,7 @@ sd_readsector:
   bne @fail
 
   ; wait for data
-  jsr sd_waitresult
+  jsr sd_waitdata
   cmp #$fe
   bne @fail
 
@@ -704,9 +783,14 @@ sd_readsector:
   jsr readpage
   dec zp_sd_address+1
 
+  ; The two CRC bytes after the block. They are not checked, but a card that
+  ; is not given the clocks for them is still sending when the next command
+  ; comes
+  jsr sd_readbyte
+  jsr sd_readbyte
+
   ; End command
-  lda #(SD_CS | SD_MOSI)
-  sta SD_PORTB
+  jsr sd_deselect
 
   clc
   rts
@@ -714,8 +798,11 @@ sd_readsector:
 @fail:
   ; Release the card and report the failure. This used to spin in an endless
   ; loop, which locked the machine up on any read error.
-  lda #(SD_CS | SD_MOSI)
-  sta SD_PORTB
+  ;
+  ; What the card sent instead of the answer or the data token ($ff: nothing)
+  ; is kept in the byte after fat32_errorstage, for PEEK(74) after a ?NO CARD
+  sta fat32_errorstage+1
+  jsr sd_deselect
 
   lda #FAT32_ERROR_READ_FAILED
   sta fat32_lasterror
@@ -743,6 +830,8 @@ sd_writesector:
   ;    zp_sd_address         address of the 512 byte buffer to send
   ;
   ; Returns carry clear on success, carry set on failure.
+
+  jsr sd_readbyte               ; a byte of clocks first, see sd_deselect
 
   lda #SD_MOSI
   sta SD_PORTB
@@ -796,8 +885,7 @@ sd_writesector:
   bcs @fail
 
   ; End command
-  lda #(SD_CS | SD_MOSI)
-  sta SD_PORTB
+  jsr sd_deselect
 
   clc
   rts
@@ -805,8 +893,7 @@ sd_writesector:
 @fail:
   ; Release the card and report the failure to the caller - unlike the read
   ; path there is no error loop here, the caller decides what to do
-  lda #(SD_CS | SD_MOSI)
-  sta SD_PORTB
+  jsr sd_deselect
 
   sec
   rts
