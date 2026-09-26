@@ -436,6 +436,14 @@ reads the BPB again for the fields the boot-time init does not keep.
 Error messages: `?NO CARD`, `?NO SUCH FILE`, `?FILE TOO SMALL`, `?DISK FULL`,
 `?DIRECTORY FULL`, `?WRITE ERROR`, `?CARD ERROR`.
 
+The card needs an MBR partition table with a FAT32 partition in one of its four entries, of
+type `$0C` (FAT32 LBA, what Windows and most new cards use) or `$0B` (what macOS writes when it
+formats a card; `diskutil list` calls it `DOS_FAT_32`). A card formatted without a partition
+table is `?NO CARD`, as is one that does not answer. `POKE 73,99` before the `LOAD` and
+`PEEK(73)` after it say how far the mount got: 99 means the card did not answer at all, 1 that
+its first sector could not be read or has no boot signature, 2 that no FAT32 partition was
+found, 3 to 6 that its boot sector is not one this can use.
+
 **The keyword table used to cap how many statements could exist**, at 256 bytes, because
 `program.s` walked it with an 8-bit index and the terminator at offset 256 was unreachable - the
 scan looped forever and the machine hung on the first ENTER, with everything up to that point

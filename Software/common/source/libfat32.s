@@ -86,24 +86,24 @@ fat32_init:
 
   inc fat32_errorstage ; stage 2 = finding partition
 
-  ; Find a FAT32 partition
-FSTYPE_FAT32 = 12
+  ; Find a FAT32 partition. Both types are FAT32, $0b addressed by CHS and
+  ; $0c by LBA; the LBA start below is in the entry either way. macOS writes
+  ; $0b when it formats a card, Windows and most new cards $0c.
+FSTYPE_FAT32_CHS = $0b
+FSTYPE_FAT32 = $0c
   ldx #0
+@nextpart:
   lda fat32_readbuffer+$1c2,x
   cmp #FSTYPE_FAT32
   beq foundpart
-  ldx #16
-  lda fat32_readbuffer+$1c2,x
-  cmp #FSTYPE_FAT32
+  cmp #FSTYPE_FAT32_CHS
   beq foundpart
-  ldx #32
-  lda fat32_readbuffer+$1c2,x
-  cmp #FSTYPE_FAT32
-  beq foundpart
-  ldx #48
-  lda fat32_readbuffer+$1c2,x
-  cmp #FSTYPE_FAT32
-  beq foundpart
+  txa
+  clc
+  adc #16
+  tax
+  cpx #64
+  bne @nextpart
 
 fail:
   jmp error
