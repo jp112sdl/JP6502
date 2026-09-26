@@ -85,7 +85,7 @@ can be typed before or after pressing the button.
 
 **Settings** is where the checkout lives, and which `python` and `make` to use.
 
-## The three things that are not obvious
+## The four things that are not obvious
 
 **PATH.** An app launched from the Finder inherits `/usr/bin:/bin:/usr/sbin:/sbin`
 and nothing else, and `ca65` is not there. Every tool is started with the PATH a
@@ -99,6 +99,24 @@ whether it has the module.
 
 `make` is also handed `PYTHON_BINARY` and `MD5_BINARY`, because the makefile
 defaults to `python` and `md5sum` and a stock macOS has neither.
+
+**CC65_HOME.** `ca65` is meant to fall back on a search path compiled into it,
+and on some installs it has none that works: every `.s` cc65 generates begins
+with `.macpack longbranch`, and without the variable that stops at
+
+    Cannot open include file 'longbranch.mac': No such file or directory
+
+which is what the C projects die on. The same install cannot find its own
+`stdlib.h` either. The app detects the prefix - next to the `bin` that holds the
+`ca65` actually being used, then the usual places - checks that
+`asminc/longbranch.mac` is under it, and hands it to `make` as `CC65_HOME`.
+That one variable covers `asminc`, `include`, `lib` and `cfg`, where `CA65_INC`
+would only cover the first. Settings shows what was found and says so when
+nothing was.
+
+Nothing else in the build changes: the makefile passes its own `-I` and `-C`
+explicitly, and those come first. A build from a Terminal needs the same
+variable, so it is worth exporting from a shell profile as well.
 
 **Why the output is live.** A C program line-buffers to a terminal and
 block-buffers to anything else, so `make` on a pipe says nothing at all until it

@@ -91,6 +91,14 @@ struct BuildView: View {
                     LabeledContent("Address mode", value: index.addressMode)
                     LabeledContent("make", value: settings.makePath.isEmpty
                                    ? "not found" : settings.makePath)
+                    LabeledContent("CC65_HOME", value: settings.cc65Home.isEmpty
+                                   ? "not found" : settings.cc65Home)
+                    if !settings.isCC65HomeValid {
+                        Label("Without it ca65 cannot find longbranch.mac and the "
+                              + "C projects will not assemble. Settings is where to "
+                              + "point it.", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange).font(.caption)
+                    }
                 }
 
                 if let product {
@@ -182,8 +190,9 @@ struct BuildView: View {
         argv += settings.makeOverrides
 
         let workingDirectory = settings.softwareDirectory
+        let environment = settings.toolchainEnvironment
         Task {
-            await runner.run(argv, cwd: workingDirectory)
+            await runner.run(argv, cwd: workingDirectory, environment: environment)
             index.reload()
         }
     }

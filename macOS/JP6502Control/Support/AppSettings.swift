@@ -16,6 +16,11 @@ final class AppSettings {
     var pythonPath: String      { didSet { defaults.set(pythonPath, forKey: "pythonPath") } }
     var makePath: String        { didSet { defaults.set(makePath, forKey: "makePath") } }
 
+    /// CC65_HOME, the prefix cc65 keeps asminc, include, lib and cfg under.
+    /// The makefile does not pass it and ca65 cannot always work it out on its
+    /// own, so the app hands it over - see Shell.cc65Home().
+    var cc65Home: String        { didSet { defaults.set(cc65Home, forKey: "cc65Home") } }
+
     /// The clock the ROMs are built for. "" leaves it to the makefile, which
     /// is the right answer until the board runs at something else - and the
     /// board does not change often, so it is worth remembering.
@@ -55,6 +60,7 @@ final class AppSettings {
         pythonPath = defaults.string(forKey: "pythonPath") ?? Shell.pythonWithPySerial()
         makePath = defaults.string(forKey: "makePath") ?? Shell.findFirst(["make"])
         clockMode = defaults.string(forKey: "clockMode") ?? ""
+        cc65Home = defaults.string(forKey: "cc65Home") ?? Shell.cc65Home()
 
         flashPort = defaults.string(forKey: "flashPort") ?? ""
         flashBaud = defaults.object(forKey: "flashBaud") as? Int ?? 225000
@@ -110,6 +116,20 @@ final class AppSettings {
         return fm.fileExists(atPath: softwareDirectory.appendingPathComponent("makefile").path)
             && fm.fileExists(atPath: flashToolScript.path)
     }
+
+    /// What the cc65 tools need in their environment, on top of PATH.
+    ///
+    /// CC65_HOME rather than CA65_INC: it covers asminc, which is where the
+    /// longbranch macro every cc65-generated .s includes lives, and the
+    /// include folder cc65 looks for stdlib.h in, and lib and cfg besides. One
+    /// variable instead of three, and nothing else in the build changes,
+    /// because the makefile's own -I and -C are passed explicitly and come
+    /// first.
+    var toolchainEnvironment: [String: String] {
+        cc65Home.isEmpty ? [:] : ["CC65_HOME": cc65Home]
+    }
+
+    var isCC65HomeValid: Bool { Shell.isCC65Home(cc65Home) }
 
     /// The makefile defaults to `python` and `md5sum`, neither of which a
     /// stock macOS has. Handing make what was actually found keeps the mapdoc

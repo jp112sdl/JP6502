@@ -70,6 +70,28 @@ struct SettingsView: View {
                 LabeledContent("make") {
                     TextField("make", text: bindingMake).frame(minWidth: 220)
                 }
+                LabeledContent("CC65_HOME") {
+                    HStack {
+                        TextField("/usr/local/share/cc65", text: bindingCC65Home)
+                            .frame(minWidth: 220)
+                        Button("Detect") { settings.cc65Home = Shell.cc65Home() }
+                            .help("Look next to ca65, then in the usual prefixes")
+                    }
+                }
+                if settings.isCC65HomeValid {
+                    Label("asminc/longbranch.mac is there.", systemImage: "checkmark.circle")
+                        .foregroundStyle(.green).font(.caption)
+                } else {
+                    // The makefile does not set this and ca65 does not always
+                    // have a usable default compiled in, so without it the C
+                    // projects stop at the first .macpack.
+                    Label("No asminc/longbranch.mac under this path. ca65 will not "
+                          + "assemble what cc65 generates, and cc65 will not find "
+                          + "its own headers. It is the folder holding asminc, "
+                          + "include, lib and cfg - next to the bin that has ca65.",
+                          systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange).font(.caption)
+                }
                 Text("Both are run with the PATH a login shell has, so ca65 and "
                      + "the rest of cc65 are found the way they are in a Terminal.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -117,5 +139,8 @@ struct SettingsView: View {
     }
     private var bindingMake: Binding<String> {
         Binding(get: { settings.makePath }, set: { settings.makePath = $0 })
+    }
+    private var bindingCC65Home: Binding<String> {
+        Binding(get: { settings.cc65Home }, set: { settings.cc65Home = $0 })
     }
 }

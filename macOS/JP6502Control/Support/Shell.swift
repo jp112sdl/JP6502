@@ -60,6 +60,45 @@ enum Shell {
         return "'" + argument.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    // MARK: - cc65
+
+    /// Where cc65 keeps asminc, include, lib and cfg - what the tools call
+    /// CC65_HOME.
+    ///
+    /// ca65 is supposed to fall back on a path compiled into it, and on this
+    /// kind of install it does not: `.macpack longbranch` fails with "Cannot
+    /// open include file 'longbranch.mac'" even in a full interactive shell,
+    /// and cc65 cannot find its own stdlib.h either. One variable fixes both,
+    /// because every one of those directories hangs off it.
+    static func cc65Home() -> String {
+        if let set = ProcessInfo.processInfo.environment["CC65_HOME"], isCC65Home(set) {
+            return set
+        }
+        // Next to the binary that is actually being used: bin/ca65 and
+        // share/cc65 are siblings under the same prefix, whichever package
+        // manager put them there.
+        if let ca65 = find("ca65") {
+            let prefix = URL(fileURLWithPath: ca65)
+                .resolvingSymlinksInPath()
+                .deletingLastPathComponent()   // bin
+                .deletingLastPathComponent()   // prefix
+            let candidate = prefix.appendingPathComponent("share/cc65").path
+            if isCC65Home(candidate) { return candidate }
+        }
+        for candidate in ["/usr/local/share/cc65", "/opt/homebrew/share/cc65",
+                          "/opt/local/share/cc65"] where isCC65Home(candidate) {
+            return candidate
+        }
+        return ""
+    }
+
+    /// A folder is it if the macro every generated .s pulls in is under it.
+    static func isCC65Home(_ path: String) -> Bool {
+        guard !path.isEmpty else { return false }
+        return FileManager.default.fileExists(
+            atPath: path + "/asminc/longbranch.mac")
+    }
+
     // MARK: - python
 
     /// The first python on PATH that can import pyserial.

@@ -63,7 +63,8 @@ final class ProcessRunner {
     }
 
     @discardableResult
-    func run(_ argv: [String], cwd: URL, note: String? = nil) async -> Int32 {
+    func run(_ argv: [String], cwd: URL, note: String? = nil,
+             environment extra: [String: String] = [:]) async -> Int32 {
         guard !isRunning, !argv.isEmpty else { return -1 }
         isRunning = true
         lastExitCode = nil
@@ -85,6 +86,7 @@ final class ProcessRunner {
         // progress lines these tools print until the transfer was over.
         environment["PYTHONUNBUFFERED"] = "1"
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
+        for (name, value) in extra where !value.isEmpty { environment[name] = value }
         task.environment = environment
 
         let errPipe = Pipe()
