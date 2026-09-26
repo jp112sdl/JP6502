@@ -50,12 +50,14 @@ LED_ON          = %10000000 ; LED pin ON
 LED_OFF         = %00000000 ; LED pin OFF
 D_PAD           = %00000000 ; D-Pad
 
-; VIA2 CB2 is the gate of a MOSFET in series with the speaker, pulled down:
-; after a reset CB2 is an input and the speaker is off, so the tone the
-; SN76489 comes up with is not heard. Once the chip is quiet, CB2 becomes a
-; manual output, high - bits 7-5 of the PCR.
+; The speaker is switched by a MOSFET in series with it, and VIA2 CB2 drives
+; that one through a second MOSFET as an inverter: CB2 high or not driven is
+; off, low is on. After a reset CB2 is an input, pulled up - inside a 6522
+; other than the W65C22S, by a resistor on the board otherwise - so the tone
+; the SN76489 comes up with is not heard. Once the chip is quiet, CB2 becomes
+; a manual output, low - bits 7-5 of the PCR.
 SPEAKER_PCR     = %11100000 ; CB2 control bits of the PCR
-SPEAKER_ON      = %11100000 ; CB2 manual output high
+SPEAKER_ON      = %11000000 ; CB2 manual output low
 
 ; Notes
 ; Note, (s)harp/(f)lat/(n)atural, octave, byte 1 or 2

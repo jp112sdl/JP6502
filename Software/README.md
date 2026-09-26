@@ -569,12 +569,15 @@ The port directions are set up by `sound_init` during `_system_init`, long befor
 prompt, so nothing has to be prepared first. Every `SOUND` mutes the channel again when it
 returns.
 
-The speaker is in series with a MOSFET (2N7000) whose gate is CB2 of VIA2, pulled down with
-10k. After a reset CB2 is an input, so the speaker stays off while the SN76489 plays whatever
-its registers came up with; `sound_init` silences the chip and only then drives CB2 high. A
-100µF capacitor in front of the speaker keeps DC out of it, 10k from its minus side to ground
-keep it charged while the speaker is off, and 100Ω in series keep the output of the chip
-near the 10 mA it is rated for. A ROM that does not drive CB2 high stays silent.
+The speaker is in series with a MOSFET (2N7000), whose gate is pulled up with 10k and pulled
+down by a second 2N7000 whose gate is CB2 of VIA2 - an inverter: CB2 high or not driven is
+off, low is on. After a reset CB2 is an input, pulled up with 10k (a 6522 other than the
+W65C22S has a pull-up of its own there, which is why a pull-down on the switch did not work),
+so the speaker stays off while the SN76489 plays whatever its registers came up with;
+`sound_init` silences the chip and only then drives CB2 low. A 100µF capacitor in front of the
+speaker keeps DC out of it, 10k from its minus side to ground keep it charged while the
+speaker is off, and 100Ω in series keep the output of the chip near the 10 mA it is rated
+for. A ROM that does not drive CB2 low stays silent.
 
 Channels 2 and 3 and the noise generator are not reachable from BASIC. They are one `POKE` away
 though - `PORTA` at 34817 carries the data bus and `PORTB` at 34816 the write strobe:
