@@ -55,7 +55,7 @@ ACIA - Serial
 
 ## Getting the sources
 
-`FlashPROMv2` is a submodule, so a plain `git clone` leaves it empty:
+`FlashPROMv2` and `GeckOS-V2` are submodules, so a plain `git clone` leaves them empty:
 
 ```
 git clone --recurse-submodules https://github.com/jp112sdl/JP6502.git
@@ -123,6 +123,25 @@ two BASIC transfer scripts. It does not reimplement any of them; it runs the
 same `make` and the same Python scripts that are in this repository. A built
 copy is committed at `macOS/dist/JP6502Control.app`, so it can be started
 without opening Xcode. See [macOS/README.md](macOS/README.md).
+
+### `GeckOS-V2`
+
+Submodule, from [jp112sdl/GeckOS-V2](https://github.com/jp112sdl/GeckOS-V2), a fork of
+André Fachat's [GeckOS](https://github.com/fachat/GeckOS-V2) - a multitasking operating
+system for the 6502 - with a port to this board in `arch/jp6502`. It runs from the ROM
+with a shell on the VDP console and one on the serial line, and loads its programs from
+the SD card (FAT32):
+
+```
+cd GeckOS-V2/arch/jp6502
+make            # boot/geckos.bin, the ROM image
+make sdcard     # boot/sdcard/, the programs for the card
+make run        # both in an emulator of the board, no flashing needed
+```
+
+Building needs the `xa` cross assembler (2.4.1 or later, e.g. `brew install xa`).
+[doc/jp6502.p.adoc](https://github.com/jp112sdl/GeckOS-V2/blob/master/doc/jp6502.p.adoc)
+describes the port.
 
 ### `Schematics`
 

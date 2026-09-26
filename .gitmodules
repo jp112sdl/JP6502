@@ -1,3 +1,6 @@
 [submodule "FlashPROMv2"]
 	path = FlashPROMv2
 	url = https://github.com/jp112sdl/FlashPROMv2
+[submodule "GeckOS-V2"]
+	path = GeckOS-V2
+	url = https://github.com/jp112sdl/GeckOS-V2
