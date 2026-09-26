@@ -26,6 +26,16 @@ final class ProjectIndex {
     private(set) var clockModes: [String] = []
     private(set) var defaultClockMode = ""
 
+    /// GeckOS: the programs waiting in boot/sdcard to be put on a card, and
+    /// the clock its makefile builds for when it is not told otherwise.
+    private(set) var geckosPrograms: [URL] = []
+    private(set) var defaultGeckosClock = ""
+
+    /// The clocks GeckOS accepts. Unlike CLOCK_MODE there is no conditional to
+    /// read them out of - CLOCK goes straight to xa as -DCLOCK_MHZ, and the
+    /// set that makes sense is written down in a comment in jp6502def.i65.
+    let geckosClocks = ["1", "2", "4", "8"]
+
     private let settings: AppSettings
 
     init(settings: AppSettings) {
@@ -55,6 +65,20 @@ final class ProjectIndex {
         let commonText = (try? String(contentsOf: common, encoding: .utf8)) ?? ""
         clockModes = clockModeNames(in: commonText)
         defaultClockMode = variable("CLOCK_MODE", in: commonText).first ?? ""
+
+        let geckosText = (try? String(contentsOf: settings.geckosMakefile, encoding: .utf8)) ?? ""
+        defaultGeckosClock = variable("CLOCK", in: geckosText).first ?? ""
+        geckosPrograms = programs(in: settings.geckosCardDirectory)
+    }
+
+    /// Everything in boot/sdcard. They are o65 binaries with no extension, so
+    /// what is there is what goes on the card - minus anything the Finder left
+    /// behind.
+    private func programs(in directory: URL) -> [URL] {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil)) ?? []
+        return contents.filter { !$0.lastPathComponent.hasPrefix(".") }
+                       .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     /// The firmware binary the makefile would produce for a project, whether

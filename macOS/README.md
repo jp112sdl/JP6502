@@ -41,11 +41,40 @@ doing rather than this app's: every object depends on a file holding the flags
 it was built with, so a 2 MHz ROM cannot end up with 1 MHz delay loops linked
 into it.
 
+**GeckOS** runs `make` in `GeckOS-V2/arch/jp6502`, which is its own makefile
+with its own way of naming things: the clock is whole MHz passed as `CLOCK`,
+not a `CLOCK_MODE` name, and `SHELLS` decides whether the OS comes up with a
+shell on the VDP console, on the serial line, or on both. It builds the ROM
+image (`boot/geckos.bin`), or the programs for the card (`make sdcard`), or
+cleans. The ROM is reassembled on every build, so the two switches take effect
+without anything being edited. `make run`, which puts the emulator's serial
+line on a terminal, is the one target the tab leaves out - it needs a Terminal.
+
+The same tab copies the programs onto the card. Removable volumes are offered
+with the filesystem macOS reports, so a card that is not FAT32 says so before
+anything is written, and any folder can be picked instead. The copy goes into
+the root of the card over anything of the same name and leaves the rest of the
+card alone.
+
+Then it removes the `._` files. macOS attaches a `com.apple.provenance`
+attribute to every file it writes, and on a FAT card an extended attribute is
+stored in an AppleDouble beside the file - `._lsh` next to `lsh`. `cp -X` does
+not prevent it, clearing the attribute on the source does not either, and a
+plain `dd` write produces one too, so they are deleted afterwards instead. That
+sticks: on FAT the `._` file is the only place the attribute lives. Without it
+GeckOS lists thirty entries where it should list fifteen.
+
+GeckOS-V2 is a submodule, so the tab says so rather than failing if the
+checkout was cloned without `--recursive`. Building it needs `xa` 2.4.1 or
+later with `file65` and `reloc65` from the same package; the tab shows where it
+found each of them.
+
 **Flash** runs `FlashPROMv2/tools/flashtool.py`: write, verify, read, erase,
 blank check, chip info, device selection and data protection, with the
 programmer's port, baud rate, bootloader wait and chip override. The file to
-write is picked from what is in `Software/build/rom`, or from anywhere on disk.
-The chip names come from `FlashPROMv2/Device.h`.
+write is picked from what is in `Software/build/rom`, from the GeckOS ROM, or
+from anywhere on disk - and the GeckOS tab can hand its ROM straight over. The
+chip names come from `FlashPROMv2/Device.h`.
 
 **BASIC** runs `Software/tools/basicsend.py` and `basicrecv.py` against the
 6502's own 6551 port - a different cable and a different baud rate from the

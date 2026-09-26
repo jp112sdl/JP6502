@@ -149,6 +149,9 @@ struct RunBar: View {
     let runner: ProcessRunner
     var enabled: Bool = true
     var confirm: String?
+    /// Only one button per tab gets Cmd-Return; a second one claiming it would
+    /// make the shortcut ambiguous.
+    var shortcut: Bool = true
     let action: () -> Void
 
     @State private var askingToConfirm = false
@@ -161,7 +164,7 @@ struct RunBar: View {
             } label: {
                 Label(title, systemImage: systemImage)
             }
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut(shortcut ? KeyboardShortcut(.return, modifiers: .command) : nil)
             .buttonStyle(.borderedProminent)
             .disabled(!enabled || runner.isRunning)
             .confirmationDialog(confirm ?? "", isPresented: $askingToConfirm) {

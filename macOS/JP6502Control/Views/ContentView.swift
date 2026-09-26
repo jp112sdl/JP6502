@@ -3,12 +3,13 @@ import SwiftUI
 struct ContentView: View {
 
     enum Tab: String, CaseIterable, Identifiable {
-        case build, flash, basic, settings
+        case build, geckos, flash, basic, settings
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .build:    return "Build"
+            case .geckos:   return "GeckOS"
             case .flash:    return "Flash"
             case .basic:    return "BASIC"
             case .settings: return "Settings"
@@ -18,6 +19,7 @@ struct ContentView: View {
         var systemImage: String {
             switch self {
             case .build:    return "hammer"
+            case .geckos:   return "shippingbox"
             case .flash:    return "memorychip"
             case .basic:    return "text.append"
             case .settings: return "gearshape"
@@ -27,6 +29,7 @@ struct ContentView: View {
         var subtitle: String {
             switch self {
             case .build:    return "make"
+            case .geckos:   return "ROM and SD card"
             case .flash:    return "FlashPROMv2"
             case .basic:    return "6551 serial"
             case .settings: return ""
@@ -41,6 +44,7 @@ struct ContentView: View {
     @State private var buildRunner = ProcessRunner()
     @State private var flashRunner = ProcessRunner()
     @State private var basicRunner = ProcessRunner()
+    @State private var geckosRunner = ProcessRunner()
 
     var body: some View {
         NavigationSplitView {
@@ -74,6 +78,14 @@ struct ContentView: View {
             switch tab {
             case .build:
                 BuildView(settings: settings, index: index, runner: buildRunner)
+            case .geckos:
+                if settings.hasGeckOS {
+                    GeckOSView(settings: settings, index: index, runner: geckosRunner) {
+                        tab = .flash
+                    }
+                } else {
+                    MissingGeckOSNotice()
+                }
             case .flash:
                 FlashView(settings: settings, index: index, runner: flashRunner)
             case .basic:

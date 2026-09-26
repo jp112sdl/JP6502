@@ -57,7 +57,6 @@ struct FlashView: View {
     let runner: ProcessRunner
 
     @State private var command: Command = .write
-    @State private var file: URL?
     @State private var offset = "0"
     @State private var fileFormat = "auto"
     @State private var eraseMode: EraseMode = .automatic
@@ -117,7 +116,9 @@ struct FlashView: View {
             }
             .formStyle(.grouped)
         }
-        .onAppear { if file == nil { file = index.romBinaries.first } }
+        .onAppear {
+            if file == nil { settings.flashFilePath = index.romBinaries.first?.path ?? "" }
+        }
     }
 
     @ViewBuilder
@@ -212,19 +213,48 @@ struct FlashView: View {
     private var binaryChooser: some View {
         LabeledContent("File") {
             HStack {
-                Picker("", selection: $file) {
-                    Text("none").tag(URL?.none)
-                    ForEach(index.romBinaries, id: \.self) { url in
-                        Text(url.lastPathComponent).tag(URL?.some(url))
+                Picker("", selection: bindingFile) {
+                    Text("none").tag("")
+                    Section("Software") {
+                        ForEach(index.romBinaries, id: \.self) { url in
+                            Text(url.lastPathComponent).tag(url.path)
+                        }
                     }
-                    if let file, !index.romBinaries.contains(file) {
-                        Text(file.lastPathComponent).tag(URL?.some(file))
+                    if FileManager.default.fileExists(atPath: settings.geckosROM.path) {
+                        Section("GeckOS") {
+                            Text(settings.geckosROM.lastPathComponent)
+                                .tag(settings.geckosROM.path)
+                        }
+                    }
+                    // Whatever was picked with Browse, or handed over by the
+                    // GeckOS tab before its ROM had been built.
+                    if let file, !suggestions.contains(file) {
+                        Section("Elsewhere") {
+                            Text(file.lastPathComponent).tag(file.path)
+                        }
                     }
                 }
                 .labelsHidden()
                 Button("Browse…") { chooseFile() }
             }
         }
+    }
+
+    /// The images the picker offers without being asked.
+    private var suggestions: [URL] {
+        index.romBinaries
+            + (FileManager.default.fileExists(atPath: settings.geckosROM.path)
+               ? [settings.geckosROM] : [])
+    }
+
+    /// The image to write lives in the settings: the GeckOS tab puts its ROM
+    /// there, and the choice is worth keeping across launches.
+    private var file: URL? {
+        settings.flashFilePath.isEmpty ? nil : URL(fileURLWithPath: settings.flashFilePath)
+    }
+
+    private var bindingFile: Binding<String> {
+        Binding(get: { settings.flashFilePath }, set: { settings.flashFilePath = $0 })
     }
 
     // MARK: - Running
@@ -338,7 +368,7 @@ struct FlashView: View {
         panel.directoryURL = index.romBinaries.first?.deletingLastPathComponent()
             ?? settings.romDirectory
         panel.message = "Pick the image to write to the chip."
-        if panel.runModal() == .OK { file = panel.url }
+        if panel.runModal() == .OK { settings.flashFilePath = panel.url?.path ?? "" }
     }
 
     private func chooseReadOutput() {

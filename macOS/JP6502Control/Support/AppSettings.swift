@@ -29,6 +29,22 @@ final class AppSettings {
     var flashDevice: String     { didSet { defaults.set(flashDevice, forKey: "flashDevice") } }
     var flashVerbose: Bool      { didSet { defaults.set(flashVerbose, forKey: "flashVerbose") } }
 
+    /// The image the Flash tab writes. Kept here rather than in the view so
+    /// the GeckOS tab can hand its ROM straight over, and so the choice
+    /// survives a relaunch.
+    var flashFilePath: String   { didSet { defaults.set(flashFilePath, forKey: "flashFilePath") } }
+
+    /// GeckOS builds for a clock too, but its own way: whole MHz passed as
+    /// CLOCK, where Software takes a CLOCK_MODE name. "" leaves both to their
+    /// makefiles.
+    var geckosClock: String     { didSet { defaults.set(geckosClock, forKey: "geckosClock") } }
+    /// What the Makefile calls SHELLS: "" for both shells, or the define that
+    /// leaves one of them out.
+    var geckosShells: String    { didSet { defaults.set(geckosShells, forKey: "geckosShells") } }
+    /// Where the card was last mounted. Volumes come and go, so this is a
+    /// starting guess rather than a setting.
+    var sdCardPath: String      { didSet { defaults.set(sdCardPath, forKey: "sdCardPath") } }
+
     var basicPort: String       { didSet { defaults.set(basicPort, forKey: "basicPort") } }
     var basicBaud: Int          { didSet { defaults.set(basicBaud, forKey: "basicBaud") } }
 
@@ -46,6 +62,11 @@ final class AppSettings {
         flashDevice = defaults.string(forKey: "flashDevice") ?? ""
         flashVerbose = defaults.bool(forKey: "flashVerbose")
 
+        flashFilePath = defaults.string(forKey: "flashFilePath") ?? ""
+        geckosClock = defaults.string(forKey: "geckosClock") ?? ""
+        geckosShells = defaults.string(forKey: "geckosShells") ?? ""
+        sdCardPath = defaults.string(forKey: "sdCardPath") ?? ""
+
         basicPort = defaults.string(forKey: "basicPort") ?? ""
         basicBaud = defaults.object(forKey: "basicBaud") as? Int ?? 19200
     }
@@ -61,6 +82,21 @@ final class AppSettings {
     var flashToolsDirectory: URL {
         projectRoot.appendingPathComponent("FlashPROMv2").appendingPathComponent("tools")
     }
+
+    // GeckOS-V2 is a submodule with its own makefile, under the board's own
+    // arch folder. A checkout that was cloned without --recursive has the
+    // folder and nothing in it, which is why the tab checks for the makefile
+    // rather than for the directory.
+    var geckosDirectory: URL { projectRoot.appendingPathComponent("GeckOS-V2") }
+    var geckosArchDirectory: URL {
+        geckosDirectory.appendingPathComponent("arch").appendingPathComponent("jp6502")
+    }
+    var geckosMakefile: URL { geckosArchDirectory.appendingPathComponent("Makefile") }
+    var geckosBootDirectory: URL { geckosArchDirectory.appendingPathComponent("boot") }
+    var geckosROM: URL { geckosBootDirectory.appendingPathComponent("geckos.bin") }
+    var geckosCardDirectory: URL { geckosBootDirectory.appendingPathComponent("sdcard") }
+
+    var hasGeckOS: Bool { FileManager.default.fileExists(atPath: geckosMakefile.path) }
 
     var basicSendScript: URL { toolsDirectory.appendingPathComponent("basicsend.py") }
     var basicRecvScript: URL { toolsDirectory.appendingPathComponent("basicrecv.py") }

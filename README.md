@@ -118,8 +118,9 @@ is in the socket. The chip names it knows come from `FlashPROMv2/Device.h`.
 
 ### `macOS`
 
-A macOS front end for the three things above - `make`, the flash tool and the
-two BASIC transfer scripts. It does not reimplement any of them; it runs the
+A macOS front end for the command line tools above - `make` for `Software` and
+for GeckOS, the flash tool, the two BASIC transfer scripts, and filling the
+GeckOS SD card. It does not reimplement any of them; it runs the
 same `make` and the same Python scripts that are in this repository. A built
 copy is committed at `macOS/dist/JP6502Control.app`, so it can be started
 without opening Xcode. See [macOS/README.md](macOS/README.md).
