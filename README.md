@@ -16,6 +16,7 @@ FTDI FT232R USB UART
 PS2 Keyboard with German Layout
 D-pad
 SD Card slot
+DS3231 real time clock (I2C, used by GeckOS)
 ```
 ## Memory Map
 ```
@@ -31,7 +32,7 @@ See [Software/MEMORY_MAP.md](Software/MEMORY_MAP.md) for the detailed layout of
 zero page, system RAM buffers, BSS, the loadable module area and the ROM segments.
 ## IO
 ```
-VIA1 - LCD
+VIA1 - LCD, DS3231 clock (I2C: PA0 = SCL, PA1 = SDA)
 VIA2 - Sound and LED
 VIA3 - Keyboard and SD card
 ACIA - Serial
@@ -139,6 +140,9 @@ make            # boot/geckos.bin, the ROM image
 make sdcard     # boot/sdcard/, the programs for the card
 make run        # both in an emulator of the board, no flashing needed
 ```
+
+With a DS3231 module on VIA1 the files GeckOS writes get the time they were written;
+`date` shows and sets the clock, `i2cscan` lists what answers on the I2C bus.
 
 Building needs the `xa` cross assembler (2.4.1 or later, e.g. `brew install xa`).
 [doc/jp6502.p.adoc](https://github.com/jp112sdl/GeckOS-V2/blob/master/doc/jp6502.p.adoc)
