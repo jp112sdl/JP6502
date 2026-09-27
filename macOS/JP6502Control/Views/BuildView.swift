@@ -22,7 +22,9 @@ struct BuildView: View {
             switch self {
             case .all:      return "make all - every ROM image and every loadable program"
             case .test:     return "make test - builds everything, then prints an md5 of each binary"
-            case .mapdoc:   return "make mapdoc - checks the addresses in MEMORY_MAP.md against the linker output"
+            case .mapdoc:   return "make mapdoc - checks the addresses in MEMORY_MAP.md against the linker output. "
+                                 + "The document describes the default clock, so this builds a copy of "
+                                 + "Software for it and leaves build/rom as it is"
             case .clean:    return "make clean - removes the whole build folder"
             case .firmware: return "One image under build/rom, built from its own project folder"
             case .loadable: return "One program under build/load, to be sent to a running machine"
@@ -79,7 +81,7 @@ struct BuildView: View {
                                 .tag(settings.clockMode)
                         }
                     }
-                    .disabled(target == .clean)
+                    .disabled(target == .clean || target == .mapdoc)
                     Text("What the delay loops are timed for. Changing it rebuilds "
                          + "everything: each object records the flags it was built "
                          + "with, so a mixed build cannot go unnoticed.")
@@ -183,17 +185,45 @@ struct BuildView: View {
         case .loadable: argv.append(index.makeTarget(loadable: loadableProject))
         }
         // clean takes the whole build folder either way, so the mode would
-        // only be noise on the command line.
-        if !settings.clockMode.isEmpty && target != .clean {
+        // only be noise on the command line. mapdoc checks against the
+        // makefile's default clock, whatever the board runs at.
+        if !settings.clockMode.isEmpty && target != .clean && target != .mapdoc {
             argv.append("CLOCK_MODE=\(settings.clockMode)")
         }
         argv += settings.makeOverrides
 
-        let workingDirectory = settings.softwareDirectory
         let environment = settings.toolchainEnvironment
+        if target == .mapdoc {
+            checkMapDocument(argv, environment: environment)
+            return
+        }
+        let workingDirectory = settings.softwareDirectory
         Task {
             await runner.run(argv, cwd: workingDirectory, environment: environment)
             index.reload()
+        }
+    }
+
+    /// MEMORY_MAP.md describes the default clock, and the ROMs in build/rom
+    /// are usually built for the board's. Checking in Software itself would
+    /// rebuild them for the default and leave the wrong ones for the Flash
+    /// tab. So the check runs in a copy of Software, without its build
+    /// folder, kept in the caches: the copy keeps its own build folder
+    /// between runs, and rsync keeps the times of the files it copies, so
+    /// the next check only rebuilds what changed.
+    private func checkMapDocument(_ argv: [String], environment: [String: String]) {
+        let copy = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("JP6502Control")
+            .appendingPathComponent("mapdoc")
+        let source = settings.softwareDirectory.path + "/"
+        Task {
+            try? FileManager.default.createDirectory(at: copy, withIntermediateDirectories: true)
+            let sync = [Shell.findFirst(["rsync"]), "-a", "--delete",
+                        "--exclude", "/build/", source, copy.path + "/"]
+            guard await runner.run(sync, cwd: settings.softwareDirectory,
+                                   note: "a copy of Software for the default clock, in \(copy.path)") == 0
+            else { return }
+            await runner.run(argv, cwd: copy, environment: environment)
         }
     }
 }

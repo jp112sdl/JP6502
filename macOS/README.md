@@ -41,6 +41,13 @@ doing rather than this app's: every object depends on a file holding the flags
 it was built with, so a 2 MHz ROM cannot end up with 1 MHz delay loops linked
 into it.
 
+`mapdoc` is the exception: `MEMORY_MAP.md` describes the default clock, and the
+delay loops make the ROMs of other clocks a few bytes longer. So the check runs
+in a copy of `Software` (without `build`) in `~/Library/Caches/JP6502Control/mapdoc`,
+built for the default clock, and the ROMs in `Software/build/rom` stay the ones
+for the board. The copy keeps its own build folder, so later checks only
+rebuild what changed.
+
 **GeckOS** runs `make` in `GeckOS-V2/arch/jp6502`, which is its own makefile
 with its own way of naming things: the clock is whole MHz passed as `CLOCK`,
 not a `CLOCK_MODE` name, and `SHELLS` decides whether the OS comes up with a
