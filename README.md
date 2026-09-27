@@ -19,15 +19,57 @@ SD Card slot
 DS3231 real time clock (I2C, used by GeckOS)
 ```
 ## Memory Map
+
+Taken from the linker configuration,
+[Software/common/firmware.ext.cfg](Software/common/firmware.ext.cfg), and the
+address bit patterns in [Software/meminfo.txt](Software/meminfo.txt).
+
 ```
-RAM  $0000 - $7FFF
-VDP  $8080
-VIA3 $8200
-ACIA $8400
-VIA2 $8800
-VIA1 $9000
-ROM  $A000 - $FFFF
+$FFFF ┌──────────────────────────┐
+      │ ROM          24 KB       │  $A000-$FFFF (vectors at $FFFA-$FFFF)
+$A000 ├──────────────────────────┤
+      │ VIA1          4 KB       │  $9000-$9FFF
+      │ VIA2          2 KB       │  $8800-$8FFF
+      │ ACIA          1 KB       │  $8400-$87FF
+      │ VIA3        512 B        │  $8200-$83FF      I/O, 8 KB
+      │ (free)      256 B        │  $8100-$81FF
+      │ VDP         128 B        │  $8080-$80FF
+      │ (free)      128 B        │  $8000-$807F
+$8000 ├──────────────────────────┤
+      │ RAM          32 KB       │  $0000-$7FFF
+$0000 └──────────────────────────┘
 ```
+
+| Chip | Range | Registers | Address bits |
+|---|---|---|---|
+| VDP TMS9918 | `$8080`-`$80FF` | `$8080` VRAM data, `$8081` registers | A15 + A7 |
+| VIA3 (keyboard, SD card) | `$8200`-`$83FF` | `$8200`-`$820F` | A15 + A9 |
+| ACIA R6551 (serial) | `$8400`-`$87FF` | `$8400`-`$8403` | A15 + A10 |
+| VIA2 (sound, LED, D-pad, speaker) | `$8800`-`$8FFF` | `$8800`-`$880F` | A15 + A11 |
+| VIA1 (LCD, DS3231) | `$9000`-`$9FFF` | `$9000`-`$900F` | A15 + A12 |
+
+The I/O window is `$8000`-`$9FFF`: A15 set, A14 and A13 clear. Going by these
+ranges, the highest of A12 down to A7 that is set picks the chip; A8 alone
+(`$8100`-`$81FF`) and none of them (`$8000`-`$807F`) are free.
+
+The RAM, as the firmware divides it:
+
+| Area | Range | Use |
+|---|---|---|
+| Zero page | `$0000`-`$00FF` | |
+| Stack | `$0100`-`$01FF` | fixed by the 6502, not in the linker config |
+| SYS_RAM | `$0200`-`$09FF` | firmware variables and buffers |
+| SD_RAM | `$0A00`-`$0BFF` | SD card write buffer |
+| FAT_RAM | `$0C00`-`$0DFF` | FAT32 sector |
+| BAS_RAM | `$0E00`-`$0FFF` | BASIC input line |
+| USERRAM | `$1000`-`$7FFF` | programs, 28 KB |
+
+GeckOS uses the same addresses for the hardware but divides the RAM its own
+way, see [doc/jp6502.p.adoc](https://github.com/jp112sdl/GeckOS-V2/blob/master/doc/jp6502.p.adoc).
+
+The flash image is 32 KB, `$8000`-`$FFFF`. Its first 8 KB are filled with
+`$EA`, as the CPU sees the I/O chips there instead.
+
 See [Software/MEMORY_MAP.md](Software/MEMORY_MAP.md) for the detailed layout of
 zero page, system RAM buffers, BSS, the loadable module area and the ROM segments.
 ## IO
