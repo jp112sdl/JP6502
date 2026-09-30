@@ -58,6 +58,8 @@ struct FlashView: View {
 
     @State private var command: Command = .write
     @State private var offset = "0"
+    /// The ROM bank written to, -1 for none: the offset is then typed in.
+    @State private var bank = -1
     @State private var fileFormat = "auto"
     @State private var eraseMode: EraseMode = .automatic
     @State private var verifyMode = "crc"
@@ -118,7 +120,11 @@ struct FlashView: View {
         }
         .onAppear {
             if file == nil { settings.flashFilePath = index.romBinaries.first?.path ?? "" }
+            followFile()
         }
+        // The GeckOS tab hands its ROM over this way, and it has to land in
+        // the GeckOS bank, not at 0 with the whole chip erased.
+        .onChange(of: settings.flashFilePath) { _, _ in followFile() }
     }
 
     @ViewBuilder
@@ -126,8 +132,23 @@ struct FlashView: View {
         switch command {
         case .write, .verify:
             binaryChooser
-            LabeledContent("Offset in the chip") {
-                HexField(title: "offset", text: $offset, placeholder: "0")
+            Picker("ROM bank", selection: bindingBank) {
+                Text("None - the offset below").tag(-1)
+                ForEach(0..<8, id: \.self) { Text(bankTitle($0)).tag($0) }
+            }
+            if bank >= 0 {
+                LabeledContent("Offset in the chip", value: bankOffset(bank))
+                Text("The flash holds eight 32 KB images, and the switches on "
+                     + "A15-A17 pick the one the 6502 sees (Schematics/ROM_BANKS.md). "
+                     + "Only this bank is written: a page-programmed flash like the "
+                     + "W29C020 clears each page as it writes it, so nothing is "
+                     + "erased first. A byte-programmed one (SST39SF...) needs "
+                     + "\"Only the sectors written\" instead.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                LabeledContent("Offset in the chip") {
+                    HexField(title: "offset", text: $offset, placeholder: "0")
+                }
             }
             Picker("File format", selection: $fileFormat) {
                 Text("From the name").tag("auto")
@@ -291,6 +312,9 @@ struct FlashView: View {
         switch command {
         case .erase where eraseWholeChip:
             return "Erase the whole chip in the programmer's socket?"
+        case .write where bank < 0 && (eraseMode == .automatic || eraseMode == .chip):
+            return "Unless the chip is an EEPROM, this erases all of it first - "
+                 + "every ROM bank on it. Write anyway?"
         case .protectState where !protectOn:
             return "Turning data protection off leaves the chip open to stray "
                  + "writes, and probing one in that state is what damages it."
@@ -355,6 +379,63 @@ struct FlashView: View {
         Task {
             await runner.run(argv, cwd: workingDirectory)
             index.reload()
+        }
+    }
+
+    // MARK: - ROM banks
+
+    /// What Schematics/ROM_BANKS.md puts into the first banks; the rest are
+    /// free.
+    private static let bankFirmware = ["MS-BASIC", "GeckOS", "minimal_bootloader"]
+
+    private func bankTitle(_ bank: Int) -> String {
+        let what = bank < Self.bankFirmware.count ? Self.bankFirmware[bank] : "free"
+        return "Bank \(bank) - \(what)"
+    }
+
+    private func bankOffset(_ bank: Int) -> String {
+        String(format: "0x%05X", bank * 0x8000)
+    }
+
+    /// The image of a bank's firmware, where its build leaves it.
+    private func bankImage(_ bank: Int) -> URL? {
+        switch bank {
+        case 0:  return index.romBinary(for: "microsoft_basic")
+        case 1:  return settings.geckosROM
+        case 2:  return index.romBinary(for: "minimal_bootloader")
+        default: return nil
+        }
+    }
+
+    private var bindingBank: Binding<Int> {
+        Binding(get: { bank }, set: { choose(bank: $0) })
+    }
+
+    /// A bank sets the offset, writes without erasing, and brings its own
+    /// firmware along when that has been built.
+    private func choose(bank new: Int) {
+        bank = new
+        if new >= 0 {
+            offset = bankOffset(new)
+            eraseMode = .none
+            if let image = bankImage(new), FileManager.default.fileExists(atPath: image.path) {
+                settings.flashFilePath = image.path
+            }
+        } else {
+            offset = "0"
+            eraseMode = .automatic
+        }
+    }
+
+    /// Picking the image of a bank's firmware picks that bank. Any other file
+    /// leaves the choice alone, so it can go into a free bank.
+    private func followFile() {
+        guard let file else { return }
+        let path = file.standardizedFileURL.path
+        if let owner = (0..<Self.bankFirmware.count).first(where: {
+            bankImage($0)?.standardizedFileURL.path == path
+        }), owner != bank {
+            choose(bank: owner)
         }
     }
 

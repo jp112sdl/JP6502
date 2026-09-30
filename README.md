@@ -68,7 +68,9 @@ GeckOS uses the same addresses for the hardware but divides the RAM its own
 way, see [doc/jp6502.p.adoc](https://github.com/jp112sdl/GeckOS-V2/blob/master/doc/jp6502.p.adoc).
 
 The flash image is 32 KB, `$8000`-`$FFFF`. Its first 8 KB are filled with
-`$EA`, as the CPU sees the I/O chips there instead.
+`$EA`, as the CPU sees the I/O chips there instead. The W29C020 holds eight
+such images; switches on its A15-A17 pick one at reset - MS-BASIC, GeckOS and
+the minimal bootloader, see [Schematics/ROM_BANKS.md](Schematics/ROM_BANKS.md).
 
 See [Software/MEMORY_MAP.md](Software/MEMORY_MAP.md) for the detailed layout of
 zero page, system RAM buffers, BSS, the loadable module area and the ROM segments.

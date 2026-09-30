@@ -85,6 +85,14 @@ write is picked from what is in `Software/build/rom`, from the GeckOS ROM, or
 from anywhere on disk - and the GeckOS tab can hand its ROM straight over. The
 chip names come from `FlashPROMv2/Device.h`.
 
+The flash holds eight 32 KB images, and switches on its A15-A17 pick the one
+the 6502 sees (`Schematics/ROM_BANKS.md`). Writing and verifying take a ROM
+bank: it sets the offset, writes without erasing so that the other banks stay,
+and follows the file - MS-BASIC goes to bank 0, the GeckOS ROM to bank 1,
+`minimal_bootloader` to bank 2, whatever else stays where it was put. Without a
+bank the offset is typed in, and a write that would erase the whole chip asks
+first.
+
 **BASIC** runs `Software/tools/basicsend.py` and `basicrecv.py` against the
 6502's own 6551 port - a different cable and a different baud rate from the
 programmer, which is why the two tabs remember their ports separately. Sending
