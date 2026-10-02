@@ -487,11 +487,28 @@ const char DATA[] = {17, 16, 15, 14, 13, 12, 11, 10};
 #define KEYBOARD_CONNECTION_SIGNAL 0xff
 #define KEYBOARD_DISCONNECTION_SIGNAL 0xfe
 #define KEYBOARD_ECHO_COMMAND 0xee
+#define KEYBOARD_SELF_TEST_PASSED 0xaa
+
+// The 6502 clears the handshake while it sets up its VIA, so the status must
+// not come before this. It is when it always came.
+#define STATUS_NOT_BEFORE_MS 1000
+// How long a keyboard may take after power-on to report its self-test. A PS/2
+// keyboard needs half a second to three quarters; a USB keyboard on a PS/2
+// adapter often more.
+#define SELF_TEST_WAIT_MS 2500
 
 PS2Keyboard keyboard;
 bool lastStatus;
 
 void setup() {
+  // The PS/2 lines first. The host is the side with the pull-ups, and a
+  // keyboard that can do USB as well looks at the lines while it powers up to
+  // decide which of the two it is. They used to float for the second this
+  // waited before anything else, and such a keyboard then came up as USB about
+  // as often as PS/2 - and was not there. 4.7k from each line to +5 V are
+  // better still: the pins float until this program runs, and the internal
+  // pull-ups are weaker than PS/2 asks for.
+  keyboard.begin(DATA_PIN_4313, IRQ_PIN_4313);
 
   for (int n = 0; n < 8; n += 1) {
     pinMode(DATA[n], OUTPUT);
@@ -502,14 +519,32 @@ void setup() {
   pinMode(HS_DATA_READY, OUTPUT);
   digitalWrite(HS_DATA_READY, HIGH);
 
-  delay(1000);
-  keyboard.begin(DATA_PIN_4313, IRQ_PIN_4313);
-  if (lastStatus=testConnection()) {
-    sendChar(KEYBOARD_CONNECTION_SIGNAL);
-  } else {
-    sendChar(KEYBOARD_DISCONNECTION_SIGNAL);
+  lastStatus = waitForKeyboard();
+  while (millis() < STATUS_NOT_BEFORE_MS) {
   }
+  sendChar(lastStatus ? KEYBOARD_CONNECTION_SIGNAL : KEYBOARD_DISCONNECTION_SIGNAL);
+}
 
+// After power-on a keyboard runs its self-test and reports $AA. Waiting for
+// that tells a slow keyboard from a missing one. When it does not come in the
+// first second the keyboard is asked - one that was running already, because
+// only the board was reset, answers at once - and if it does not answer
+// either, it gets until SELF_TEST_WAIT_MS before it counts as missing.
+bool waitForKeyboard() {
+  while (millis() < STATUS_NOT_BEFORE_MS) {
+    if (get_scan_code() == KEYBOARD_SELF_TEST_PASSED) {
+      return true;
+    }
+  }
+  if (testConnection()) {
+    return true;
+  }
+  while (millis() < SELF_TEST_WAIT_MS) {
+    if (get_scan_code() == KEYBOARD_SELF_TEST_PASSED) {
+      return true;
+    }
+  }
+  return testConnection();
 }
 
 void loop() {
@@ -545,19 +580,24 @@ void loop() {
   }
 }
 
+// Any answer at all means a keyboard is there. ECHO comes back as $EE; a
+// keyboard that does not know it - some USB keyboards in PS/2 mode - answers
+// $FE, resend, which used to count as no keyboard. Only silence means none.
+// Three tries, as a command can get lost while the keyboard is busy, and 50 ms
+// each, as not every keyboard answers within the 20 ms PS/2 allows.
 bool testConnection() {
-  sendToKeyboard(KEYBOARD_ECHO_COMMAND);
-  uint32_t start = millis();
-  uint32_t current;
-  do {
-    uint8_t c = get_scan_code();
-    if (c == KEYBOARD_ECHO_COMMAND) {
-      return true;
-    } else if (c != 0) {
-      return false;
+  for (uint8_t attempt = 0; attempt < 3; attempt++) {
+    while (get_scan_code() != 0) {
+      // what it said before is not the answer
     }
-    current = millis();
-  } while (current - start < 20);
+    sendToKeyboard(KEYBOARD_ECHO_COMMAND);
+    uint32_t start = millis();
+    do {
+      if (get_scan_code() != 0) {
+        return true;
+      }
+    } while (millis() - start < 50);
+  }
   return false;
 }
 

@@ -3,3 +3,5 @@
 __pycache__/
 *.hex
 SDBackup
+Arduino/keyboard_168P/build/diy_atmega8_series.avr.atmega168_diy/keyboard_168P.ino.eep
+Arduino/keyboard_168P/build/diy_atmega8_series.avr.atmega168_diy/keyboard_168P.ino.elf
