@@ -596,9 +596,10 @@ with the switch on the Mac side:
 ./tools/drivesim.py -v                 # log every byte on the wire
 ```
 
-As with `LOAD "@"`, the 6551 sends nothing until the tool has the port open, so the command
-waits in the transmit buffer until then - BASIC keeps re-arming the transmitter for the ten
-seconds it waits for an answer, so the tool may also be started just after the command.
+As with `LOAD "@"`, the 6551 sends nothing until the tool has the port open, and on the Mac
+the first byte after that is lost. So once the port has settled the tool sends ENQ, and BASIC,
+if it is waiting for an answer, sends the command again - the tool may be started before the
+command or within the ten seconds BASIC waits.
 
 It treats the folder as a 1.44 MB disk, so `LOAD "$",8` shows how much of that is left and a
 save that does not fit gets `?72,DISK FULL`. With `--stdio` it talks over standard input and

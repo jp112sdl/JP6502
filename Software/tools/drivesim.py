@@ -13,8 +13,11 @@ over standard input and output for the emulator.
     drivesim.py -v                       # log every byte on the wire
     jp6502emu -A "drivesim.py --stdio DIR" microsoft_basic.ext.bin
 
-Over the FTDI the 6551 sends nothing until this has the port open, so start it
-first - or at least within the ten seconds BASIC waits for an answer.
+Over the FTDI the 6551 sends nothing until this has the port open, and the Mac
+loses the first bytes after that. So once the port has settled this sends ENQ,
+which makes BASIC send the command again if it is waiting for an answer: the
+tool may be started before the command or within the ten seconds BASIC waits.
+At the prompt BASIC ignores an ENQ, as it does every control character.
 
 Commands from the machine, one line each, ending in CR, the name in the raw
 FAT form the card uses - eight characters, three, space padded, no dot:
@@ -38,6 +41,7 @@ import sys
 import time
 
 EOT = 0x04
+ENQ = 0x05
 ACK = 0x06
 CAN = 0x18
 CR = 0x0D
@@ -49,6 +53,7 @@ DISK_BLOCKS = 2847              # data area of a 1.44 MB FAT12 disk, 512 bytes e
 FIRST_ACK_TIMEOUT = 30.0        # the machine sends one at once; this is generous
 LINE_ACK_TIMEOUT = 10.0         # inserting a line in front of a long program
 SAVE_IDLE_TIMEOUT = 60.0        # LIST is slow, but not that slow
+SETTLE = 0.2                    # after opening the port, before the ENQ
 
 BASIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "basic")
 
@@ -96,7 +101,6 @@ class SerialLink:
 
     def open(self):
         port = self.serial.Serial(self.name, self.baud, timeout=0.1)
-        port.reset_input_buffer()
         # The 6551 sends nothing while its /CTS is high, and /CTS is this end's
         # RTS. pyserial raises RTS when it opens the port - this only makes sure.
         try:
@@ -104,6 +108,13 @@ class SerialLink:
             port.dtr = True
         except (self.serial.SerialException, OSError):
             pass                # a pseudo terminal has no modem lines
+        # A command BASIC wrote before this was started leaves the moment RTS
+        # goes up, while the port is still being set up, and its first byte
+        # never arrives - LOAD "$",8 came in as a bare CR. What did come is
+        # thrown away, and BASIC is asked for the command again.
+        time.sleep(SETTLE)
+        port.reset_input_buffer()
+        port.write(bytes([trace(">", ENQ)]))
         return port
 
     def report(self):

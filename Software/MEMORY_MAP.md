@@ -227,10 +227,10 @@ ROM frei gesamt 5141 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DE2F` | 15917 | `CODE` (darin 392 Bytes `db6502_serial.s`, `sd_finish` und 345 Bytes `db6502_disk.s`, siehe 5.6 und 5.7) |
-| `$DE30` | `$E4B5` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E4B6` | `$E686` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E687` | `$E6FF` | 121 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DE45` | 15939 | `CODE` (darin 392 Bytes `db6502_serial.s`, `sd_finish` und 367 Bytes `db6502_disk.s`, siehe 5.6 und 5.7) |
+| `$DE46` | `$E4CB` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E4CC` | `$E69C` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E69D` | `$E6FF` | 99 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
 | `$EC00` | `$F79C` | 2973 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
@@ -241,7 +241,7 @@ ROM frei gesamt 5141 Bytes von 24576.
 | `$FF0C` | `$FFF9` | 238 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 576 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
+ROM frei gesamt 554 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
 fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach
 hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten. Was dort
 dazukommt, muss also entweder klein sein oder in `CODE` gehören —
@@ -2214,7 +2214,7 @@ Dateinamens darin, damit der Zeilenzähler unverändert weiterläuft.
 
 ### 5.7 `LOAD "NAME",8` — das Diskettenlaufwerk
 
-`common/source/db6502_disk.s`, 345 Bytes in `CODE`, drei Bytes in `BASBUF`.
+`common/source/db6502_disk.s`, 367 Bytes in `CODE`, drei Bytes in `BASBUF`.
 Das Laufwerk ist ein PC-Diskettenlaufwerk mit einem Raspberry Pi Pico als
 Controller, über einen Umschalter am ACIA statt des FTDI; Schaltung und
 Protokoll stehen in `Schematics/FLOPPY_PICO.md`. Auf dem Mac spielt
@@ -2249,10 +2249,18 @@ Fällen `?DEVICE NOT PRESENT`. Bricht Ctrl+C das Listing ab, geht statt `EOT` ei
 
 Auf eine Statuszeile wird etwa zehn Sekunden gewartet (`DISK_WAIT`, nach Takt
 skaliert): Motoranlauf, eine neu eingelegte Diskette, das Schreiben nach SAVE.
-Danach `?DEVICE NOT PRESENT`, Ctrl+C bricht still ab. Während des Wartens ruft
-`disk_getc` alle 256 Runden `ser_arm` (3 Bytes): Am FTDI liegt `/CTS` hoch, bis
-`drivesim.py` den Port öffnet, und ein Befehl, der vorher in den Sendepuffer
-kam, ginge sonst nie hinaus (5.6). So ist es gleich, welche Seite zuerst da ist.
+Danach `?DEVICE NOT PRESENT`, Ctrl+C bricht still ab.
+
+Ein Laufwerk, das gerade erst bereit ist, schickt `ENQ` ($05). Kommt es, während
+BASIC auf die erste Statuszeile wartet, verwirft `disk_status` den Sendepuffer
+und schickt den Befehl noch einmal (`disk_command`) — zusammen 22 Bytes. Nötig ist
+das für `drivesim.py` am FTDI: Am Mac geht das erste Byte nach dem Öffnen des
+Ports verloren — `LOAD "$",8` vor dem Start getippt kam als bloßes CR an.
+`drivesim.py` wartet deshalb nach dem Öffnen kurz, wirft weg, was kam, und
+schickt `ENQ`. Bei der zweiten Antwort eines SAVE wird `ENQ` übergangen
+(`disk_saving` ist dann noch gesetzt, `disk_load` nullt es vorher): Das Listing
+ist dann verloren, und das Warten endet in `?DEVICE NOT PRESENT`. Am Prompt
+überliest BASIC ein `ENQ` wie jedes Steuerzeichen.
 
 ## 6. Kollisionen — Status
 

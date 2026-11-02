@@ -332,8 +332,8 @@ ser_endsave:
         ; leaves the light on, the way a 1541 does.
         lda disk_saving
         beq @light
+        jsr disk_status         ; with disk_saving still set - no ENQ here
         stz disk_saving
-        jsr disk_status
         bcc @light
         rts
 

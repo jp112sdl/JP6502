@@ -17,6 +17,12 @@
 ; LCD. A SAVE is answered twice - once before the listing, once the file is
 ; on the disk.
 ;
+; A drive that has only just come up sends ENQ, and while BASIC waits for the
+; first answer that makes it send the command again: the one it sent before
+; reached nobody. tools/drivesim.py does this each time it opens the port,
+; since over the FTDI the first bytes after that are lost on the Mac - so it
+; may be started after the command as well as before.
+;
 ; Everything after the answer is LOAD "@" or SAVE "@" as they stand, entered
 ; behind their own status panels so that the LCD shows the file name instead
 ; of SERIAL. The drive takes the part tools/basicsend.py and basicrecv.py
@@ -27,12 +33,14 @@
 
 disk_op:        .res 1          ; 'L', 'S' or '$' - the command for the drive
 disk_saving:    .res 1          ; ser_endsave owes the drive's second answer -
-                                ; ser_save clears it, BASBUF is not cleared at start
+                                ; ser_save and disk_load clear it, BASBUF is
+                                ; not cleared at start
 disk_timer:     .res 1          ; top byte of the wait, ser_timer has the rest
 
         .segment "CODE"
 
 DISK_DEVICE     = 8
+DISK_ENQ        = $05           ; from the drive: say the command again
 
 ; The status line is put together in the card's sector buffer: the card is not
 ; in use while the drive is, and the line has to outlive the statement - an
@@ -103,32 +111,11 @@ disk_save:
         ; is straight to the interpreter, as if this were LOAD or SAVE itself
         pla
         pla
+        stz disk_saving         ; the first answer - the one an ENQ repeats
         jsr sd_ledon
         jsr ser_flush           ; nothing left over may be taken for the answer
-
-        lda disk_op
-        jsr ser_send
+        jsr disk_command
         bcs @done               ; Ctrl+C
-        lda disk_op
-        cmp #'$'
-        beq @endofcommand
-        lda #' '
-        jsr ser_send
-        bcs @done
-        ldx #$00
-@name:
-        lda sd_fatname,x
-        phx                     ; ser_send may use X
-        jsr ser_send
-        plx
-        bcs @done
-        inx
-        cpx #11
-        bcc @name
-@endofcommand:
-        lda #$0D
-        jsr ser_send
-        bcs @done
 
         jsr disk_status
         bcs @done               ; and said so
@@ -162,9 +149,40 @@ disk_save:
         rts
 
 ; ---------------------------------------------------------------------------
+; The command for disk_op as one line: "$", or "L " or "S " and the name.
+; Carry set for Ctrl+C.
+; ---------------------------------------------------------------------------
+disk_command:
+        lda disk_op
+        jsr ser_send
+        bcs @done
+        lda disk_op
+        cmp #'$'
+        beq @end
+        lda #' '
+        jsr ser_send
+        bcs @done
+        ldx #$00
+@name:
+        lda sd_fatname,x
+        phx                     ; ser_send may use X
+        jsr ser_send
+        plx
+        bcs @done
+        inx
+        cpx #11
+        bcc @name
+@end:
+        lda #$0D
+        jmp ser_send
+@done:
+        rts
+
+; ---------------------------------------------------------------------------
 ; The drive's answer, one line. Carry clear for "00". Anything else is shown
 ; with a question mark in front, silence as "?DEVICE NOT PRESENT" - carry set
-; for both. Ctrl+C during the wait gives carry set and no message.
+; for both. Ctrl+C during the wait gives carry set and no message. An ENQ
+; before the first answer sends the command again and starts over.
 ; ---------------------------------------------------------------------------
 disk_status:
         lda #'?'
@@ -173,6 +191,8 @@ disk_status:
 @char:
         jsr disk_getc
         bcs @silent
+        cmp #DISK_ENQ
+        beq @again
         cmp #$0D
         beq @line
         cpx #DISK_MSG_LEN+1
@@ -211,16 +231,22 @@ disk_status:
         sec
         rts
 
+@again:
+        ; The drive has only just come up. What is left of the command in the
+        ; transmit ring - written while /CTS was high, it may never have gone -
+        ; is dropped, or the drive would take it for a second command. The
+        ; second answer of a SAVE has nothing to ask for again, the drive has
+        ; lost the listing: the wait runs out to DEVICE NOT PRESENT.
+        lda disk_saving
+        bne @char
+        jsr ser_flush
+        jsr disk_command
+        bcc disk_status
+        rts                     ; Ctrl+C
+
 ; ---------------------------------------------------------------------------
 ; One byte from the drive. Carry set when none came within DISK_WAIT, A = 0,
 ; or Ctrl+C was pressed, A = 3. X and Y are kept.
-;
-; Every 256 rounds the transmitter is armed again. The command may still be
-; sitting in the transmit ring: written while /CTS was high - over the FTDI,
-; before tools/drivesim.py had the port open - it never reached a transmitter
-; that could act on it, and nothing else arms it again (see ser_arm). This way
-; it leaves as soon as /CTS drops, and it does not matter which end comes
-; first. The Pico holds /CTS low for good, so there it changes nothing.
 ; ---------------------------------------------------------------------------
 disk_getc:
         phx
@@ -239,7 +265,6 @@ disk_getc:
         bcs @break
         lda ser_timer
         bne @low
-        jsr ser_arm
         lda ser_timer+1
         bne @middle
         lda disk_timer

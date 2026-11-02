@@ -12,8 +12,9 @@ LOAD "$",8              das Inhaltsverzeichnis als Programm laden, dann LIST
 
 Ohne `,8` bleibt alles wie bisher bei der SD-Karte.
 
-Stand: Schritt 1 ist fertig und im Emulator geprüft - BASIC (`db6502_disk.s`),
-`drivesim.py`, Emulator-Option `-A`. Umschalter, Pico und Laufwerk sind geplant.
+Stand: Schritt 1 ist fertig und im Emulator wie am Board (über den FTDI)
+geprüft - BASIC (`db6502_disk.s`), `drivesim.py`, Emulator-Option `-A`.
+Umschalter, Pico und Laufwerk sind geplant.
 
 ## Warum der Pico
 
@@ -152,6 +153,12 @@ Kopfbewegung, eine neu eingelegte Diskette einlesen, nach SAVE das Schreiben.
 Kommt nichts, meldet es `?DEVICE NOT PRESENT`, zum Beispiel wenn der Schalter
 auf „Mac“ steht. Ctrl+C bricht das Warten ab.
 
+**ENQ ($05), Pico → 6502**: schickt der Pico, sobald er bereit ist, etwa nach
+dem Einschalten. Wartet BASIC gerade auf die erste Statuszeile, schickt es den
+Befehl noch einmal - der erste kam bei niemandem an. Nach dem Listing eines
+SAVE gilt ENQ nicht: BASIC wartet weiter und meldet `?DEVICE NOT PRESENT`. Am
+Prompt überliest BASIC ein ENQ wie jedes Steuerzeichen.
+
 **Dateien** sind Text mit CR LF, wie die `.BAS`-Dateien der SD-Karte - auf
 dem Mac oder PC lesbar. Namensregeln wie bei der SD-Karte: die Endung gehört
 dazu (`"HELLO.BAS"`).
@@ -187,9 +194,10 @@ dazu (`"HELLO.BAS"`).
 - `Software/tools/drivesim.py` spielt das Laufwerk mit einem Ordner auf dem
   Mac, über den FTDI (Schalter auf „Mac“) - die BASIC-Seite lässt sich so am
   echten Board prüfen, bevor es den Pico gibt. Der ACIA sendet erst, wenn
-  drivesim den Port offen hat (`/CTS` = RTS des FTDI); BASIC schiebt den Befehl
-  während der zehn Sekunden Wartezeit immer wieder an, die Reihenfolge ist also
-  egal. `-v` zeigt jedes Byte auf der Leitung.
+  drivesim den Port offen hat (`/CTS` = RTS des FTDI), und das erste Byte danach
+  geht am Mac verloren. drivesim schickt deshalb nach dem Öffnen ein ENQ, und
+  BASIC wiederholt den Befehl - die Reihenfolge ist also egal. `-v` zeigt jedes
+  Byte auf der Leitung.
 - Der Emulator (`GeckOS-V2/arch/jp6502/emu/jp6502emu`) hängt mit `-A` den ACIA
   an ein Programm, etwa `drivesim.py --stdio`.
 
