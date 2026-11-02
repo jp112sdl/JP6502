@@ -85,6 +85,8 @@ ser_load:
         lda #$00                        ; the LOAD panel, not the SAVE one
         jsr ser_panel
 
+        ; LOAD "NAME",8 comes in here, with a panel of its own - db6502_disk.s
+ser_loading:
         stz ser_idle
         lda #SD_MODE_SERIAL
         sta sd_loadmode
@@ -271,7 +273,12 @@ ser_save:
         jsr ser_flush           ; a leftover ACK would be the first character
         lda #$01                ; the SAVE panel
         jsr ser_panel
+        ; Nothing waits for an answer from the far end - basicrecv.py gives
+        ; none. BASBUF is never cleared, so this has to be said, not assumed.
+        stz disk_saving
 
+        ; SAVE "NAME",8 comes in here, with a panel of its own - db6502_disk.s
+ser_saving:
         stz ser_dropped
         lda #SD_SAVE_SERIAL
         sta sd_savemode
@@ -320,11 +327,26 @@ ser_endsave:
         bne @gaveup
         lda #SER_EOT
         jsr ser_send            ; carry is nobody's business up here
+
+        ; The floppy writes the file only now, and says how that went. An error
+        ; leaves the light on, the way a 1541 does.
+        lda disk_saving
+        beq @light
+        stz disk_saving
+        jsr disk_status
+        bcc @light
+        rts
+
 @gaveup:
         ; A truncated listing is not a program, so nothing is sent for it - the
         ; host is better off timing out than being handed the byte that means
-        ; "all of it".
-        ;
+        ; "all of it". The floppy is not: it holds the listing so far and waits
+        ; for the rest, so it is told to throw it away.
+        lda disk_saving
+        beq @light
+        stz disk_saving
+        jsr ser_cancel
+@light:
         ; The drive light is this routine's to put out either way. sd_finish
         ; opens with sd_promptled, which leaves the light alone while a save is
         ; still running - and at that moment this one still is.

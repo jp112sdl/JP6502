@@ -135,9 +135,9 @@ page-aligned) = `fat32_readbuffer` aus `libfat32.s`. Nur belegt, wenn `sd.o` gel
 
 | Von | Bis | Bytes | Inhalt |
 |---|---|---|---|
-| `$0E00` | `$0E66` | 103 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …) und `db6502_serial.s` (`ser_idle`, `ser_timer`, `ser_dropped`), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
-| `$0E67` | `$0E9C` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
-| `$0E9D` | `$0EFB` | 95 | ungenutzt |
+| `$0E00` | `$0E69` | 106 | Segment `BASBUF`, Teil aus `msbasic.o`: Zustandsvariablen von `db6502_sdbasic.s` (`sd_loadmode`, `sd_savemode`, `sd_fatname`, …), `db6502_serial.s` (`ser_idle`, `ser_timer`, `ser_dropped`) und `db6502_disk.s` (`disk_op`, `disk_saving`, `disk_timer`), `start_magic`, Zustand der Grafikbefehle und des Grafiktexts |
+| `$0E6A` | `$0E9F` | 54 | Segment `BASBUF`, Teil aus `sd.o`: Variablen des allozierenden Schreibpfads in `libfat32.s` (`fat32_partstart`, `fat32_fatsize`, `fat32_maxcluster`, `fat32_scancluster`, …) |
+| `$0EA0` | `$0EFB` | 92 | ungenutzt |
 | `$0EFC` | `$0EFF` | 4 | Scratch von `PUT_NEW_LINE`: Link-Pointer und Zeilennummer, geschrieben als `INPUTBUFFER-4` … `INPUTBUFFER-1` (`program.s:253`, `program.s:267`, `input.s:143`) |
 | `$0F00` | `$0FFF` | 256 | `INPUTBUFFER` |
 
@@ -227,28 +227,37 @@ ROM frei gesamt 5141 Bytes von 24576.
 | Von | Bis | Bytes | Segment |
 |---|---|---|---|
 | `$A000` | `$A002` | 3 | `STARTUP` (`jmp init`) |
-| `$A003` | `$DCBA` | 15544 | `CODE` (darin 364 Bytes `db6502_serial.s` und `sd_finish`, siehe 5.6) |
-| `$DCBB` | `$E340` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
-| `$E341` | `$E511` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
-| `$E512` | `$E6FF` | 494 | frei — hier lag `RODATA_PA`, siehe 5.4 |
+| `$A003` | `$DE2F` | 15917 | `CODE` (darin 392 Bytes `db6502_serial.s`, `sd_finish` und 345 Bytes `db6502_disk.s`, siehe 5.6 und 5.7) |
+| `$DE30` | `$E4B5` | 1670 | `RODATA` (u. a. VDP-Zeichensatz + Registertabelle) |
+| `$E4B6` | `$E686` | 465 | `BAS_VEC` / `BAS_KEY` / `BAS_ERR` — `BAS_KEY` bei 277 Bytes, die 256er-Grenze ist aufgehoben, siehe 5.3 |
+| `$E687` | `$E6FF` | 121 | frei — hier lag `RODATA_PA`, siehe 5.4 |
 | `$E700` | `$EBE7` | 1256 | `EXTCODE` — Panel, Laufwerks-LED, Fehlertexte, FSInfo-Buchführung, `BLOCKS FREE`, Kaltstart-Leuchte, `SOUND` |
 | `$EBE8` | `$EBFF` | 24 | frei |
-| `$EC00` | `$F796` | 2967 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
-| `$F797` | `$F7FF` | 105 | frei |
+| `$EC00` | `$F79C` | 2973 | `SDCODE` — Rumpf von `db6502_sdbasic.s`, `CLS`, getakteter VDP-Kaltstart, allozierender Schreibpfad aus `libfat32.s` |
+| `$F79D` | `$F7FF` | 99 | frei |
 | `$F800` | `$F8A1` | 162 | `SYSCALLS` |
 | `$F8A2` | `$F8FF` | 94 | frei (Reserve für ein wachsendes `SYSCALLS`) |
-| `$F900` | `$FF23` | 1572 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
-| `$FF24` | `$FFF9` | 214 | frei |
+| `$F900` | `$FF0B` | 1548 | `EXTCODE2` — `COLOR`, `SCREEN`, `PLOT`, `LINE`, `CIRCLE`, `SPRITE`, `VPOKE`, `KEY`, Text im Grafikmodus samt Bildlauf, Kalt-/Warmstart-Auswahl, Seitenlogik der Schlüsselworttabelle, siehe 5.1.1 und 5.3 |
+| `$FF0C` | `$FFF9` | 238 | frei |
 | `$FFFA` | `$FFFF` | 6 | `VECTORS` |
 
-ROM frei gesamt 931 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
+ROM frei gesamt 576 Bytes von 24576. `SDCODE` ist der engste Block: es liegt
 fest zwischen `EXTCODE` und `SYSCALLS`, und `SYSCALLS` kann nicht weiter nach
 hinten, weil geladene Programme seine Tabelle bei `$F800` erwarten. Was dort
 dazukommt, muss also entweder klein sein oder in `CODE` gehören —
 `db6502_serial.s` steht aus genau diesem Grund in `CODE` und nicht neben dem
 SD-Code, den es sich ansonsten teilt. Als `SAVE "@"` dazukam, waren noch zwölf
 Bytes übrig; `sd_finish` ist deshalb ebenfalls nach `CODE` gezogen, was den
-Block wieder auf 105 Bytes Luft gebracht hat.
+Block wieder auf 105 Bytes Luft gebracht hat. Die zwei Sprünge, mit denen `LOAD`
+und `SAVE` auf `,8` schauen (5.7), kosten davon sechs: 99 Bytes.
+
+`EXTCODE2` ist um 24 Bytes geschrumpft, seit `keyptr`, `keyptrm1`, `keylasty` und
+`gtx_src` vor ihrer ersten Verwendung angelegt werden. Vorher lagen ihre
+`.zeropage`-Definitionen hinter dem Code, ca65 kannte sie beim ersten Zugriff
+noch nicht und nahm absolute Adressierung - je Befehl ein Byte und einen Takt
+mehr, dazu vier Warnungen „Didn't use zeropage addressing“ bei jedem Build. Die
+Reihenfolge der beiden Blöcke ist geblieben, die Adressen in der Zero Page also
+auch.
 
 #### 5.1.1 `EXTCODE2` — der dritte Codeblock
 
@@ -2040,7 +2049,7 @@ byteidentisch, `CODE` behält Adresse und Länge. Eine Variable.
 
 ### 5.6 `LOAD "@"` und `SAVE "@"` — ein Programm über den ACIA
 
-`common/source/db6502_serial.s`, 364 Bytes in `CODE`, vier Bytes in `BASBUF`.
+`common/source/db6502_serial.s`, 392 Bytes in `CODE`, vier Bytes in `BASBUF`.
 Gegenstellen sind `tools/basicsend.py` und `tools/basicrecv.py` auf dem Mac.
 
 Der Weg ist derselbe, den die SD-Karte schon geht: `INLIN` wird umgeleitet, und
@@ -2202,6 +2211,48 @@ Blöcke liegen 4 KB auseinander.
 
 Die Statuszeile ist die des Kartenladens, nur mit `SERIAL` statt eines
 Dateinamens darin, damit der Zeilenzähler unverändert weiterläuft.
+
+### 5.7 `LOAD "NAME",8` — das Diskettenlaufwerk
+
+`common/source/db6502_disk.s`, 345 Bytes in `CODE`, drei Bytes in `BASBUF`.
+Das Laufwerk ist ein PC-Diskettenlaufwerk mit einem Raspberry Pi Pico als
+Controller, über einen Umschalter am ACIA statt des FTDI; Schaltung und
+Protokoll stehen in `Schematics/FLOPPY_PICO.md`. Auf dem Mac spielt
+`tools/drivesim.py` das Laufwerk mit einem Ordner.
+
+Es ist das Protokoll aus 5.6 mit einem Befehl davor: `L`, `S` oder `$`, dazu der
+Name in der rohen FAT-Form, die `sd_getname` ohnehin baut. Das Laufwerk antwortet
+mit einer Statuszeile wie eine 1541 (`00,OK`, `62,FILE NOT FOUND`), danach laufen
+`LOAD "@"` und `SAVE "@"` unverändert — eingestiegen wird hinter ihrer eigenen
+Statuszeile (`ser_loading`, `ser_saving`), damit das LCD den Dateinamen zeigt
+statt `SERIAL`. `LOAD "$",8` kostet auf dieser Seite nichts: Das Laufwerk baut
+das Verzeichnis selbst als Programmzeilen im Format der Karte.
+
+`LOAD` und `SAVE` liegen selbst in `SDCODE`; dort steht nur je ein `jsr` auf
+`disk_load` und `disk_save`. Ohne `,8` kommen Carry und A von `sd_getname`
+unverändert zurück, und die Karte macht weiter wie bisher. Mit `,8` endet die
+Anweisung in `db6502_disk.s` — die Rücksprungadresse nach `LOAD`/`SAVE` wird
+verworfen, so dass ein Fehler direkt zum Interpreter zurückkehrt, wie aus
+`LOAD` selbst.
+
+Die Statuszeile wird in `sd_sectorbuffer` gesammelt: Die Karte ist währenddessen
+unbenutzt, und `INPUTBUFFER` scheidet aus — nach einem Fehler liest der
+Interpreter den Rest der Direktzeile noch daraus.
+
+Ein SAVE wird zweimal beantwortet. Das Laufwerk sammelt das Listing im RAM und
+schreibt erst nach dem `EOT`; `ser_endsave` wartet dann auf die zweite
+Statuszeile, wenn `disk_saving` gesetzt ist. Weil `BASBUF` beim Start nicht
+genullt wird (3.5), setzt `ser_save` die Variable für `SAVE "@"` ausdrücklich
+auf null — vorher meldete ein `SAVE "@"` nach dem Einschalten in 255 von 256
+Fällen `?DEVICE NOT PRESENT`. Bricht Ctrl+C das Listing ab, geht statt `EOT` ein
+`CAN` an das Laufwerk, das dann alles verwirft.
+
+Auf eine Statuszeile wird etwa zehn Sekunden gewartet (`DISK_WAIT`, nach Takt
+skaliert): Motoranlauf, eine neu eingelegte Diskette, das Schreiben nach SAVE.
+Danach `?DEVICE NOT PRESENT`, Ctrl+C bricht still ab. Während des Wartens ruft
+`disk_getc` alle 256 Runden `ser_arm` (3 Bytes): Am FTDI liegt `/CTS` hoch, bis
+`drivesim.py` den Port öffnet, und ein Befehl, der vorher in den Sendepuffer
+kam, ginge sonst nie hinaus (5.6). So ist es gleich, welche Seite zuerst da ist.
 
 ## 6. Kollisionen — Status
 

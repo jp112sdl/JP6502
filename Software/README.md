@@ -388,6 +388,7 @@ token table or to the load address.
 | `SAVE "@"` | list the program out over the serial port |
 | `SAVE` | write `BASIC.BAS` |
 | `SAVE "NAME.BAS"` | write `NAME.BAS` |
+| `LOAD "NAME.BAS",8` / `SAVE "NAME.BAS",8` / `LOAD "$",8` | the same with the floppy drive instead of the card, see below |
 
 Both accept any string expression, so `LOAD F$` works too. Names are folded to upper case and
 cut down to 8.3; long file names on the card are ignored, only the short name matches.
@@ -564,6 +565,45 @@ rather than the software: the 6551 holds its transmitter off while `/CTS` is hig
 comes from the far end's RTS. So `LOAD "@"` on its own sits quietly at `000` until something
 opens the port. Ctrl+C gets you out of it at any point, and starting a fresh `LOAD "@"` throws
 away anything a previous attempt left on the wire - no power cycle needed in between.
+
+### The floppy drive: `LOAD "NAME.BAS",8`
+
+With `,8` behind the name, `LOAD`, `SAVE` and `LOAD "$"` go to a floppy drive instead of the
+card - device 8, the way a C64 has its 1541:
+
+```basic
+LOAD "$",8
+LIST
+LOAD "HELLO.BAS",8
+SAVE "HELLO.BAS",8
+```
+
+The drive is a PC floppy with a Raspberry Pi Pico as its controller, on the 6551 through a
+switch that otherwise connects the FTDI. The wiring, the protocol and the state of the
+build are in [`../Schematics/FLOPPY_PICO.md`](../Schematics/FLOPPY_PICO.md). It speaks the
+protocol of `LOAD "@"` and `SAVE "@"` with a command in front, and answers like a 1541:
+anything that goes wrong shows up as `?62,FILE NOT FOUND`, `?72,DISK FULL`,
+`?26,WRITE PROTECT ON` and so on, on the screen and the LCD. A drive that does not answer
+within about ten seconds - the switch on the Mac side, say - is `?DEVICE NOT PRESENT`.
+Files are text, as on the card, and the same name rules apply.
+
+Until the drive is built, `tools/drivesim.py` plays it with a folder on the Mac, over the FTDI
+with the switch on the Mac side:
+
+```
+./tools/drivesim.py                    # serves basic/
+./tools/drivesim.py -p /dev/tty.usbserial-XXXX ~/floppy
+./tools/drivesim.py -v                 # log every byte on the wire
+```
+
+As with `LOAD "@"`, the 6551 sends nothing until the tool has the port open, so the command
+waits in the transmit buffer until then - BASIC keeps re-arming the transmitter for the ten
+seconds it waits for an answer, so the tool may also be started just after the command.
+
+It treats the folder as a 1.44 MB disk, so `LOAD "$",8` shows how much of that is left and a
+save that does not fit gets `?72,DISK FULL`. With `--stdio` it talks over standard input and
+output instead, which is how the GeckOS emulator runs it:
+`jp6502emu -A "tools/drivesim.py --stdio basic" build/rom/microsoft_basic.ext.bin`.
 
 ### The `SOUND` statement
 

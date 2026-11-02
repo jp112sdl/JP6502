@@ -146,6 +146,9 @@ StartupMessage:
 ; LOAD "@" - the same lines, arriving over the serial port instead
 .include "db6502_serial.s"
 
+; LOAD "NAME",8 - the same lines again, from the floppy drive behind the ACIA
+.include "db6502_disk.s"
+
 .segment "EXTCODE"
 
 ; ----------------------------------------------------------------------------
@@ -879,6 +882,15 @@ start_magic_value:
 ; Cost is about 25 cycles per byte of table read. That is a few tens of
 ; milliseconds on a whole line of input, once, when ENTER is pressed.
 ; ----------------------------------------------------------------------------
+
+; Defined ahead of the code: ca65 has to know a symbol is in zero page when it
+; first meets it, or it settles for absolute addressing - a byte and a cycle
+; more for every instruction, and a warning.
+.zeropage
+keyptr:         .res 2
+keyptrm1:       .res 2
+keylasty:       .res 1
+
 .segment "EXTCODE2"
 
 ; Carries the pointer onto the page Y is now in. Flags are destroyed, A is not.
@@ -944,10 +956,6 @@ key_sbc:
         sbc     (keyptr),y
         rts
 
-.zeropage
-keyptr:         .res 2
-keyptrm1:       .res 2
-keylasty:       .res 1
 
 ; ----------------------------------------------------------------------------
 ; "CIRCLE" STATEMENT
@@ -1529,6 +1537,13 @@ gtx_scroll_table:
         bne     @page
         rts
 
+; Ahead of gtx_render for the same reason as keyptr: defined after its first
+; use, it would cost absolute addressing.
+.zeropage
+gtx_src:        .res 2
+
+.segment "EXTCODE2"
+
 ; ----------------------------------------------------------------------------
 ; Draws A into the cell at gtx_col/gtx_row without moving the cursor.
 ;
@@ -1590,9 +1605,6 @@ gtx_render:
         bne     @colour
         ply
         rts
-
-.zeropage
-gtx_src:        .res 2
 
 .segment "BASBUF"
 gtx_active:     .res 1                  ; non-zero while SCREEN 1 is up

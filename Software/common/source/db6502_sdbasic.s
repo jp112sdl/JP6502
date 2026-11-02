@@ -20,6 +20,9 @@
 ;   SAVE              write BASIC.BAS
 ;   SAVE "NAME.BAS"   write NAME.BAS
 ;
+; With ",8" behind the name the floppy drive gets the job instead of the card -
+; db6502_disk.s.
+;
 ; SAVE writes into the root directory. It creates the file if the card does not
 ; have it yet, and it rebuilds the cluster chain from scratch every time, so the
 ; result is exactly as long as the program - no matter what was there before.
@@ -103,6 +106,7 @@ sd_decbuf32:    .res 10         ; sd_dec32 renders here
 ; ---------------------------------------------------------------------------
 LOAD:
         jsr sd_getname
+        jsr disk_load           ; ",8" - the floppy; back here only without it
         bcs @notafile
 
         ; The name is parsed first, so a bad one fails before the card is asked
@@ -162,6 +166,7 @@ LOAD:
 ; ---------------------------------------------------------------------------
 SAVE:
         jsr sd_getname
+        jsr disk_save           ; ",8" - the floppy; back here only without it
         bcs @notaname           ; "$" or "@" - only one of them means anything
 
         ; A name that is about to bring a new entry into the directory has to
