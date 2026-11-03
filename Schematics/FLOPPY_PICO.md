@@ -13,8 +13,11 @@ LOAD "$",8              das Inhaltsverzeichnis als Programm laden, dann LIST
 Ohne `,8` bleibt alles wie bisher bei der SD-Karte.
 
 Stand: Schritt 1 ist fertig und im Emulator wie am Board (über den FTDI)
-geprüft - BASIC (`db6502_disk.s`), `drivesim.py`, Emulator-Option `-A`.
-Umschalter, Pico und Laufwerk sind geplant.
+geprüft - BASIC (`db6502_disk.s`), `drivesim.py`, Emulator-Option `-A`. Die
+Pico-Firmware (`Arduino/floppy_pico/`) ist geschrieben und kompiliert; auf dem
+Mac gebaut, mit Attrappen für Laufwerk und Diskette, läuft sie im Emulator gegen
+das echte BASIC (siehe „Testen ohne Laufwerk“). An Pico und Laufwerk ist sie
+noch ungeprüft. Umschalter und Verdrahtung sind geplant.
 
 ## Warum der Pico
 
@@ -47,6 +50,9 @@ Umschalter (2 × UM) am R6551:
 - /CTS auf GND: Der ACIA sendet nur bei /CTS low; den 6502 bremsen muss der
   Pico nie.
 - 19200 Baud, 8N1 - wie `_acia_init` und `basicsend.py`.
+- In Stellung „Mac“ hört der Pico weiter mit, TxD bleibt ja an GP1: Ein
+  `LOAD`/`SAVE ...,8` an `drivesim.py` führt er stumm mit aus, ein SAVE landet
+  dann auch auf der Diskette.
 
 Pinbelegung des R6551 aus `Datasheets/R6551_Rockwell.pdf`.
 
@@ -76,6 +82,12 @@ Beispielen von Adafruit_Floppy. Gerades Kabel: Das Laufwerk ist ab Werk als
   nur nach GND ziehen, versorgt mit 3,3 V, an den Ausgängen 5-V-fest. Ohne sie
   hinge der Pico über die Pull-ups im Laufwerk an 5 V. Nicht invertierend, die
   Software merkt nichts davon.
+- **Jeder der 8 Eingänge der 74LVC07A bekommt 10 kΩ nach 3,3 V**, etwa ein
+  Widerstandsnetz 8 × 10 kΩ. Bis die Firmware läuft - beim Einschalten, beim
+  Reset und die ganze Zeit im BOOTSEL-Modus beim Flashen - sind alle GPIOs des
+  Pico Eingänge mit Pull-down. Ohne die Pull-ups wären SELECT, MOTOR und WRGATE
+  dann aktiv: Das Laufwerk liefe angewählt, und der Schreibkopf löschte die Spur
+  unter sich. 10 kΩ überstimmen den Pull-down des RP2040 (etwa 50 kΩ).
 - **Vom Laufwerk** direkt an den Pico, das Laufwerk zieht nur nach GND. READ
   bekommt 4,7 kΩ nach 3,3 V (Empfehlung von Adafruit), die übrigen die
   internen Pull-ups.
@@ -107,8 +119,10 @@ $                 LOAD "$",8
 | 20 | READ ERROR | Sektor nicht lesbar |
 | 25 | WRITE ERROR | Schreiben fehlgeschlagen |
 | 26 | WRITE PROTECT ON | Schreibschutz bei SAVE |
+| 26 | 720 KB READ ONLY | SAVE auf eine 720-KB-Diskette, siehe Pico-Firmware |
 | 31 | SYNTAX ERROR | Befehl unbekannt |
 | 33 | SYNTAX ERROR | Name ungültig |
+| 52 | FILE TOO LARGE | Datei oder Listing über 64 KB |
 | 62 | FILE NOT FOUND | |
 | 72 | DISK FULL | |
 | 74 | DRIVE NOT READY | keine Diskette |
@@ -176,18 +190,41 @@ dazu (`"HELLO.BAS"`).
 
 ## Pico-Firmware
 
-`Arduino/floppy_pico/`, ein Arduino-Sketch:
+`Arduino/floppy_pico/floppy_pico.ino`, ein Arduino-Sketch. Er folgt
+`drivesim.py` Schritt für Schritt, mit einer Diskette statt des Ordners.
 
-- Arduino-Pico-Core (Earle Philhower), Bibliotheken Adafruit_Floppy und SdFat
-  (Adafruit-Fork).
-- `Adafruit_MFM_Floppy` mit automatischer Erkennung von 720 KB und 1,44 MB,
-  darauf `FatVolume`.
-- `Serial1` auf GP0/GP1, 19200 8N1; die USB-Schnittstelle des Pico dient nur
-  als Protokoll für die Fehlersuche.
-- Diskettenwechsel (DSKCHG): neu einlesen. Motor nach einigen Sekunden Ruhe
-  aus.
-- Flashen: UF2-Datei, Pico mit gedrückter BOOTSEL-Taste anstecken, Datei auf
-  das Laufwerk ziehen.
+- Arduino-Pico-Core 5.5.0 (Earle Philhower), Bibliotheken Adafruit Floppy 0.6.1
+  und SdFat - Adafruit Fork 2.3.102. Bauen:
+
+  ```
+  arduino-cli compile -b rp2040:rp2040:rpipico --output-dir Arduino/floppy_pico/build Arduino/floppy_pico
+  ```
+
+- Flashen: Pico mit gedrückter BOOTSEL-Taste anstecken,
+  `Arduino/floppy_pico/build/floppy_pico.ino.uf2` auf das Laufwerk RPI-RP2
+  ziehen - nur mit den Pull-ups oben oder bei ausgeschaltetem Laufwerk.
+- `Serial1` auf GP0/GP1, 19200 8N1. Gleich nach dem Start schickt der Pico ein
+  ENQ.
+- `Adafruit_MFM_Floppy` erkennt 720 KB und 1,44 MB am Bootsektor, darauf
+  `FatVolume`. SAVE nur auf 1,44 MB: Die Bibliothek schreibt jede Diskette, die
+  sie selbst erkannt hat, mit dem Bittakt von 1,44 MB - eine 720-KB-Diskette
+  wäre danach unlesbar. Dort antwortet SAVE mit `26,720 KB READ ONLY`.
+- Ein Programm liegt immer ganz im RAM (64 KB): LOAD liest die Datei vor dem
+  `00,OK`, SAVE schreibt erst nach dem EOT. Beim Lesen einer Spur sind die
+  Interrupts eine Umdrehung lang aus; der UART verlöre dabei Bytes, aber der
+  6502 wartet dann ohnehin.
+- Diskettenwechsel: DSKCHG (Pin 34) gilt nur bei angewähltem Laufwerk und wird
+  vor jedem Befehl gelesen. Ist es aktiv, macht der Kopf einen Schritt hin und
+  zurück. Bleibt es danach aktiv, ist keine Diskette drin
+  (`74,DRIVE NOT READY`), sonst wird die Diskette neu eingelesen.
+- Motor aus nach 3 s ohne Befehl, außer während das Listing eines SAVE kommt.
+- Das Inhaltsverzeichnis steht in der Reihenfolge der Diskette, wie bei der
+  1541. Die Kopfzeile ist das Volume-Label, ohne Label „FLOPPY“. Namen, die
+  nicht in 8.3 passen, und die Punkt-Dateien des Mac fehlen.
+- Die Pico-LED (GP25) leuchtet, solange das Laufwerk angewählt ist.
+- Die USB-Schnittstelle des Pico protokolliert jeden Befehl mit Zeiten
+  (beliebiges Terminal). Ein `v` dort schaltet jedes Byte auf der Leitung und
+  die Kopfschritte dazu.
 
 ## Testen ohne Laufwerk
 
@@ -199,13 +236,23 @@ dazu (`"HELLO.BAS"`).
   BASIC wiederholt den Befehl - die Reihenfolge ist also egal. `-v` zeigt jedes
   Byte auf der Leitung.
 - Der Emulator (`GeckOS-V2/arch/jp6502/emu/jp6502emu`) hängt mit `-A` den ACIA
-  an ein Programm, etwa `drivesim.py --stdio`.
+  an ein Programm, etwa `drivesim.py --stdio`, und läuft dann in Echtzeit -
+  sonst rechnet er 10 s Emulatorzeit in einem Bruchteil davon durch, und die
+  Antwort des Programms kommt für BASIC zu spät.
+- `Arduino/floppy_pico/host/` baut die Pico-Firmware für den Mac: Attrappen
+  ersetzen Arduino-Core, Adafruit Floppy und SdFat, die Diskette ist ein
+  Ordner. `make -C Arduino/floppy_pico/host test` lässt sie im Emulator gegen
+  das MS-BASIC aus `Software/build/rom` laufen, in etwa einer Minute. Die Fälle
+  liegen in `host/tests/`: Verzeichnis, LOAD, SAVE, Datei fehlt, Pico startet
+  zu spät, keine Diskette, Schreibschutz, 720 KB, langsames Laufwerk. Jeder ist
+  ein Emulator-Skript; Kommentare darin sagen, wie sich das Laufwerk verhält und
+  was herauskommen muss. Adafruit Floppy am echten Laufwerk prüft das nicht.
 
 ## Schritte
 
 1. BASIC-Seite, `drivesim.py`, Emulator-Test. *Erledigt.*
 2. Umschalter einbauen, `LOAD "...",8` gegen `drivesim.py` am Mac prüfen.
-3. Pico-Firmware schreiben und hier kompilieren; Pico und Laufwerk
-   verdrahten, UF2 flashen.
+3. Pico-Firmware schreiben und hier kompilieren *(erledigt)*; Pico und
+   Laufwerk verdrahten, UF2 flashen.
 4. Erst eine Diskette lesen, die am Mac oder PC beschrieben wurde, dann
    speichern.

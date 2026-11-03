@@ -1,0 +1,16 @@
+# A 720 KB disk reads, but Adafruit Floppy would write it at the bit rate of
+# 1.44 MB, so SAVE is refused.
+# env: PICO_SPT=9
+# expect: 0 "FLOPPY"
+# expect: ?26,720 KB READ ONLY
+# check: test ! -e X.BAS
+wait 8
+kbd LOAD "$",8\r
+wait 4
+kbd SAVE "X.BAS",8\r
+wait 4
+kbd LIST\r
+wait 2
+screen
+lcd
+quit

@@ -5,3 +5,6 @@ __pycache__/
 SDBackup
 Arduino/keyboard_168P/build/diy_atmega8_series.avr.atmega168_diy/keyboard_168P.ino.eep
 Arduino/keyboard_168P/build/diy_atmega8_series.avr.atmega168_diy/keyboard_168P.ino.elf
+Arduino/floppy_pico/build/
+Arduino/floppy_pico/host/picohost
+Arduino/floppy_pico/host/out/

@@ -1,0 +1,13 @@
+# A write-protected disk: SAVE is refused before the listing comes, and
+# nothing is written.
+# env: PICO_WP=1
+# expect: ?26,WRITE PROTECT ON
+# check: test ! -e X.BAS
+wait 8
+kbd 10 PRINT "HI"\r
+wait 1
+kbd SAVE "X.BAS",8\r
+wait 4
+screen
+lcd
+quit

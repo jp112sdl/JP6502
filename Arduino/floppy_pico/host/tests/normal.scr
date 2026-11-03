@@ -1,0 +1,22 @@
+# The directory, LOAD, SAVE and a name that is not on the disk.
+# expect: 0 "FLOPPY"
+# expect: BLOCKS FREE
+# expect: ?62,FILE NOT FOUND
+# SAVE writes what LIST prints: an empty line, then every line after a space,
+# all with CR LF - byte for byte what drivesim.py writes.
+# check: awk 'BEGIN { printf "\r\n" } { printf " %s\r\n", $0 }' HANOI.BAS | cmp -s - COPY.BAS
+wait 8
+kbd LOAD "$",8\r
+wait 4
+kbd LIST\r
+wait 2
+screen
+kbd LOAD "HANOI.BAS",8\r
+wait 25
+kbd SAVE "COPY.BAS",8\r
+wait 25
+kbd LOAD "NOPE.BAS",8\r
+wait 3
+screen
+lcd
+quit

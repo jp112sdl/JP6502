@@ -1,0 +1,12 @@
+# A slow drive: 2 s until the motor runs, 1.5 s to read the disk in. The
+# answer still comes within the 10 s BASIC waits.
+# env: PICO_SPINUP_MS=2000 PICO_MOUNT_MS=1500
+# expect: 0 "FLOPPY"
+wait 8
+kbd LOAD "$",8\r
+wait 8
+kbd LIST\r
+wait 2
+screen
+lcd
+quit

@@ -1,0 +1,9 @@
+# No disk in the drive: the motor turns, but no index pulse comes.
+# env: PICO_NODISK=1
+# expect: ?74,DRIVE NOT READY
+wait 8
+kbd LOAD "$",8\r
+wait 5
+screen
+lcd
+quit

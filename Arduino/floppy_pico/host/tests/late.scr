@@ -1,0 +1,13 @@
+# The Pico comes up 11 s after the board, so the "$" typed at 8 s is lost.
+# Its ENQ makes BASIC, still waiting for an answer, send the command again.
+# env: PICO_BOOT_MS=11000
+# expect: lost $24 while booting
+# expect: 0 "FLOPPY"
+wait 8
+kbd LOAD "$",8\r
+wait 10
+kbd LIST\r
+wait 2
+screen
+lcd
+quit
