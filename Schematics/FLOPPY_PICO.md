@@ -32,19 +32,40 @@ geprüft (siehe „Testen ohne Laufwerk“). Der Umschalter fehlt noch.
 
 ## Umschalter am ACIA
 
-Der ACIA ist der einzige serielle Anschluss und hängt am FTDI für den Mac.
-Mac und Laufwerk werden nie gleichzeitig gebraucht, also ein zweipoliger
-Umschalter (2 × UM) am R6551:
+Der ACIA (U5) ist der einzige serielle Anschluss und hängt am FTDI für den Mac,
+einem FT230X (U6), der fest auf dem Board sitzt. Mac und Laufwerk werden nie
+gleichzeitig gebraucht, also ein zweipoliger Umschalter (2 × UM) am ACIA:
 
 | | Stellung „Mac“ | Stellung „Disk“ |
 |---|---|---|
-| Pol A an ACIA **RxD (Pin 12)** | FTDI-TXD | Pico GP0 (UART0 TX) |
-| Pol B an ACIA **/CTS (Pin 9)** | FTDI-RTS | GND |
+| Pol A an ACIA **RxD (Pin 12)** | J2 Pin 2 (FTDI-TXD) | Pico GP0 (UART0 TX), über 1 kΩ |
+| Pol B an ACIA **/CTS (Pin 9)** | J2 Pin 4 (FTDI-RTS) | GND |
 
-- ACIA **TxD (Pin 10)** bleibt am FTDI und geht zusätzlich über einen
-  Spannungsteiler an Pico GP1 (UART0 RX): 2,2 kΩ in Reihe, 3,3 kΩ nach GND,
-  das ergibt etwa 3 V.
-- Pico TX (3,3 V) direkt an den ACIA: reicht für dessen TTL-Eingang.
+**Pin 12 und 9 müssen vom Board getrennt werden.** Der FT230X bekommt seinen
+Strom aus den 5 V des Boards, auch ohne USB-Kabel, und treibt RxD und /CTS
+selbst; parallel dazu arbeiteten Pico-TX und FTDI-TXD gegeneinander. Ohne
+Eingriff ins Board geht das mit einer zweiten DIP-28-Fassung als Zwischenstecker
+zwischen Board-Fassung und ACIA: Ihre Pins 9 und 12 sind nach außen gebogen,
+gehen also nicht in die Board-Fassung, und bekommen je einen Draht zum Schalter.
+
+Alles andere liegt an J2, der 6-poligen Buchsenleiste „Optional UART Port“. Die
+Namen gelten aus Sicht des ACIA, und mit dem Zwischenstecker führen Pin 2 und
+Pin 4 nur noch zum FT230X:
+
+| J2 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Leitung | TxD | RxD | /RTS | /CTS | GND | +5 V |
+
+- ACIA **TxD (Pin 10)** bleibt am FTDI und geht zusätzlich von J2 Pin 1 über
+  einen Spannungsteiler an Pico GP1 (UART0 RX, Pico-Pin 2): 2,2 kΩ in Reihe,
+  3,3 kΩ nach GND, das ergibt etwa 3 V.
+- GND: J2 Pin 5 an Pico-Pin 3.
+- Pico TX (GP0, Pico-Pin 1): 3,3 V reichen für den ACIA, auch der FT230X treibt
+  RxD nur mit 3,3 V. Die 1 kΩ sind für die Zeit, in der das Board aus ist: Am
+  USB des Mac hat der Pico weiter Strom, und GP0 versorgte das Board sonst über
+  den Eingang des ACIA mit.
+- J2 Pin 6 (+5 V) nicht an den Pico, solange der am USB hängt - das Board
+  drückte sonst Strom in den USB-Port des Mac.
 - /CTS auf GND: Der ACIA sendet nur bei /CTS low; den 6502 bremsen muss der
   Pico nie.
 - 19200 Baud, 8N1 - wie `_acia_init` und `basicsend.py`.
@@ -52,7 +73,12 @@ Umschalter (2 × UM) am R6551:
   `LOAD`/`SAVE ...,8` an `drivesim.py` führt er stumm mit aus, ein SAVE landet
   dann auch auf der Diskette.
 
-Pinbelegung des R6551 aus `Datasheets/R6551_Rockwell.pdf`.
+Ohne Schalter ist das die Stellung „Disk“, fest verdrahtet: ACIA Pin 12 über
+1 kΩ an GP0, Pin 9 an GND. Der Mac kann dann nichts mehr ans Board schicken,
+hört über den FT230X aber weiter alles, was der 6502 sendet.
+
+Pinbelegung des ACIA aus `Datasheets/R6551_Rockwell.pdf`, Bauteile und J2 aus
+`Schematics/65C02_Computer`.
 
 ## Pico an das Laufwerk
 
