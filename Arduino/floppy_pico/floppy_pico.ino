@@ -152,10 +152,14 @@ static void pollUsb() {
 // from wherever the stack points - and writes a 720 KB disk at the bit rate of
 // a 1.44 MB one. So reading still goes through the library's capture and
 // decoder, and writing through the encoder of its mfm_impl.h, set up here.
-// One track is held, as in the library: sectors written go into it, and it
-// goes back to the disk whole when another track is needed. What it has not
-// been given it reads only then, or when a read asks for it - a SAVE fills most
-// of its tracks whole, and so writes them without reading them first.
+// Three tracks are held. Track 0 has a place for each side - the boot sector,
+// the FATs and the directory live there, on 720 KB disks as on 1.44 MB ones -
+// and every other track shares the third. Sectors written go into them, and a
+// track goes back to the disk whole when its place is needed, or at
+// syncDevice(). What it has not been given it reads only then, or when a read
+// asks for it - a SAVE fills most of its tracks whole, and so writes them
+// without reading them first. Track 0 stays held from one command to the next,
+// until the disk comes out.
 static void stillBusy();   // the wire: keeps BASIC waiting during a SAVE
 
 class Disk : public FsBlockDeviceInterface {
@@ -165,8 +169,10 @@ public:
   const char *mount();
   // The disk came out, or is about to be formatted: nothing held counts.
   void forget() {
-    held = NONE;
-    dirty = false;
+    for (Track &t : held) {
+      t.number = NONE;
+      t.dirty = false;
+    }
     sectors = 0;
   }
   const char *format(bool dd, const char *label);
@@ -184,23 +190,30 @@ public:
 private:
   static constexpr int NONE = -1;
 
+  // A track held: its sectors as far as they are known, from the disk or
+  // written
+  struct Track {
+    int number = NONE;         // track * HEADS + head
+    bool filled = false;       // the disk has given what it has of it
+    bool dirty = false;        // a sector written that is not on the disk yet
+    uint8_t valid[18];
+    uint8_t data[18 * SECTOR];
+  };
+
   bool locate(Sector_t sector, uint8_t &track, uint8_t &head, uint8_t &index) const;
   bool seek(uint8_t track, uint8_t head);
   bool hasFlux();
-  unsigned marked() const;
-  unsigned readTrack(uint8_t track, uint8_t head);
-  bool hold(uint8_t track, uint8_t head);
-  void fill();
-  bool writeTrack(uint8_t track, uint8_t head);
+  unsigned marked(const Track &t) const;
+  unsigned readTrack(Track &t);
+  Track *hold(uint8_t track, uint8_t head);
+  void fill(Track &t);
+  bool flush(Track &t);
+  bool writeTrack(uint8_t track, uint8_t head, uint8_t *data);
 
   uint8_t flux[125000];        // a revolution and a bit of pulses, read or to be written
-  uint8_t data[18 * SECTOR];   // the sectors of one track
-  uint8_t valid[18];
+  Track held[3];               // track 0, sides 0 and 1, and any other
   uint8_t tracks = 0, sectors = 0;
   uint16_t bitNs = 1000;       // the MFM cell: 1000 ns on 1.44 MB, 2000 on 720 KB
-  int held = NONE;             // track * HEADS + head of what data[] holds
-  bool filled = false;         // the disk has given what it has of that track
-  bool dirty = false;
 };
 
 Disk disk;
@@ -292,90 +305,92 @@ bool Disk::hasFlux() {
   return edges >= 16;
 }
 
-// The sectors valid[] marks
-unsigned Disk::marked() const {
+// The sectors of a track held that valid[] marks
+unsigned Disk::marked(const Track &t) const {
   unsigned count = 0;
   for (uint8_t i = 0; i < sectors; i++) {
-    count += valid[i];
+    count += t.valid[i];
   }
   return count;
 }
 
-// The sectors of a track that valid[] does not mark yet, from the disk into
-// data[] - as many as READ_TRIES revolutions give; the decoder leaves the
-// marked ones alone. The count marked then.
-unsigned Disk::readTrack(uint8_t track, uint8_t head) {
+// The sectors of a track held that valid[] does not mark yet, from the disk -
+// as many as READ_TRIES revolutions give; the decoder leaves the marked ones
+// alone. The count marked then.
+unsigned Disk::readTrack(Track &t) {
+  uint8_t track = t.number / HEADS, head = t.number % HEADS;
   if (!seek(track, head)) {
-    return marked();
+    return marked(t);
   }
   if (!hasFlux()) {
     say("no flux on track %u, side %u - nothing written there, or READ without "
         "its pull-up", track, head);
-    return marked();
+    return marked(t);
   }
-  unsigned got = marked();
+  unsigned got = marked(t);
   for (uint8_t i = 0; i < READ_TRIES && got < sectors; i++) {
     stillBusy();
     int32_t index;
     size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
-    uint8_t before[sizeof valid], found = track;
-    memcpy(before, valid, sizeof valid);
-    got = floppy.decode_track_mfm(data, sectors, valid, flux, count,
+    uint8_t before[sizeof t.valid], found = track;
+    memcpy(before, t.valid, sizeof t.valid);
+    got = floppy.decode_track_mfm(t.data, sectors, t.valid, flux, count,
                                   bitNs / 1000.f, false, &found);
     if (found != track) {
       say("track %u, side %u holds the sectors of track %u", track, head, found);
-      memcpy(valid, before, sizeof valid);
-      return marked();
+      memcpy(t.valid, before, sizeof t.valid);
+      return marked(t);
     }
   }
   return got;
 }
 
-// The track into data[], once the one held before is back on the disk. Of the
-// new one nothing is read yet: a write brings its sector along.
-bool Disk::hold(uint8_t track, uint8_t head) {
+// The place for a track, once what was in it is back on the disk. Of a track
+// new there nothing is read yet: a write brings its sector along.
+Disk::Track *Disk::hold(uint8_t track, uint8_t head) {
+  Track &t = held[track ? 2 : head];
   int want = track * HEADS + head;
-  if (held == want) {
-    return true;
+  if (t.number != want) {
+    if (!flush(t)) {
+      return nullptr;
+    }
+    t.number = want;
+    t.filled = false;
+    memset(t.valid, 0, sizeof t.valid);
   }
-  if (!syncDevice()) {
-    return false;
-  }
-  held = want;
-  filled = false;
-  memset(valid, 0, sizeof valid);
-  return true;
+  return &t;
 }
 
-// The rest of the track held, from the disk - once. If none of it reads, the
+// The rest of a track held, from the disk - once. If none of it reads, the
 // disk is asked again next time.
-void Disk::fill() {
-  if (filled) {
+void Disk::fill(Track &t) {
+  if (t.filled) {
     return;
   }
-  filled = true;
-  uint8_t track = held / HEADS, head = held % HEADS;
-  unsigned got = readTrack(track, head);
+  t.filled = true;
+  unsigned got = readTrack(t);
   if (got < sectors) {
-    say("track %u, side %u: %u of %u sectors read", track, head, got, sectors);
+    say("track %u, side %u: %u of %u sectors read", t.number / HEADS,
+        t.number % HEADS, got, sectors);
   }
   if (!got) {
-    held = NONE;
+    t.number = NONE;
   }
 }
 
 bool Disk::readSector(Sector_t sector, uint8_t *dst) {
   uint8_t track, head, index;
-  if (!locate(sector, track, head, index) || !hold(track, head)) {
+  Track *t = locate(sector, track, head, index) ? hold(track, head) : nullptr;
+  if (!t) {
     return false;
   }
-  if (!valid[index]) {
-    fill();
+  if (!t->valid[index]) {
+    fill(*t);
   }
-  if (!valid[index]) {
+  if (!t->valid[index]) {
     return false;
   }
-  memcpy(dst, data + index * SECTOR, SECTOR);
+  memcpy(dst, t->data + index * SECTOR, SECTOR);
   return true;
 }
 
@@ -390,12 +405,13 @@ bool Disk::readSectors(Sector_t sector, uint8_t *dst, size_t count) {
 
 bool Disk::writeSector(Sector_t sector, const uint8_t *src) {
   uint8_t track, head, index;
-  if (!locate(sector, track, head, index) || !hold(track, head)) {
+  Track *t = locate(sector, track, head, index) ? hold(track, head) : nullptr;
+  if (!t) {
     return false;
   }
-  memcpy(data + index * SECTOR, src, SECTOR);
-  valid[index] = 1;
-  dirty = true;
+  memcpy(t->data + index * SECTOR, src, SECTOR);
+  t->valid[index] = 1;
+  t->dirty = true;
   return true;
 }
 
@@ -408,31 +424,39 @@ bool Disk::writeSectors(Sector_t sector, const uint8_t *src, size_t count) {
   return true;
 }
 
-// The track held goes back to the disk if a sector of it was written. It goes
+// A track held goes back to the disk if a sector of it was written. It goes
 // whole, so the sectors not written come from the disk first - none if all
 // were. Not with one of them unreadable, though: it would come out as
-// whatever data[] has in its place.
-bool Disk::syncDevice() {
-  if (!dirty) {
+// whatever its place has there.
+bool Disk::flush(Track &t) {
+  if (!t.dirty) {
     return true;
   }
-  dirty = false;
-  uint8_t track = held / HEADS, head = held % HEADS;
-  if (memchr(valid, 0, sectors)) {
-    fill();
+  t.dirty = false;
+  uint8_t track = t.number / HEADS, head = t.number % HEADS;
+  if (memchr(t.valid, 0, sectors)) {
+    fill(t);
   }
-  if (memchr(valid, 0, sectors)) {
+  if (memchr(t.valid, 0, sectors)) {
     say("track %u, side %u not written back - a sector of it did not read",
         track, head);
     return false;
   }
-  return writeTrack(track, head);
+  return writeTrack(track, head, t.data);
 }
 
-// data[] onto a track, sector headers and all: a revolution from the index on.
-// The library's write_track waits for the index with no time limit, so only
-// with a disk in the drive.
-bool Disk::writeTrack(uint8_t track, uint8_t head) {
+// Everything written onto the disk: the data first, then FAT and directory -
+// cut short in between, the disk only loses room.
+bool Disk::syncDevice() {
+  bool ok = flush(held[2]);
+  ok = flush(held[0]) && ok;
+  return flush(held[1]) && ok;
+}
+
+// Sectors onto a track, headers and all: a revolution from the index on. The
+// library's write_track waits for the index with no time limit, so only with a
+// disk in the drive.
+bool Disk::writeTrack(uint8_t track, uint8_t head, uint8_t *data) {
   if (floppy.get_ready_sense()) {
     say("the disk came out");
     return false;
@@ -468,24 +492,30 @@ const char *Disk::mount() {
   }
   int32_t index;
   size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
+  // The boot sector stays held - FatVolume asks for it next.
+  Track &t = held[0];
+  const uint8_t *boot = t.data;
+  memset(t.valid, 0, sizeof t.valid);
   static const uint16_t cells[] = {1000, 2000};
   for (uint16_t ns : cells) {
-    if (!floppy.decode_track_mfm(data, 1, valid, flux, count, ns / 1000.f, true)) {
+    if (!floppy.decode_track_mfm(t.data, 1, t.valid, flux, count, ns / 1000.f, true)) {
       continue;
     }
-    uint16_t perTrack = le16(data + 0x18), total = le16(data + 0x13);
-    if (le16(data + 0x0B) != SECTOR || le16(data + 0x1A) != HEADS ||
+    uint16_t perTrack = le16(boot + 0x18), total = le16(boot + 0x13);
+    if (le16(boot + 0x0B) != SECTOR || le16(boot + 0x1A) != HEADS ||
         (perTrack != 9 && perTrack != 18) || total % (HEADS * perTrack)) {
       say("boot sector: %u bytes a sector, %u sectors a track, %u heads - not "
-          "a 3.5\" format", le16(data + 0x0B), perTrack, le16(data + 0x1A));
+          "a 3.5\" format", le16(boot + 0x0B), perTrack, le16(boot + 0x1A));
       return "20,READ ERROR";
     }
     sectors = perTrack;
     tracks = total / (HEADS * perTrack);
     bitNs = ns;
+    t.number = 0;
+    t.filled = false;
     say("boot sector: %u sectors a track, %u a cluster, %u FATs of %u, %u root "
-        "entries, media %02X", perTrack, data[0x0D], data[0x10], le16(data + 0x16),
-        le16(data + 0x11), data[0x15]);
+        "entries, media %02X", perTrack, boot[0x0D], boot[0x10], le16(boot + 0x16),
+        le16(boot + 0x11), boot[0x15]);
     return nullptr;
   }
   say("no PC format on this disk");
@@ -500,19 +530,21 @@ const char *Disk::format(bool dd, const char *label) {
   sectors = dd ? 9 : 18;
   bitNs = dd ? 2000 : 1000;
   uint32_t serial = micros();   // the volume serial only has to differ from disk to disk
+  Track &t = held[2];           // to build each track in, and read it back
   for (uint8_t track = 0; track < tracks; track++) {
     for (uint8_t head = 0; head < HEADS; head++) {
       Sector_t first = ((Sector_t)track * HEADS + head) * sectors;
       for (uint8_t i = 0; i < sectors; i++) {
-        blankSector(first + i, data + i * SECTOR, dd, label, serial);
+        blankSector(first + i, t.data + i * SECTOR, dd, label, serial);
       }
-      if (!writeTrack(track, head)) {
+      if (!writeTrack(track, head, t.data)) {
         say("cannot write track %u, side %u", track, head);
         forget();
         return "25,WRITE ERROR";
       }
-      memset(valid, 0, sizeof valid);
-      unsigned got = readTrack(track, head);
+      t.number = track * HEADS + head;
+      memset(t.valid, 0, sizeof t.valid);
+      unsigned got = readTrack(t);
       if (got < sectors) {
         say("track %u, side %u: %u of %u sectors read back", track, head, got, sectors);
         forget();

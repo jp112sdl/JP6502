@@ -12,13 +12,10 @@ LOAD "$",8              das Inhaltsverzeichnis als Programm laden, dann LIST
 
 Ohne `,8` bleibt alles wie bisher bei der SD-Karte.
 
-Stand: Schritt 1 ist fertig und im Emulator wie am Board (über den FTDI)
-geprüft - BASIC (`db6502_disk.s`), `drivesim.py`, Emulator-Option `-A`. Die
-Pico-Firmware (`Arduino/floppy_pico/`) ist geschrieben und kompiliert; auf dem
-Mac gebaut, mit Attrappen für Laufwerk und Diskette, läuft sie im Emulator gegen
-das echte BASIC (siehe „Testen ohne Laufwerk“). Am Board, vorerst mit
-Steckbrücken verdrahtet, kommen die Befehle beim Pico an; Motor, Indexpuls und
-Kopfschritte gehen, gelesen hat er noch keine Diskette.
+Stand: Pico und Laufwerk laufen am Board, vorerst mit Steckbrücken verdrahtet.
+Verzeichnis, LOAD und SAVE gehen mit einer 1,44-MB-Diskette, auch mit einem
+Wechsel der Diskette. `format` und 720-KB-Disketten sind bisher nur auf dem Mac
+geprüft (siehe „Testen ohne Laufwerk“). Der Umschalter fehlt noch.
 
 ## Warum der Pico
 
@@ -223,14 +220,20 @@ dazu (`"HELLO.BAS"`).
   Release) -, und eine 720-KB-Diskette schriebe sie mit dem Bittakt von
   1,44 MB. Gelesen wird mit Capture und Decoder der Bibliothek, geschrieben mit
   dem Encoder aus ihrer `mfm_impl.h`, sauber eingestellt. 720 KB und 1,44 MB
-  erkennt die Firmware am Bootsektor und liest und schreibt beide. Wie die
-  Bibliothek hält sie eine Spur: Geschriebene Sektoren gehen dort hinein, und
-  die ganze Spur geht zurück auf die Diskette, sobald eine andere dran ist.
-  Von einer Spur, in die geschrieben wird, liest sie nur, was fehlt, und erst,
-  wenn ein Lesezugriff es braucht oder die Spur zurückgeht. Den Rest legt der
-  Decoder neben die geschriebenen Sektoren, ohne sie anzurühren. Eine Spur, die
-  ein SAVE ganz neu füllt, wird gar nicht gelesen: Eine 40-KB-Datei kostet so
-  4 statt 7 gelesene Umdrehungen.
+  erkennt die Firmware am Bootsektor und liest und schreibt beide.
+- Sie hält drei Spuren im RAM, 9 KB je Spur. Spur 0 hat einen Platz für jede
+  Seite - Bootsektor, FATs und Verzeichnis liegen dort, bei 720 KB wie bei
+  1,44 MB -, alle anderen Spuren teilen sich den dritten. Geschriebene Sektoren
+  gehen dort hinein; eine Spur geht ganz zurück auf die Diskette, wenn ihr
+  Platz gebraucht wird oder SdFat synchronisiert: erst die Daten, dann FAT und
+  Verzeichnis. Spur 0 bleibt von Befehl zu Befehl gehalten, bis die Diskette
+  herauskommt - ein zweites `LOAD "$",8` liest nichts mehr.
+- Von einer Spur, in die geschrieben wird, liest die Firmware nur, was fehlt,
+  und erst, wenn ein Lesezugriff es braucht oder die Spur zurückgeht. Den Rest
+  legt der Decoder neben die geschriebenen Sektoren, ohne sie anzurühren. Eine
+  Spur, die ein SAVE ganz neu füllt, wird gar nicht gelesen. Ein SAVE von 5 KB
+  kostet so 1 bis 3 gelesene Umdrehungen statt 6 bis 8, eins von 40 KB eine
+  statt 7.
 - Die Bibliothek wartet ohne Zeitlimit: beim Lesen, mit abgeschalteten
   Interrupts, auf Flusswechsel, beim Schreiben auf den Indexpuls. Der Pico
   hinge dann für immer. Deshalb prüft die Firmware vor jedem Lesen 2 ms lang,
@@ -296,7 +299,7 @@ dazu (`"HELLO.BAS"`).
 
 1. BASIC-Seite, `drivesim.py`, Emulator-Test. *Erledigt.*
 2. Umschalter einbauen, `LOAD "...",8` gegen `drivesim.py` am Mac prüfen.
-3. Pico-Firmware schreiben und hier kompilieren *(erledigt)*; Pico und
-   Laufwerk verdrahten, UF2 flashen.
+3. Pico-Firmware schreiben und hier kompilieren, Pico und Laufwerk verdrahten,
+   UF2 flashen. *Erledigt.*
 4. Erst eine Diskette lesen, die am Mac oder PC beschrieben wurde, dann
-   speichern.
+   speichern. *Erledigt.*
