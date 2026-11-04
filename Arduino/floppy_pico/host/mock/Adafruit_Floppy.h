@@ -1,8 +1,8 @@
 // The drive, played by environment variables: PICO_NODISK, PICO_WP (write
-// protect), PICO_SPT (sectors per track, 9 for 720 KB), PICO_SPINUP_MS and
-// PICO_MOUNT_MS (how long the motor and the first read take). Its disk reads
-// at the bit rate of its format only: a boot sector on track 0, zeros
-// elsewhere. Written tracks are not kept.
+// protect), PICO_SPT (sectors per track, 9 for 720 KB), PICO_SPINUP_MS,
+// PICO_MOUNT_MS and PICO_WRITE_MS (how long the motor, the first read and the
+// write of a track take). Its disk reads at the bit rate of its format only: a
+// boot sector on track 0, zeros elsewhere. Written tracks are not kept.
 #pragma once
 #include "SdFat.h"
 
@@ -72,9 +72,14 @@ public:
     return count;
   }
 
-  bool write_track(uint8_t *, size_t, bool) { return true; }
+  bool write_track(uint8_t *, size_t, bool) {
+    fprintf(stderr, "mock: track %d, side %d written\n", at, onSide);
+    delay(envInt("PICO_WRITE_MS", 0));
+    return true;
+  }
 
   Stream *debug_serial = nullptr;
+  uint16_t step_delay_us = 10000;
 
 private:
   int at = 0, onSide = 0, captured = 0;

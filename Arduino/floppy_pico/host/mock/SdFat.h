@@ -1,6 +1,7 @@
 // SdFat as far as floppy_pico.ino uses it, over a folder on the Mac - the way
-// drivesim.py treats one, a 1.44 MB disk of 2847 blocks. The block device it
-// is handed, the sketch's Disk, goes unused.
+// drivesim.py treats one, a 1.44 MB disk of 2847 blocks. Of the block device it
+// is handed, the sketch's Disk, it only uses what a file written makes it do:
+// a sector on each of four tracks, written when the file is closed.
 #pragma once
 #include <dirent.h>
 #include <string>
@@ -81,6 +82,14 @@ public:
     if (fp) {
       ok = fclose(fp) == 0;
     }
+    if (device) {
+      uint8_t sector[512] = {};
+      for (Sector_t track = 10; track < 14; track++) {
+        ok = device->writeSector(track * 36, sector) && ok;
+      }
+      ok = device->syncDevice() && ok;
+    }
+    device = nullptr;
     if (dp) {
       closedir(dp);
     }
@@ -92,6 +101,7 @@ public:
 
   FILE *fp = nullptr;
   DIR *dp = nullptr;
+  FsBlockDeviceInterface *device = nullptr;   // of a file being written
   bool isOpen = false, isdir = false;
   std::string name;
   uint32_t size = 0;
@@ -99,7 +109,10 @@ public:
 
 class FatVolume {
 public:
-  bool begin(FsBlockDeviceInterface *) { return true; }
+  bool begin(FsBlockDeviceInterface *dev) {
+    device = dev;
+    return true;
+  }
   uint8_t sectorsPerCluster() const { return 1; }
   uint16_t bytesPerCluster() const { return 512; }
 
@@ -145,6 +158,7 @@ public:
     }
     file.fp = fopen(full.c_str(), "wb");
     file.isOpen = file.fp != nullptr;
+    file.device = device;
     return file;
   }
 
@@ -161,4 +175,7 @@ public:
     }
     return used > 2847 ? 0 : 2847 - used;
   }
+
+private:
+  FsBlockDeviceInterface *device = nullptr;
 };

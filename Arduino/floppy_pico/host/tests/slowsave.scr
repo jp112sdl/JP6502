@@ -1,0 +1,15 @@
+# Writing the file takes longer than the ten seconds BASIC waits - four tracks
+# of three seconds each. The ENQs the drive sends in between keep it waiting.
+# env: PICO_WRITE_MS=3000
+# expect: wrote X.BAS
+# check: test -e X.BAS
+# check: ! grep -q 'NOT PRESENT' ../slowsave.out
+# check: grep -q 'wrote X.BAS, 2 lines in 1[0-9][0-9][0-9][0-9] ms' ../slowsave.log
+wait 8
+kbd 10 PRINT "HI"\r
+wait 1
+kbd SAVE "X.BAS",8\r
+wait 20
+screen
+lcd
+quit

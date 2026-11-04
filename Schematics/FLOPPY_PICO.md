@@ -165,14 +165,18 @@ Statuszeile. Bricht BASIC ab (Ctrl+C), kommt statt EOT ein CAN - der Pico
 verwirft dann alles und antwortet nicht.
 
 **Zeiten**: BASIC wartet bis etwa 10 s auf eine Statuszeile - Motoranlauf,
-Kopfbewegung, eine neu eingelegte Diskette einlesen, nach SAVE das Schreiben.
-Kommt nichts, meldet es `?DEVICE NOT PRESENT`, zum Beispiel wenn der Schalter
-auf „Mac“ steht. Ctrl+C bricht das Warten ab.
+Kopfbewegung, eine neu eingelegte Diskette einlesen. Die 10 s zählen ab dem
+letzten Byte, das ankam. Kommt nichts, meldet es `?DEVICE NOT PRESENT`, zum
+Beispiel wenn der Schalter auf „Mac“ steht. Ctrl+C bricht das Warten ab. Das
+Schreiben nach einem SAVE dauert bei einem langen Programm länger; der Pico
+schickt dabei alle 2 s ein ENQ, siehe unten.
 
 **ENQ ($05), Pico → 6502**: schickt der Pico, sobald er bereit ist, etwa nach
 dem Einschalten. Wartet BASIC gerade auf die erste Statuszeile, schickt es den
 Befehl noch einmal - der erste kam bei niemandem an. Nach dem Listing eines
-SAVE gilt ENQ nicht: BASIC wartet weiter und meldet `?DEVICE NOT PRESENT`. Am
+SAVE überliest BASIC ein ENQ und wartet von vorn: So hält der Pico es hin,
+solange er schreibt. Ein Pico, der in dieser Zeit neu startet, hat das Listing
+verloren - sein ENQ verlängert nur das Warten bis `?DEVICE NOT PRESENT`. Am
 Prompt überliest BASIC ein ENQ wie jedes Steuerzeichen.
 
 **Dateien** sind Text mit CR LF, wie die `.BAS`-Dateien der SD-Karte - auf
@@ -236,6 +240,10 @@ dazu (`"HELLO.BAS"`).
   zurück. Bleibt es danach aktiv, ist keine Diskette drin
   (`74,DRIVE NOT READY`), sonst wird die Diskette neu eingelesen.
 - Motor aus nach 3 s ohne Befehl, außer während das Listing eines SAVE kommt.
+- Der Kopf macht alle 4 ms einen Schritt. Adafruit Floppy wartet ab Werk
+  zweimal `step_delay_us / 1000 + 1` ms je Schritt, mit 10000 also 22 ms; die
+  Firmware setzt 1000. Ein 3,5"-Laufwerk schafft 3 ms, 2 ms - jeder Wert unter
+  1000 - wären zu schnell.
 - Das Inhaltsverzeichnis steht in der Reihenfolge der Diskette, wie bei der
   1541. Die Kopfzeile ist das Volume-Label, ohne Label „FLOPPY“. Namen, die
   nicht in 8.3 passen, und die Punkt-Dateien des Mac fehlen.
@@ -272,8 +280,9 @@ dazu (`"HELLO.BAS"`).
   das MS-BASIC aus `Software/build/rom` laufen, in etwa einer Minute. Die Fälle
   liegen in `host/tests/`: Verzeichnis, LOAD, SAVE, Datei fehlt, Pico startet
   zu spät, keine Diskette, keine Flusswechsel, Schreibschutz, 720 KB, langsames
-  Laufwerk, Formatieren über USB. Jeder ist ein Emulator-Skript; Kommentare
-  darin sagen, wie sich das Laufwerk verhält und was herauskommen muss. Die
+  Laufwerk, Schreiben länger als 10 s, Formatieren und Hexdump über USB. Jeder
+  ist ein Emulator-Skript; Kommentare darin sagen, wie sich das Laufwerk
+  verhält und was herauskommen muss. Die
   Spuren selbst - MFM, Sektoren, das FAT12 einer formatierten Diskette - prüft
   das nicht, die Attrappe behält keine Spur; ebenso wenig Adafruit Floppy am
   echten Laufwerk.

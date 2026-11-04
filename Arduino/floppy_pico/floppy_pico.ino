@@ -94,6 +94,8 @@ static bool motorOn;        // motor line on, drive selected
 static bool mounted;        // fat holds the disk that is in the drive
 static bool keepSpinning;   // a listing is coming in that goes to disk next
 static uint32_t lastUse;    // millis() of the last drive access
+static bool saving;         // a SAVE's file is going to disk, BASIC waits for the answer
+static uint32_t lastSign;   // millis() of the last ENQ that kept it waiting
 static bool verbose;        // every byte on the wire to the log
 
 // A line typed on the USB port: v at once, anything else once the drive is
@@ -152,6 +154,8 @@ static void pollUsb() {
 // decoder, and writing through the encoder of its mfm_impl.h, set up here.
 // One track is held, as in the library: sectors written go into it, and it
 // goes back to the disk whole when another track is needed.
+static void stillBusy();   // the wire: keeps BASIC waiting during a SAVE
+
 class Disk : public FsBlockDeviceInterface {
 public:
   // The format of the disk in the drive, from its boot sector: nullptr, or
@@ -297,6 +301,7 @@ unsigned Disk::readTrack(uint8_t track, uint8_t head) {
   }
   unsigned got = 0;
   for (uint8_t i = 0; i < READ_TRIES && got < sectors; i++) {
+    stillBusy();
     int32_t index;
     size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
     uint8_t found = track;
@@ -399,6 +404,7 @@ bool Disk::writeTrack(uint8_t track, uint8_t head) {
   if (!seek(track, head)) {
     return false;
   }
+  stillBusy();
   mfm_io_t io = {};
   io.settings = &standard_mfm;
   io.T1_nom = floppy.getSampleFrequency() / 1000000 * bitNs / 1000;   // samples a cell
@@ -584,6 +590,17 @@ static int linkRead(uint32_t timeout) {
 static void linkByte(uint8_t byte) {
   trace('>', byte);
   Serial1.write(byte);
+}
+
+// While the file of a SAVE goes to disk, BASIC waits for the second answer
+// ten seconds from the last byte it got, and an ENQ there it passes over. So
+// between two tracks the drive sends one every two seconds: a long program
+// takes longer than ten to write.
+static void stillBusy() {
+  if (saving && millis() - lastSign >= 2000) {
+    linkByte(ENQ);
+    lastSign = millis();
+  }
 }
 
 static void linkLine(const char *line) {
@@ -1041,7 +1058,7 @@ static void doSave(const char *raw) {
   status("00,OK");
 
   // The motor stays on while the listing comes in: the file goes to disk
-  // right after it, and BASIC gives the second answer only ten seconds.
+  // right after it.
   keepSpinning = true;
   bool tooLarge;
   bool complete = receiveListing(tooLarge);
@@ -1054,7 +1071,11 @@ static void doSave(const char *raw) {
     status("52,FILE TOO LARGE");
     return;
   }
-  status(writeFile(name));
+  saving = true;
+  lastSign = millis();
+  const char *result = writeFile(name);
+  saving = false;
+  status(result);
 }
 
 // format [720] [NAME], typed on the USB port
@@ -1161,6 +1182,9 @@ static void runUsbCommand() {
 void setup() {
   // The drive lines first: deselected, motor off, write gate shut.
   floppy.begin();
+  // A step every 4 ms instead of 22: step() waits step_delay_us / 1000 + 1 ms
+  // twice for each, and a 3.5" drive takes one every 3 ms.
+  floppy.step_delay_us = 1000;
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 
