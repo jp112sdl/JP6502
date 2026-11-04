@@ -1,0 +1,16 @@
+# format typed on the USB port, run once the machine has been quiet for a
+# second: every track written and read back. Then the drive goes on as usual.
+# env: PICO_USB=format_TEST
+# expect: usb: format TEST
+# expect: formatting as 1.44 MB, named "TEST"
+# expect: track 80 of 80
+# expect: formatted in
+# expect: 0 "FLOPPY"
+wait 8
+kbd LOAD "$",8\r
+wait 4
+kbd LIST\r
+wait 2
+screen
+lcd
+quit

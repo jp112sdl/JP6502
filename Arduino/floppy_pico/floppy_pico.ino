@@ -22,12 +22,22 @@
 // with the floppy drive switched off: until the firmware runs, every pin is
 // pulled low, which without them selects the drive and opens its write gate.
 //
-// The USB port carries a log of every command (any terminal, any baud rate).
-// Typing v there adds every byte on the wire and the steps of the head.
+// The USB port carries a log of every command (any terminal, any baud rate)
+// and takes commands of its own, a line each:
+//
+//   v                     every byte on the wire and the steps of the head, or not
+//   format [720] [NAME]   a blank disk, 1.44 MB or 720 KB, named NAME: every
+//                         track written afresh and read back, what was on it gone
+//   dump SECTOR           a sector of the disk in the drive, in hex
 
 #include <stdarg.h>
-#include <SdFat.h>
+// Not plain SdFat.h: the RP2040 core brings an SdFat of its own, which
+// arduino-cli prefers, and that one reads no FAT12 and wants a partition
+// table - no floppy disk has either. This header only the fork has, and with
+// it first, Adafruit_Floppy's SdFat.h is the fork's too.
+#include <SdFat_Adafruit_Fork.h>
 #include <Adafruit_Floppy.h>
+#include <mfm_impl.h>
 
 // Pico pins, the ones of the Adafruit_Floppy examples; the pin on the 34-way
 // cable in brackets. The drive is a "drive B" as it comes from the factory,
@@ -63,11 +73,14 @@ static constexpr uint32_t SAVE_IDLE_TIMEOUT = 60000; // LIST is slow, but not th
 static constexpr uint32_t MOTOR_IDLE = 3000;         // motor off after this long without a command
 static constexpr size_t TEXT_SIZE = 64 * 1024;       // a program, as its file or as its lines
 
+static constexpr uint8_t HEADS = 2;
+static constexpr size_t SECTOR = 512;
+static constexpr uint8_t READ_TRIES = 5;             // revolutions before a sector counts as unreadable
+static constexpr uint32_t CAPTURE_MS = 220;          // a revolution, and some for a sector on the index
+
 Adafruit_Floppy floppy(DENSITY_PIN, INDEX_PIN, SELECT_PIN, MOTOR_PIN, DIR_PIN,
                        STEP_PIN, WRDATA_PIN, WRGATE_PIN, TRK0_PIN, PROT_PIN,
                        READ_PIN, SIDE_PIN, DSKCHG_PIN);
-Adafruit_MFM_Floppy mfm(&floppy);   // detects 720 KB and 1.44 MB from the boot sector
-FatVolume fat;
 
 // One program at a time, whole: the lines of a LOAD or a "$", each ending in
 // a NUL, or the file a SAVE writes. Nothing comes from the 6502 while the
@@ -82,6 +95,12 @@ static bool mounted;        // fat holds the disk that is in the drive
 static bool keepSpinning;   // a listing is coming in that goes to disk next
 static uint32_t lastUse;    // millis() of the last drive access
 static bool verbose;        // every byte on the wire to the log
+
+// A line typed on the USB port: v at once, anything else once the drive is
+// free - between two commands of the machine.
+static char usbLine[40];
+static size_t usbLength;
+static char usbCommand[sizeof usbLine];
 
 // --- the log on USB ----------------------------------------------------------
 
@@ -107,12 +126,360 @@ static int trace(char direction, int byte) {
 
 static void pollUsb() {
   while (Serial.available()) {
-    if (Serial.read() == 'v') {
-      verbose = !verbose;
-      floppy.debug_serial = verbose ? &Serial : nullptr;
-      say("byte log %s", verbose ? "on" : "off");
+    int c = Serial.read();
+    if (c == '\r' || c == '\n') {
+      usbLine[usbLength] = 0;
+      usbLength = 0;
+      if (strcmp(usbLine, "v") == 0) {
+        verbose = !verbose;
+        floppy.debug_serial = verbose ? &Serial : nullptr;
+        say("byte log %s", verbose ? "on" : "off");
+      } else if (usbLine[0]) {
+        strcpy(usbCommand, usbLine);
+      }
+    } else if (c >= 0x20 && c < 0x7F && usbLength < sizeof usbLine - 1) {
+      usbLine[usbLength++] = c;
     }
   }
+}
+
+// --- the disk surface --------------------------------------------------------
+
+// Sectors for FatVolume, in place of Adafruit_MFM_Floppy. Its version 0.6.1
+// hands the track encoder uninitialised settings - gap sizes and filler come
+// from wherever the stack points - and writes a 720 KB disk at the bit rate of
+// a 1.44 MB one. So reading still goes through the library's capture and
+// decoder, and writing through the encoder of its mfm_impl.h, set up here.
+// One track is held, as in the library: sectors written go into it, and it
+// goes back to the disk whole when another track is needed.
+class Disk : public FsBlockDeviceInterface {
+public:
+  // The format of the disk in the drive, from its boot sector: nullptr, or
+  // the status line that says why there is none.
+  const char *mount();
+  // The disk came out, or is about to be formatted: nothing held counts.
+  void forget() {
+    held = NONE;
+    dirty = false;
+    sectors = 0;
+  }
+  const char *format(bool dd, const char *label);
+  uint8_t tracksPerSide() const { return tracks; }
+  uint8_t sectorsPerTrack() const { return sectors; }
+
+  bool isBusy() override { return false; }
+  Sector_t sectorCount() override { return (Sector_t)tracks * HEADS * sectors; }
+  bool syncDevice() override;
+  bool readSector(Sector_t sector, uint8_t *dst) override;
+  bool readSectors(Sector_t sector, uint8_t *dst, size_t count) override;
+  bool writeSector(Sector_t sector, const uint8_t *src) override;
+  bool writeSectors(Sector_t sector, const uint8_t *src, size_t count) override;
+
+private:
+  static constexpr int NONE = -1;
+
+  bool locate(Sector_t sector, uint8_t &track, uint8_t &head, uint8_t &index) const;
+  bool seek(uint8_t track, uint8_t head);
+  bool hasFlux();
+  unsigned readTrack(uint8_t track, uint8_t head);
+  bool hold(uint8_t track, uint8_t head);
+  bool writeTrack(uint8_t track, uint8_t head);
+
+  uint8_t flux[125000];        // a revolution and a bit of pulses, read or to be written
+  uint8_t data[18 * SECTOR];   // the sectors of one track
+  uint8_t valid[18];
+  uint8_t tracks = 0, sectors = 0;
+  uint16_t bitNs = 1000;       // the MFM cell: 1000 ns on 1.44 MB, 2000 on 720 KB
+  int held = NONE;             // track * HEADS + head of what data[] holds
+  bool dirty = false;
+};
+
+Disk disk;
+FatVolume fat;
+
+static uint16_t le16(const uint8_t *p) { return p[0] | p[1] << 8; }
+
+static void put16(uint8_t *p, uint16_t value) {
+  p[0] = value;
+  p[1] = value >> 8;
+}
+
+// Sector lba of a blank FAT12 disk: the boot sector, two FATs and the root
+// directory - with the name as the volume label, if there is one - and after
+// them the filler FORMAT has always used.
+static void blankSector(Sector_t lba, uint8_t *s, bool dd, const char *label,
+                        uint32_t serial) {
+  const uint8_t perFat = dd ? 3 : 9, media = dd ? 0xF9 : 0xF0;
+  const uint16_t rootEntries = dd ? 112 : 224;
+  const Sector_t root = 1 + 2 * perFat, files = root + rootEntries * 32 / SECTOR;
+  char name[11];
+  memset(name, ' ', sizeof name);
+  memcpy(name, label, strlen(label));
+  memset(s, lba < files ? 0 : 0xF6, SECTOR);
+  if (lba == 0) {
+    memcpy(s, "\xEB\x3C\x90" "JP6502  ", 11);   // a jump to 0x3E, and who formatted it
+    put16(s + 0x0B, SECTOR);
+    s[0x0D] = dd ? 2 : 1;                        // sectors a cluster
+    put16(s + 0x0E, 1);                          // reserved sectors: this one
+    s[0x10] = 2;                                 // FATs
+    put16(s + 0x11, rootEntries);
+    put16(s + 0x13, dd ? 1440 : 2880);           // sectors
+    s[0x15] = media;
+    put16(s + 0x16, perFat);
+    put16(s + 0x18, dd ? 9 : 18);                // sectors a track
+    put16(s + 0x1A, HEADS);
+    s[0x26] = 0x29;                              // serial, label and type follow
+    put16(s + 0x27, serial);
+    put16(s + 0x29, serial >> 16);
+    memcpy(s + 0x2B, label[0] ? name : "NO NAME    ", 11);
+    memcpy(s + 0x36, "FAT12   ", 8);
+    s[0x3E] = 0xCD;                              // int 18h: a PC booting from it moves on
+    s[0x3F] = 0x18;
+    s[0x1FE] = 0x55;
+    s[0x1FF] = 0xAA;
+  } else if (lba == 1 || lba == 1u + perFat) {
+    s[0] = media;                                // FAT entries 0 and 1
+    s[1] = 0xFF;
+    s[2] = 0xFF;
+  } else if (lba == root && label[0]) {
+    memcpy(s, name, sizeof name);
+    s[11] = 0x08;                                // the volume label
+  }
+}
+
+bool Disk::locate(Sector_t sector, uint8_t &track, uint8_t &head,
+                  uint8_t &index) const {
+  if (!sectors || sector >= (Sector_t)tracks * HEADS * sectors) {
+    return false;
+  }
+  track = sector / (HEADS * sectors);
+  head = sector / sectors % HEADS;
+  index = sector % sectors;
+  return true;
+}
+
+bool Disk::seek(uint8_t track, uint8_t head) {
+  if (!floppy.goto_track(track)) {
+    say("cannot get to track %u - no TRK0 from the drive", track);
+    return false;
+  }
+  floppy.side(head);
+  return true;
+}
+
+// Any flux on READ at all? The library's capture waits for it with the
+// interrupts off and no time limit: a track with nothing on it, or a READ line
+// without its pull-up, would hang the Pico for good. A written track has an
+// edge every 2 to 8 us.
+bool Disk::hasFlux() {
+  uint32_t start = micros();
+  unsigned edges = 0;
+  int last = digitalRead(READ_PIN);
+  while (edges < 16 && micros() - start < 2000) {
+    int now = digitalRead(READ_PIN);
+    edges += last && !now;
+    last = now;
+  }
+  return edges >= 16;
+}
+
+// The sectors of a track into data[], as many as READ_TRIES revolutions give:
+// the count, and valid[] says which.
+unsigned Disk::readTrack(uint8_t track, uint8_t head) {
+  memset(valid, 0, sizeof valid);
+  if (!seek(track, head)) {
+    return 0;
+  }
+  if (!hasFlux()) {
+    say("no flux on track %u, side %u - nothing written there, or READ without "
+        "its pull-up", track, head);
+    return 0;
+  }
+  unsigned got = 0;
+  for (uint8_t i = 0; i < READ_TRIES && got < sectors; i++) {
+    int32_t index;
+    size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
+    uint8_t found = track;
+    got = floppy.decode_track_mfm(data, sectors, valid, flux, count,
+                                  bitNs / 1000.f, false, &found);
+    if (found != track) {
+      say("track %u, side %u holds the sectors of track %u", track, head, found);
+      memset(valid, 0, sizeof valid);
+      return 0;
+    }
+  }
+  return got;
+}
+
+// The track into data[], once what was held is back on the disk; false if no
+// sector of it reads.
+bool Disk::hold(uint8_t track, uint8_t head) {
+  int want = track * HEADS + head;
+  if (held == want) {
+    return true;
+  }
+  if (!syncDevice()) {
+    return false;
+  }
+  held = NONE;
+  unsigned got = readTrack(track, head);
+  if (got < sectors) {
+    say("track %u, side %u: %u of %u sectors read", track, head, got, sectors);
+  }
+  if (!got) {
+    return false;
+  }
+  held = want;
+  return true;
+}
+
+bool Disk::readSector(Sector_t sector, uint8_t *dst) {
+  uint8_t track, head, index;
+  if (!locate(sector, track, head, index) || !hold(track, head) || !valid[index]) {
+    return false;
+  }
+  memcpy(dst, data + index * SECTOR, SECTOR);
+  return true;
+}
+
+bool Disk::readSectors(Sector_t sector, uint8_t *dst, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    if (!readSector(sector + i, dst + i * SECTOR)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool Disk::writeSector(Sector_t sector, const uint8_t *src) {
+  uint8_t track, head, index;
+  if (!locate(sector, track, head, index) || !hold(track, head)) {
+    return false;
+  }
+  memcpy(data + index * SECTOR, src, SECTOR);
+  valid[index] = 1;
+  dirty = true;
+  return true;
+}
+
+bool Disk::writeSectors(Sector_t sector, const uint8_t *src, size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    if (!writeSector(sector + i, src + i * SECTOR)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The track held goes back to the disk if a sector of it was written - but not
+// with a sector that did not read: the track is written whole, and that one
+// would come out as whatever data[] has in its place.
+bool Disk::syncDevice() {
+  if (!dirty) {
+    return true;
+  }
+  dirty = false;
+  uint8_t track = held / HEADS, head = held % HEADS;
+  if (memchr(valid, 0, sectors)) {
+    say("track %u, side %u not written back - a sector of it did not read",
+        track, head);
+    return false;
+  }
+  return writeTrack(track, head);
+}
+
+// data[] onto a track, sector headers and all: a revolution from the index on.
+// The library's write_track waits for the index with no time limit, so only
+// with a disk in the drive.
+bool Disk::writeTrack(uint8_t track, uint8_t head) {
+  if (floppy.get_ready_sense()) {
+    say("the disk came out");
+    return false;
+  }
+  if (!seek(track, head)) {
+    return false;
+  }
+  mfm_io_t io = {};
+  io.settings = &standard_mfm;
+  io.T1_nom = floppy.getSampleFrequency() / 1000000 * bitNs / 1000;   // samples a cell
+  io.pulses = flux;
+  io.n_pulses = sizeof flux;
+  io.sectors = data;
+  io.n_sectors = sectors;
+  io.n = 2;   // 128 << 2 = 512 bytes a sector
+  io.head = head;
+  io.cylinder = track;
+  encode_track_mfm(&io);   // gap after the sectors up to the end: the write stops at the index
+  return floppy.write_track(flux, sizeof flux, false);
+}
+
+// A PC format at the bit rate of 1.44 MB, else of 720 KB, by its boot sector -
+// as the library's autodetect does, but only what a 3.5" drive holds.
+const char *Disk::mount() {
+  forget();
+  if (!seek(0, 0)) {
+    return "74,DRIVE NOT READY";
+  }
+  if (!hasFlux()) {
+    say("no flux on track 0 - an empty disk, or READ (GP12) without its pull-up");
+    return "21,READ ERROR";
+  }
+  int32_t index;
+  size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
+  static const uint16_t cells[] = {1000, 2000};
+  for (uint16_t ns : cells) {
+    if (!floppy.decode_track_mfm(data, 1, valid, flux, count, ns / 1000.f, true)) {
+      continue;
+    }
+    uint16_t perTrack = le16(data + 0x18), total = le16(data + 0x13);
+    if (le16(data + 0x0B) != SECTOR || le16(data + 0x1A) != HEADS ||
+        (perTrack != 9 && perTrack != 18) || total % (HEADS * perTrack)) {
+      say("boot sector: %u bytes a sector, %u sectors a track, %u heads - not "
+          "a 3.5\" format", le16(data + 0x0B), perTrack, le16(data + 0x1A));
+      return "20,READ ERROR";
+    }
+    sectors = perTrack;
+    tracks = total / (HEADS * perTrack);
+    bitNs = ns;
+    say("boot sector: %u sectors a track, %u a cluster, %u FATs of %u, %u root "
+        "entries, media %02X", perTrack, data[0x0D], data[0x10], le16(data + 0x16),
+        le16(data + 0x11), data[0x15]);
+    return nullptr;
+  }
+  say("no PC format on this disk");
+  return "20,READ ERROR";
+}
+
+// A blank FAT12 disk, as FORMAT A: leaves one: every track written afresh,
+// sector headers and all, and read back. 720 KB with dd, else 1.44 MB.
+const char *Disk::format(bool dd, const char *label) {
+  forget();
+  tracks = 80;
+  sectors = dd ? 9 : 18;
+  bitNs = dd ? 2000 : 1000;
+  uint32_t serial = micros();   // the volume serial only has to differ from disk to disk
+  for (uint8_t track = 0; track < tracks; track++) {
+    for (uint8_t head = 0; head < HEADS; head++) {
+      Sector_t first = ((Sector_t)track * HEADS + head) * sectors;
+      for (uint8_t i = 0; i < sectors; i++) {
+        blankSector(first + i, data + i * SECTOR, dd, label, serial);
+      }
+      if (!writeTrack(track, head)) {
+        say("cannot write track %u, side %u", track, head);
+        forget();
+        return "25,WRITE ERROR";
+      }
+      unsigned got = readTrack(track, head);
+      if (got < sectors) {
+        say("track %u, side %u: %u of %u sectors read back", track, head, got, sectors);
+        forget();
+        return "25,WRITE ERROR";
+      }
+    }
+    say("track %u of %u", track + 1, tracks);
+  }
+  forget();
+  return nullptr;
 }
 
 // --- the drive ---------------------------------------------------------------
@@ -124,9 +491,9 @@ static void driveOff() {
   digitalWrite(LED_BUILTIN, LOW);
 }
 
-// Selects the drive, spins it up and makes sure fat holds the disk that is in
-// it. nullptr when it does, else the status line that says why not.
-static const char *driveOpen() {
+// Selects the drive and spins it up: nullptr, or the status line that says
+// why not.
+static const char *driveSpin() {
   lastUse = millis();
   digitalWrite(LED_BUILTIN, HIGH);
   floppy.select(true);
@@ -138,16 +505,15 @@ static const char *driveOpen() {
       return "74,DRIVE NOT READY";
     }
   }
+  return nullptr;
+}
 
-  // DSKCHG goes active when the disk comes out and stays so until the head
-  // steps with a disk in - a swap while the motor was off still shows. Only
-  // while the drive is selected, though.
-  if (mounted && !floppy.get_ready_sense()) {
-    return nullptr;
-  }
+// A step out and back, which clears DSKCHG if there is a disk in the drive:
+// nullptr, or the status line for an empty one. Whatever was read of the disk
+// before counts no more.
+static const char *diskIn() {
   mounted = false;
-  mfm.removed();
-  uint32_t started = millis();
+  disk.forget();
   floppy.goto_track(1);
   floppy.goto_track(0);
   if (floppy.get_ready_sense()) {
@@ -155,18 +521,38 @@ static const char *driveOpen() {
     driveOff();
     return "74,DRIVE NOT READY";
   }
-  if (!mfm.inserted(AUTODETECT)) {
-    say("no PC format on this disk");
-    return "20,READ ERROR";
+  return nullptr;
+}
+
+// Selects the drive, spins it up and makes sure fat holds the disk that is in
+// it. nullptr when it does, else the status line that says why not.
+static const char *driveOpen() {
+  const char *error = driveSpin();
+  if (error) {
+    return error;
   }
-  if (!fat.begin(&mfm)) {
+
+  // DSKCHG goes active when the disk comes out and stays so until the head
+  // steps with a disk in - a swap while the motor was off still shows. Only
+  // while the drive is selected, though.
+  if (mounted && !floppy.get_ready_sense()) {
+    return nullptr;
+  }
+  uint32_t started = millis();
+  error = diskIn();
+  if (!error) {
+    error = disk.mount();
+  }
+  if (error) {
+    return error;
+  }
+  if (!fat.begin(&disk)) {
     say("no FAT file system on this disk");
     return "20,READ ERROR";
   }
   mounted = true;
-  say("disk in: %u tracks of %u sectors, read in %lu ms",
-      mfm.tracks_per_side(), mfm.sectors_per_track(),
-      (unsigned long)(millis() - started));
+  say("disk in: %u tracks of %u sectors, read in %lu ms", disk.tracksPerSide(),
+      disk.sectorsPerTrack(), (unsigned long)(millis() - started));
   return nullptr;
 }
 
@@ -212,19 +598,23 @@ static void status(const char *line) {
   linkLine(line);
 }
 
-// The next command line. Bytes outside a line - an ACK left over, a CAN from a
-// transfer given up - are not commands and are dropped.
-static void readCommand(char *line, size_t size) {
+// The next command line - false after a second of quiet with none begun. Bytes
+// outside a line - an ACK left over, a CAN from a transfer given up - are not
+// commands and are dropped.
+static bool readCommand(char *line, size_t size) {
   size_t length = 0;
   for (;;) {
     int byte = linkRead(1000);
     if (byte < 0) {
+      if (!length) {
+        return false;
+      }
       continue;
     }
     if (byte == CR) {
       if (length) {
         line[length] = 0;
-        return;
+        return true;
       }
       continue;
     }
@@ -544,7 +934,7 @@ static const char *writeFile(const char *name) {
     ok = file.write(text, textUsed) == textUsed;
     ok = file.close() && ok;
   }
-  ok = mfm.syncDevice() && ok;
+  ok = disk.syncDevice() && ok;
   lastUse = millis();
   if (!ok) {
     // Whatever is left in the caches is not to be trusted any more - read
@@ -556,6 +946,27 @@ static const char *writeFile(const char *name) {
   say("wrote %s, %u lines in %lu ms", name, lineCount,
       (unsigned long)(millis() - started));
   return "00,OK";
+}
+
+// The disk name of format: up to 11 letters, digits, spaces and the signs FAT
+// allows, in capitals. False for anything else.
+static bool makeLabel(const char *from, char *label) {
+  size_t length = strlen(from);
+  while (length && from[length - 1] == ' ') {
+    length--;
+  }
+  if (length > 11) {
+    return false;
+  }
+  for (size_t i = 0; i < length; i++) {
+    char c = toupper((unsigned char)from[i]);
+    if (!isalnum((unsigned char)c) && !strchr(" !#$%&'()-@^_`{}~", c)) {
+      return false;
+    }
+    label[i] = c;
+  }
+  label[length] = 0;
+  return true;
 }
 
 // --- the commands ------------------------------------------------------------
@@ -627,13 +1038,6 @@ static void doSave(const char *raw) {
     status("26,WRITE PROTECT ON");
     return;
   }
-  if (mfm.sectors_per_track() != MFM_IBMPC1440K_SECTORS_PER_TRACK) {
-    // Adafruit_MFM_Floppy writes a disk it detected for itself at the bit
-    // rate of a 1.44 MB one, whatever it read it at - a 720 KB disk would be
-    // left unreadable.
-    status("26,720 KB READ ONLY");
-    return;
-  }
   status("00,OK");
 
   // The motor stays on while the listing comes in: the file goes to disk
@@ -651,6 +1055,107 @@ static void doSave(const char *raw) {
     return;
   }
   status(writeFile(name));
+}
+
+// format [720] [NAME], typed on the USB port
+static void doFormat(const char *args) {
+  while (*args == ' ') {
+    args++;
+  }
+  bool dd = strncmp(args, "720", 3) == 0 && (!args[3] || args[3] == ' ');
+  if (dd) {
+    args += 3;
+    while (*args == ' ') {
+      args++;
+    }
+  }
+  char label[12];
+  if (!makeLabel(args, label)) {
+    say("a disk name is up to 11 letters, digits, spaces and !#$%%&'()-@^_`{}~");
+    return;
+  }
+  const char *error = driveSpin();
+  if (!error) {
+    error = diskIn();
+  }
+  if (!error && floppy.get_write_protect()) {
+    error = "26,WRITE PROTECT ON";
+  }
+  uint32_t started = millis();
+  if (!error) {
+    say("formatting as %s, named \"%s\" - what is on the disk is lost",
+        dd ? "720 KB" : "1.44 MB", label);
+    error = disk.format(dd, label);
+  }
+  lastUse = millis();
+  if (error) {
+    say("format: %s", error);
+  } else {
+    say("formatted in %lu s", (unsigned long)(millis() - started) / 1000);
+  }
+  // What the machine sent meanwhile, it has long given up waiting for.
+  while (Serial1.available()) {
+    trace('<', Serial1.read());
+  }
+}
+
+// dump SECTOR, typed on the USB port: 16 bytes a line, and as text
+static void doDump(const char *args) {
+  char *end;
+  unsigned long sector = strtoul(args, &end, 0);
+  if (end == args) {
+    say("dump which sector?");
+    return;
+  }
+  const char *error = driveSpin();
+  if (!error && (!mounted || floppy.get_ready_sense())) {
+    error = diskIn();
+    if (!error) {
+      error = disk.mount();
+    }
+  }
+  uint8_t s[SECTOR];
+  if (!error && !disk.readSector(sector, s)) {
+    error = "20,READ ERROR";
+  }
+  lastUse = millis();
+  if (error) {
+    say("dump: %s", error);
+    return;
+  }
+  for (size_t row = 0; row < SECTOR; row += 16) {
+    char line[80];
+    int n = snprintf(line, sizeof line, "%03X:", (unsigned)row);
+    for (size_t i = 0; i < 16; i++) {
+      n += snprintf(line + n, sizeof line - n, " %02X", s[row + i]);
+    }
+    line[n++] = ' ';
+    for (size_t i = 0; i < 16; i++) {
+      uint8_t c = s[row + i];
+      line[n++] = c >= 0x20 && c < 0x7F ? c : '.';
+    }
+    line[n] = 0;
+    say("%s", line);
+  }
+}
+
+// A line typed on the USB port, run between two commands of the machine: a
+// format keeps the drive for minutes.
+static void runUsbCommand() {
+  if (!usbCommand[0]) {
+    return;
+  }
+  char line[sizeof usbCommand];
+  strcpy(line, usbCommand);
+  usbCommand[0] = 0;
+  say("usb: %s", line);
+  if (strncmp(line, "format", 6) == 0 && (!line[6] || line[6] == ' ')) {
+    doFormat(line + 6);
+  } else if (strncmp(line, "dump ", 5) == 0) {
+    doDump(line + 5);
+  } else {
+    say("commands: v, format [720] [NAME], dump SECTOR");
+  }
 }
 
 void setup() {
@@ -674,7 +1179,10 @@ void setup() {
 
 void loop() {
   char command[41];
-  readCommand(command, sizeof command);
+  if (!readCommand(command, sizeof command)) {
+    runUsbCommand();
+    return;
+  }
   say("<- %s", command);
   if (strcmp(command, "$") == 0) {
     doDirectory();

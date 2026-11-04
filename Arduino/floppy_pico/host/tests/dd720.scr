@@ -1,9 +1,10 @@
-# A 720 KB disk reads, but Adafruit Floppy would write it at the bit rate of
-# 1.44 MB, so SAVE is refused.
+# A 720 KB disk: found at its own bit rate, read and written like a 1.44 MB
+# one.
 # env: PICO_SPT=9
+# expect: 80 tracks of 9 sectors
 # expect: 0 "FLOPPY"
-# expect: ?26,720 KB READ ONLY
-# check: test ! -e X.BAS
+# expect: wrote X.BAS
+# check: test -e X.BAS
 wait 8
 kbd LOAD "$",8\r
 wait 4

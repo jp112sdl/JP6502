@@ -10,6 +10,7 @@
 #include <ctime>
 #include <fcntl.h>
 #include <poll.h>
+#include <string>
 #include <unistd.h>
 
 #define HIGH 1
@@ -22,6 +23,11 @@ inline uint32_t millis() {
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint32_t)(ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000);
 }
+inline uint32_t micros() {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint32_t)(ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000);
+}
 inline void delay(uint32_t ms) { usleep(ms * 1000); }
 inline void pinMode(int, int) {}
 inline void digitalWrite(int, int) {}
@@ -31,19 +37,41 @@ inline int envInt(const char *name, int fallback) {
   return value ? atoi(value) : fallback;
 }
 
+// The sketch reads only READ, and that toggles - flux - unless PICO_NOFLUX.
+inline int digitalRead(int) {
+  static int level;
+  return envInt("PICO_NOFLUX", 0) ? HIGH : (level ^= 1);
+}
+
 class Stream {};
 
+// PICO_USB is a line typed on the USB port right at the start, '_' for a space.
 class UsbLog : public Stream {
 public:
+  UsbLog() {
+    if (const char *line = getenv("PICO_USB")) {
+      typed = line;
+      for (char &c : typed) {
+        if (c == '_') {
+          c = ' ';
+        }
+      }
+      typed += '\r';
+    }
+  }
   void begin(unsigned long) {}
-  int available() { return 0; }
-  int read() { return -1; }
+  int available() { return at < typed.size(); }
+  int read() { return at < typed.size() ? (unsigned char)typed[at++] : -1; }
   __attribute__((format(printf, 2, 3))) void printf(const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
   }
+
+private:
+  std::string typed;
+  size_t at = 0;
 };
 
 class AciaLink {

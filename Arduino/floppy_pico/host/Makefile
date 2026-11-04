@@ -18,7 +18,7 @@ GECKOS = $(ROOT)/GeckOS-V2/arch/jp6502
 EMU = $(GECKOS)/emu/jp6502emu
 TESTS = $(patsubst tests/%.scr,%,$(wildcard tests/*.scr))
 
-picohost: $(SKETCH) main.cpp prelude.h mock/SdFat.h mock/Adafruit_Floppy.h
+picohost: $(SKETCH) main.cpp prelude.h mock/SdFat.h mock/Adafruit_Floppy.h mock/mfm_impl.h
 	$(CXX) -std=c++17 -Wall -Wextra -Wno-unused-parameter -I mock -include prelude.h \
 		-x c++ $(SKETCH) -x none main.cpp -o $@
 

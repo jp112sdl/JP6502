@@ -1,0 +1,11 @@
+# No flux on READ - a disk with nothing written on it, or the line without its
+# pull-up. Adafruit Floppy would wait for it for good; the drive says so.
+# env: PICO_NOFLUX=1
+# expect: no flux on track 0
+# expect: ?21,READ ERROR
+wait 8
+kbd LOAD "$",8\r
+wait 4
+screen
+lcd
+quit

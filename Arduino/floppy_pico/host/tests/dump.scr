@@ -1,0 +1,8 @@
+# dump typed on the USB port: a sector of the disk in hex - here the boot
+# sector, whose values also go to the log when the disk is read in.
+# env: PICO_USB=dump_0
+# expect: usb: dump 0
+# expect: boot sector: 18 sectors a track, 1 a cluster, 2 FATs of 0
+# expect: 000: EB 3C 90
+wait 4
+quit

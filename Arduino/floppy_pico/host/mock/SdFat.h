@@ -1,5 +1,6 @@
 // SdFat as far as floppy_pico.ino uses it, over a folder on the Mac - the way
-// drivesim.py treats one, a 1.44 MB disk of 2847 blocks.
+// drivesim.py treats one, a 1.44 MB disk of 2847 blocks. The block device it
+// is handed, the sketch's Disk, goes unused.
 #pragma once
 #include <dirent.h>
 #include <string>
@@ -18,7 +19,20 @@ const uint8_t FAT_NAME_DELETED = 0xE5;
 const uint8_t FAT_ATTRIB_LABEL = 0x08;
 const uint8_t FAT_ATTRIB_LONG_NAME = 0x0F;
 
-class Adafruit_MFM_Floppy;
+typedef uint32_t Sector_t;
+
+class FsBlockDeviceInterface {
+public:
+  virtual ~FsBlockDeviceInterface() {}
+  virtual bool isBusy() = 0;
+  virtual bool readSector(Sector_t sector, uint8_t *dst) = 0;
+  virtual bool readSectors(Sector_t sector, uint8_t *dst, size_t count) = 0;
+  virtual Sector_t sectorCount() = 0;
+  virtual bool syncDevice() = 0;
+  virtual bool writeSector(Sector_t sector, const uint8_t *src) = 0;
+  virtual bool writeSectors(Sector_t sector, const uint8_t *src, size_t count) = 0;
+};
+
 class FatVolume;
 
 class File32 {
@@ -85,7 +99,7 @@ public:
 
 class FatVolume {
 public:
-  bool begin(Adafruit_MFM_Floppy *) { return true; }
+  bool begin(FsBlockDeviceInterface *) { return true; }
   uint8_t sectorsPerCluster() const { return 1; }
   uint16_t bytesPerCluster() const { return 512; }
 
