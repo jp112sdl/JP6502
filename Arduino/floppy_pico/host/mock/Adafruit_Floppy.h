@@ -41,35 +41,41 @@ public:
     return max;
   }
 
+  // Like the real decoder, it leaves the sectors marked valid alone.
   size_t decode_track_mfm(uint8_t *sectors, size_t count, uint8_t *validity,
                           const uint8_t *, size_t, float bitUs, bool clear,
                           uint8_t *track = nullptr) {
+    if (clear) {
+      memset(validity, 0, count);
+    }
     int perTrack = envInt("PICO_SPT", 18);
-    if ((perTrack == 9) != (bitUs > 1.5f)) {
-      if (clear) {
-        memset(validity, 0, count);
+    bool readable = (perTrack == 9) == (bitUs > 1.5f);
+    size_t got = 0;
+    for (size_t i = 0; i < count; i++) {
+      if (readable && !validity[i]) {
+        uint8_t *s = sectors + i * 512;
+        memset(s, 0, 512);
+        if (i == 0 && at == 0 && onSide == 0) {
+          int total = 80 * 2 * perTrack;
+          s[0] = 0xEB;                    // the jump
+          s[1] = 0x3C;
+          s[2] = 0x90;
+          s[0x0C] = 2;                    // 512 bytes a sector
+          s[0x0D] = 1;                    // a cluster
+          s[0x10] = 2;                    // FATs
+          s[0x13] = total;
+          s[0x14] = total >> 8;
+          s[0x18] = perTrack;
+          s[0x1A] = 2;                    // heads
+        }
+        validity[i] = 1;
+        if (track) {
+          *track = at;
+        }
       }
-      return 0;
+      got += validity[i];
     }
-    memset(sectors, 0, count * 512);
-    if (at == 0 && onSide == 0) {
-      int total = 80 * 2 * perTrack;
-      sectors[0] = 0xEB;                  // the jump
-      sectors[1] = 0x3C;
-      sectors[2] = 0x90;
-      sectors[0x0C] = 2;                  // 512 bytes a sector
-      sectors[0x0D] = 1;                  // a cluster
-      sectors[0x10] = 2;                  // FATs
-      sectors[0x13] = total;
-      sectors[0x14] = total >> 8;
-      sectors[0x18] = perTrack;
-      sectors[0x1A] = 2;                  // heads
-    }
-    memset(validity, 1, count);
-    if (track) {
-      *track = at;
-    }
-    return count;
+    return got;
   }
 
   bool write_track(uint8_t *, size_t, bool) {

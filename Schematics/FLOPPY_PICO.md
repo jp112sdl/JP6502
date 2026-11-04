@@ -226,6 +226,11 @@ dazu (`"HELLO.BAS"`).
   erkennt die Firmware am Bootsektor und liest und schreibt beide. Wie die
   Bibliothek hält sie eine Spur: Geschriebene Sektoren gehen dort hinein, und
   die ganze Spur geht zurück auf die Diskette, sobald eine andere dran ist.
+  Von einer Spur, in die geschrieben wird, liest sie nur, was fehlt, und erst,
+  wenn ein Lesezugriff es braucht oder die Spur zurückgeht. Den Rest legt der
+  Decoder neben die geschriebenen Sektoren, ohne sie anzurühren. Eine Spur, die
+  ein SAVE ganz neu füllt, wird gar nicht gelesen: Eine 40-KB-Datei kostet so
+  4 statt 7 gelesene Umdrehungen.
 - Die Bibliothek wartet ohne Zeitlimit: beim Lesen, mit abgeschalteten
   Interrupts, auf Flusswechsel, beim Schreiben auf den Indexpuls. Der Pico
   hinge dann für immer. Deshalb prüft die Firmware vor jedem Lesen 2 ms lang,

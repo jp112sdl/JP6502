@@ -153,7 +153,9 @@ static void pollUsb() {
 // a 1.44 MB one. So reading still goes through the library's capture and
 // decoder, and writing through the encoder of its mfm_impl.h, set up here.
 // One track is held, as in the library: sectors written go into it, and it
-// goes back to the disk whole when another track is needed.
+// goes back to the disk whole when another track is needed. What it has not
+// been given it reads only then, or when a read asks for it - a SAVE fills most
+// of its tracks whole, and so writes them without reading them first.
 static void stillBusy();   // the wire: keeps BASIC waiting during a SAVE
 
 class Disk : public FsBlockDeviceInterface {
@@ -185,8 +187,10 @@ private:
   bool locate(Sector_t sector, uint8_t &track, uint8_t &head, uint8_t &index) const;
   bool seek(uint8_t track, uint8_t head);
   bool hasFlux();
+  unsigned marked() const;
   unsigned readTrack(uint8_t track, uint8_t head);
   bool hold(uint8_t track, uint8_t head);
+  void fill();
   bool writeTrack(uint8_t track, uint8_t head);
 
   uint8_t flux[125000];        // a revolution and a bit of pulses, read or to be written
@@ -195,6 +199,7 @@ private:
   uint8_t tracks = 0, sectors = 0;
   uint16_t bitNs = 1000;       // the MFM cell: 1000 ns on 1.44 MB, 2000 on 720 KB
   int held = NONE;             // track * HEADS + head of what data[] holds
+  bool filled = false;         // the disk has given what it has of that track
   bool dirty = false;
 };
 
@@ -287,37 +292,47 @@ bool Disk::hasFlux() {
   return edges >= 16;
 }
 
-// The sectors of a track into data[], as many as READ_TRIES revolutions give:
-// the count, and valid[] says which.
+// The sectors valid[] marks
+unsigned Disk::marked() const {
+  unsigned count = 0;
+  for (uint8_t i = 0; i < sectors; i++) {
+    count += valid[i];
+  }
+  return count;
+}
+
+// The sectors of a track that valid[] does not mark yet, from the disk into
+// data[] - as many as READ_TRIES revolutions give; the decoder leaves the
+// marked ones alone. The count marked then.
 unsigned Disk::readTrack(uint8_t track, uint8_t head) {
-  memset(valid, 0, sizeof valid);
   if (!seek(track, head)) {
-    return 0;
+    return marked();
   }
   if (!hasFlux()) {
     say("no flux on track %u, side %u - nothing written there, or READ without "
         "its pull-up", track, head);
-    return 0;
+    return marked();
   }
-  unsigned got = 0;
+  unsigned got = marked();
   for (uint8_t i = 0; i < READ_TRIES && got < sectors; i++) {
     stillBusy();
     int32_t index;
     size_t count = floppy.capture_track(flux, sizeof flux, &index, false, CAPTURE_MS);
-    uint8_t found = track;
+    uint8_t before[sizeof valid], found = track;
+    memcpy(before, valid, sizeof valid);
     got = floppy.decode_track_mfm(data, sectors, valid, flux, count,
                                   bitNs / 1000.f, false, &found);
     if (found != track) {
       say("track %u, side %u holds the sectors of track %u", track, head, found);
-      memset(valid, 0, sizeof valid);
-      return 0;
+      memcpy(valid, before, sizeof valid);
+      return marked();
     }
   }
   return got;
 }
 
-// The track into data[], once what was held is back on the disk; false if no
-// sector of it reads.
+// The track into data[], once the one held before is back on the disk. Of the
+// new one nothing is read yet: a write brings its sector along.
 bool Disk::hold(uint8_t track, uint8_t head) {
   int want = track * HEADS + head;
   if (held == want) {
@@ -326,21 +341,38 @@ bool Disk::hold(uint8_t track, uint8_t head) {
   if (!syncDevice()) {
     return false;
   }
-  held = NONE;
+  held = want;
+  filled = false;
+  memset(valid, 0, sizeof valid);
+  return true;
+}
+
+// The rest of the track held, from the disk - once. If none of it reads, the
+// disk is asked again next time.
+void Disk::fill() {
+  if (filled) {
+    return;
+  }
+  filled = true;
+  uint8_t track = held / HEADS, head = held % HEADS;
   unsigned got = readTrack(track, head);
   if (got < sectors) {
     say("track %u, side %u: %u of %u sectors read", track, head, got, sectors);
   }
   if (!got) {
-    return false;
+    held = NONE;
   }
-  held = want;
-  return true;
 }
 
 bool Disk::readSector(Sector_t sector, uint8_t *dst) {
   uint8_t track, head, index;
-  if (!locate(sector, track, head, index) || !hold(track, head) || !valid[index]) {
+  if (!locate(sector, track, head, index) || !hold(track, head)) {
+    return false;
+  }
+  if (!valid[index]) {
+    fill();
+  }
+  if (!valid[index]) {
     return false;
   }
   memcpy(dst, data + index * SECTOR, SECTOR);
@@ -376,15 +408,19 @@ bool Disk::writeSectors(Sector_t sector, const uint8_t *src, size_t count) {
   return true;
 }
 
-// The track held goes back to the disk if a sector of it was written - but not
-// with a sector that did not read: the track is written whole, and that one
-// would come out as whatever data[] has in its place.
+// The track held goes back to the disk if a sector of it was written. It goes
+// whole, so the sectors not written come from the disk first - none if all
+// were. Not with one of them unreadable, though: it would come out as
+// whatever data[] has in its place.
 bool Disk::syncDevice() {
   if (!dirty) {
     return true;
   }
   dirty = false;
   uint8_t track = held / HEADS, head = held % HEADS;
+  if (memchr(valid, 0, sectors)) {
+    fill();
+  }
   if (memchr(valid, 0, sectors)) {
     say("track %u, side %u not written back - a sector of it did not read",
         track, head);
@@ -475,6 +511,7 @@ const char *Disk::format(bool dd, const char *label) {
         forget();
         return "25,WRITE ERROR";
       }
+      memset(valid, 0, sizeof valid);
       unsigned got = readTrack(track, head);
       if (got < sectors) {
         say("track %u, side %u: %u of %u sectors read back", track, head, got, sectors);
