@@ -1,5 +1,5 @@
-// Just enough Arduino for floppy_pico.ino to run on the Mac: the 6551 is
-// standard input and output (the emulator's -A), the USB log is stderr.
+// Just enough Arduino for floppy_pico.ino and SdFat to build on the Mac: the
+// 6551 is standard input and output (the emulator's -A), the USB log is stderr.
 #pragma once
 #include <cctype>
 #include <cstdarg>
@@ -17,6 +17,9 @@
 #define LOW 0
 #define OUTPUT 1
 #define LED_BUILTIN 25
+#define SS 10                   // SdFat wants a chip select, and never uses it here
+
+class __FlashStringHelper;      // SdFat names it
 
 inline uint32_t millis() {
   struct timespec ts;
@@ -28,7 +31,6 @@ inline uint32_t micros() {
   clock_gettime(CLOCK_MONOTONIC, &ts);
   return (uint32_t)(ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000);
 }
-inline void delay(uint32_t ms) { usleep(ms * 1000); }
 inline void pinMode(int, int) {}
 inline void digitalWrite(int, int) {}
 
@@ -37,10 +39,17 @@ inline int envInt(const char *name, int fallback) {
   return value ? atoi(value) : fallback;
 }
 
+// The drive behaves as the PICO_* variables say only once main() has put the
+// files on its disk, and no longer when it takes them off again.
+extern bool driveLive;
+
+inline int driveEnv(const char *name) { return driveLive ? envInt(name, 0) : 0; }
+inline void delay(uint32_t ms) { usleep(ms * 1000); }
+
 // The sketch reads only READ, and that toggles - flux - unless PICO_NOFLUX.
 inline int digitalRead(int) {
   static int level;
-  return envInt("PICO_NOFLUX", 0) ? HIGH : (level ^= 1);
+  return driveEnv("PICO_NOFLUX") ? HIGH : (level ^= 1);
 }
 
 class Stream {};
@@ -63,11 +72,15 @@ public:
   int available() { return at < typed.size(); }
   int read() { return at < typed.size() ? (unsigned char)typed[at++] : -1; }
   __attribute__((format(printf, 2, 3))) void printf(const char *format, ...) {
+    if (quiet) {
+      return;
+    }
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
   }
+  bool quiet = false;
 
 private:
   std::string typed;

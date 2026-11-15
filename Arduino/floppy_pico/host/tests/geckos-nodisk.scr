@@ -1,0 +1,20 @@
+# GeckOS with no disk in the drive: the shell comes from the card, b:, and the
+# one that could not be started is no failure - init counts none.
+# rom: geckos
+# env: PICO_NODISK=1
+# emu: -r
+# expect: Start "c:lsh -d c:": failed!
+# expect: Start "b:lsh -d b:": ok!
+# expect: |GECKOS
+# expect: MEDIA ERROR
+# expect: overruns=0
+# check: ! grep -q -E 'Could not set|sigchld' ../geckos-nodisk.out
+wait 16
+screen
+kbd ls\r
+wait 5
+screen
+kbd ls c:\r
+wait 6
+screen
+quit

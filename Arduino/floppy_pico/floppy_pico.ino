@@ -1,11 +1,13 @@
 // The floppy drive behind LOAD "NAME.BAS",8, SAVE "NAME.BAS",8 and LOAD "$",8
+// of MS-BASIC, and drive c: of GeckOS
 //
 // A Raspberry Pi Pico is the drive's own controller, the way a 1541 has its
 // own 6502: it sits on the 6551 behind a switch that otherwise connects the
 // FTDI, and runs a 3.5" PC drive through Adafruit_Floppy. Schematics/
-// FLOPPY_PICO.md has the wiring and the protocol, common/source/db6502_disk.s
-// is the other end, and tools/drivesim.py plays the same part from a folder on
-// the Mac - this follows it step for step, with a disk in place of the folder.
+// FLOPPY_PICO.md has the wiring and the protocols. For BASIC,
+// common/source/db6502_disk.s is the other end, and tools/drivesim.py plays
+// the same part from a folder on the Mac - this follows it step for step, with
+// a disk in place of the folder. For GeckOS it is arch/jp6502/fsflop.a65.
 //
 // Build (core rp2040:rp2040, libraries "Adafruit Floppy" and "SdFat - Adafruit
 // Fork"):
@@ -13,7 +15,8 @@
 //   arduino-cli compile -b rp2040:rp2040:rpipico
 //                       --output-dir Arduino/floppy_pico/build Arduino/floppy_pico
 //
-// Test on the Mac, with mocks for the drive, against MS-BASIC in the emulator:
+// Test on the Mac, with a mock for the drive, against MS-BASIC and GeckOS in
+// the emulator:
 //
 //   make -C Arduino/floppy_pico/host test
 //
@@ -58,6 +61,7 @@
 #define ACIA_TX_PIN 0   // UART0 TX to the 6551's RxD, through the switch
 #define ACIA_RX_PIN 1   // UART0 RX from the 6551's TxD, through a divider
 
+static constexpr uint8_t SOH = 0x01;
 static constexpr uint8_t EOT = 0x04;
 static constexpr uint8_t ENQ = 0x05;
 static constexpr uint8_t ACK = 0x06;
@@ -71,6 +75,8 @@ static constexpr uint32_t FIRST_ACK_TIMEOUT = 30000; // ms; the machine sends on
 static constexpr uint32_t LINE_ACK_TIMEOUT = 10000;  // inserting a line in front of a long program
 static constexpr uint32_t SAVE_IDLE_TIMEOUT = 60000; // LIST is slow, but not that slow
 static constexpr uint32_t MOTOR_IDLE = 3000;         // motor off after this long without a command
+static constexpr uint32_t SPIN_UP = 1000;            // from the first index pulse until the disk turns at speed
+static constexpr uint32_t FRAME_TIMEOUT = 200;       // between two bytes of a request of GeckOS
 static constexpr size_t TEXT_SIZE = 64 * 1024;       // a program, as its file or as its lines
 
 static constexpr uint8_t HEADS = 2;
@@ -94,8 +100,9 @@ static bool motorOn;        // motor line on, drive selected
 static bool mounted;        // fat holds the disk that is in the drive
 static bool keepSpinning;   // a listing is coming in that goes to disk next
 static uint32_t lastUse;    // millis() of the last drive access
-static bool saving;         // a SAVE's file is going to disk, BASIC waits for the answer
-static uint32_t lastSign;   // millis() of the last ENQ that kept it waiting
+static uint32_t busyEvery;  // while the drive works for a machine that takes ENQ for
+                            // "wait on": the ms from one ENQ to the next, else 0
+static uint32_t lastSign;   // millis() of the last such ENQ
 static bool verbose;        // every byte on the wire to the log
 
 // A line typed on the USB port: v at once, anything else once the drive is
@@ -160,7 +167,7 @@ static void pollUsb() {
 // asks for it - a SAVE fills most of its tracks whole, and so writes them
 // without reading them first. Track 0 stays held from one command to the next,
 // until the disk comes out.
-static void stillBusy();   // the wire: keeps BASIC waiting during a SAVE
+static void stillBusy();   // the wire: keeps the machine waiting
 
 class Disk : public FsBlockDeviceInterface {
 public:
@@ -559,6 +566,11 @@ const char *Disk::format(bool dd, const char *label) {
 
 // --- the drive ---------------------------------------------------------------
 
+namespace geckos {
+static void dropFiles();
+static void request();
+}
+
 static void driveOff() {
   floppy.spin_motor(false);
   floppy.select(false);
@@ -574,10 +586,17 @@ static const char *driveSpin() {
   floppy.select(true);
   if (!motorOn) {
     motorOn = true;
+    // With motor_delay_ms at 0, spin_motor() only waits for an index pulse, a
+    // second at most. The time the motor takes comes after it, in pieces: a
+    // machine that is kept waiting hears from the drive in between.
     if (!floppy.spin_motor(true)) {
       say("no index pulse - no disk in the drive, or no drive");
       driveOff();
       return "74,DRIVE NOT READY";
+    }
+    for (uint32_t waited = 0; waited < SPIN_UP; waited += 250) {
+      delay(250);
+      stillBusy();
     }
   }
   return nullptr;
@@ -585,10 +604,11 @@ static const char *driveSpin() {
 
 // A step out and back, which clears DSKCHG if there is a disk in the drive:
 // nullptr, or the status line for an empty one. Whatever was read of the disk
-// before counts no more.
+// before counts no more, and no file of it is open any longer.
 static const char *diskIn() {
   mounted = false;
   disk.forget();
+  geckos::dropFiles();
   floppy.goto_track(1);
   floppy.goto_track(0);
   if (floppy.get_ready_sense()) {
@@ -664,9 +684,10 @@ static void linkByte(uint8_t byte) {
 // While the file of a SAVE goes to disk, BASIC waits for the second answer
 // ten seconds from the last byte it got, and an ENQ there it passes over. So
 // between two tracks the drive sends one every two seconds: a long program
-// takes longer than ten to write.
+// takes longer than ten to write. GeckOS waits two seconds for every answer,
+// and gets an ENQ every half second.
 static void stillBusy() {
-  if (saving && millis() - lastSign >= 2000) {
+  if (busyEvery && millis() - lastSign >= busyEvery) {
     linkByte(ENQ);
     lastSign = millis();
   }
@@ -684,9 +705,10 @@ static void status(const char *line) {
   linkLine(line);
 }
 
-// The next command line - false after a second of quiet with none begun. Bytes
-// outside a line - an ACK left over, a CAN from a transfer given up - are not
-// commands and are dropped.
+// The next command line of BASIC - false after a second of quiet with none
+// begun, and after a request of GeckOS, which starts with SOH and is answered
+// from here. Other bytes outside a line - an ACK left over, a CAN from a
+// transfer given up - are not commands and are dropped.
 static bool readCommand(char *line, size_t size) {
   size_t length = 0;
   for (;;) {
@@ -696,6 +718,10 @@ static bool readCommand(char *line, size_t size) {
         return false;
       }
       continue;
+    }
+    if (byte == SOH && !length) {
+      geckos::request();
+      return false;
     }
     if (byte == CR) {
       if (length) {
@@ -1055,6 +1081,538 @@ static bool makeLabel(const char *from, char *label) {
   return true;
 }
 
+// --- the files of GeckOS -----------------------------------------------------
+
+// GeckOS reaches the drive through its filesystem server fsflop (GeckOS-V2,
+// arch/jp6502/fsflop.a65), which leaves all the work to this end. A request is
+//
+//   SOH, command, file, n, n bytes
+//
+// and the answer
+//
+//   error, n, n bytes
+//
+// after an ENQ for every half second the drive needs. The commands are those
+// of the filesystem interface of GeckOS, with the name - two for a rename - as
+// it comes there, and the errors are its error numbers. "file" is the number,
+// below FILES, the drive is to use should the command open one; it then
+// answers with one byte, 1 for a file to read from, a directory too, and 2 for
+// one to write to. FLOP_READ brings the next READ_LEN bytes of a file, E_EOF
+// with the last ones, FLOP_WRITE writes n, and FS_CLOSE ends a file. After
+// E_EOF or an error the file is closed here already. FLOP_HELLO comes when
+// GeckOS starts: nothing is open any more, and its four bytes are the time and
+// the date for the files written from now on.
+
+namespace geckos {
+
+static constexpr uint8_t FILES = 4;
+static constexpr uint8_t READ_LEN = 56;   // with error and n it fits the receive ring of 64 there
+
+enum : uint8_t {    // commands - FS_* as in include/fdefs.i65
+  FLOP_HELLO = 0,
+  FS_OPEN_RD = 1, FS_OPEN_WR = 2, FS_OPEN_OW = 4, FS_OPEN_AP = 5, FS_OPEN_DR = 6,
+  FS_RENAME = 7, FS_DELETE = 8, FS_FORMAT = 9, FS_CLOSE = 11, FS_RMDIR = 12, FS_MKDIR = 13,
+  FLOP_READ = 64, FLOP_WRITE = 65,
+};
+
+enum : uint8_t {    // errors - include/kdefs.i65, negative numbers there
+  E_OK = 0, E_NOTIMP = 256 - 1, E_ILLPAR = 256 - 3, E_EOF = 256 - 10,
+  E_FNOPATH = 256 - 33, E_FILLNAM = 256 - 34, E_FNOFIL = 256 - 36, E_FWPROT = 256 - 37,
+  E_FILEXIST = 256 - 38, E_FDISKFULL = 256 - 39, E_FDNEMPTY = 256 - 40, E_FMEDIA = 256 - 42,
+};
+
+enum : uint8_t { FREE, READING, WRITING, LISTING };   // what a file is open for
+
+// The clock of GeckOS, taken over at its hello and counted on from there.
+// Without one, files are of the first day of 2026.
+static bool clockSet;
+static uint32_t clockDays, clockSeconds;  // since 1.1.1970 and since midnight ...
+static uint32_t clockAt;                  // ... when millis() was this
+
+// Days since 1.1.1970 and back, in the calendar as it is
+static int32_t daysOf(int year, unsigned month, unsigned day) {
+  year -= month <= 2;
+  int era = (year >= 0 ? year : year - 399) / 400;
+  unsigned ofEra = year - era * 400;
+  unsigned ofYear = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  return era * 146097 + (int32_t)(ofEra * 365 + ofEra / 4 - ofEra / 100 + ofYear) - 719468;
+}
+
+static void dateOf(int32_t days, int &year, unsigned &month, unsigned &day) {
+  days += 719468;
+  int era = (days >= 0 ? days : days - 146096) / 146097;
+  unsigned ofEra = days - era * 146097;
+  unsigned years = (ofEra - ofEra / 1460 + ofEra / 36524 - ofEra / 146096) / 365;
+  unsigned ofYear = ofEra - (365 * years + years / 4 - years / 100);
+  unsigned m = (5 * ofYear + 2) / 153;
+  day = ofYear - (153 * m + 2) / 5 + 1;
+  month = m < 10 ? m + 3 : m - 9;
+  year = years + era * 400 + (month <= 2);
+}
+
+// For SdFat: the date and the time of a file that is written now
+static void fileTime(uint16_t *date, uint16_t *time) {
+  if (!clockSet) {
+    *date = FS_DATE(2026, 1, 1);
+    *time = FS_TIME(12, 0, 0);
+    return;
+  }
+  uint32_t seconds = clockSeconds + (millis() - clockAt) / 1000;
+  int year;
+  unsigned month, day;
+  dateOf(clockDays + seconds / 86400, year, month, day);
+  seconds %= 86400;
+  *date = FS_DATE(year, month, day);
+  *time = FS_TIME(seconds / 3600, seconds / 60 % 60, seconds % 60);
+}
+
+struct OpenFile {
+  uint8_t kind = FREE;
+  File32 file;              // the file, or the directory that is listed
+  char name[32];            // for the log
+  uint32_t bytes, since;
+  // of a listing
+  uint8_t phase;            // what comes next: 0 the disk, 1 an entry, 2 the room left, 3 nothing
+  char pattern[32];         // which entries
+  uint8_t entry[11 + 13];   // the one on its way, FS_DIR_* of fdefs.i65
+  uint8_t entryLength, entrySent;
+
+  void begin(uint8_t what, const char *path) {
+    kind = what;
+    snprintf(name, sizeof name, "%s", path);
+    bytes = 0;
+    since = millis();
+    phase = entryLength = entrySent = 0;
+  }
+
+  void end() {
+    file.close();
+    kind = FREE;
+  }
+
+  // The next entry of a listing into entry[]: four bytes of length, six of
+  // date and time, what it is, the name. False when there is none left.
+  bool nextEntry() {
+    memset(entry, 0, sizeof entry);
+    entrySent = 0;
+    char *text = (char *)entry + 11;
+    if (phase == 0) {
+      phase = 1;
+      entry[10] = 1;                      // FS_DIR_MOD_NAM, the disk
+      readLabel(text);
+      entryLength = 11 + strlen(text) + 1;
+      return true;
+    }
+    File32 found;
+    while (phase == 1) {
+      if (!found.openNext(&file, O_RDONLY)) {
+        phase = 2;
+        break;
+      }
+      size_t got = found.getSFN(text, 13);
+      for (char *c = text; *c; c++) {
+        *c = tolower((unsigned char)*c);
+      }
+      bool wanted = got && text[0] != '.' && !found.isHidden() && matches(pattern, text);
+      if (wanted) {
+        uint32_t size = found.isDir() ? 0 : found.fileSize();
+        uint16_t date, time;
+        entry[0] = size;
+        entry[1] = size >> 8;
+        entry[2] = size >> 16;
+        entry[3] = size >> 24;
+        if (found.getModifyDateTime(&date, &time)) {
+          entry[4] = FS_YEAR(date) - 1900;
+          entry[5] = FS_MONTH(date);
+          entry[6] = FS_DAY(date);
+          entry[7] = FS_HOUR(time);
+          entry[8] = FS_MINUTE(time);
+          entry[9] = FS_SECOND(time);
+        }
+        entry[10] = found.isDir() ? 3 : 0;  // FS_DIR_MOD_DIR or _FIL
+        entryLength = 11 + strlen(text) + 1;
+      }
+      found.close();
+      if (wanted) {
+        return true;
+      }
+      memset(entry, 0, sizeof entry);
+    }
+    if (phase == 2) {
+      phase = 3;
+      int32_t free = fat.freeClusterCount();
+      if (free >= 0) {
+        uint32_t room = (uint32_t)free * fat.bytesPerCluster();
+        entry[0] = room;
+        entry[1] = room >> 8;
+        entry[2] = room >> 16;
+        entry[3] = room >> 24;
+        entry[10] = 2;                    // FS_DIR_MOD_FRE
+        entryLength = 11 + 1;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // * for any characters and ? for one, capitals or not
+  static bool matches(const char *pattern, const char *name) {
+    for (;; pattern++, name++) {
+      if (*pattern == '*') {
+        for (;; name++) {
+          if (matches(pattern + 1, name)) {
+            return true;
+          }
+          if (!*name) {
+            return false;
+          }
+        }
+      }
+      if (!*pattern || !*name) {
+        return !*pattern && !*name;
+      }
+      if (*pattern != '?' &&
+          tolower((unsigned char)*pattern) != tolower((unsigned char)*name)) {
+        return false;
+      }
+    }
+  }
+};
+
+static OpenFile files[FILES];
+
+// GeckOS starts anew, or the disk came out: nothing is open any more.
+static void dropFiles() {
+  for (OpenFile &o : files) {
+    o.file = File32();
+    o.kind = FREE;
+  }
+}
+
+static void answer(uint8_t error, const uint8_t *data = nullptr, size_t length = 0) {
+  if (error != E_OK && error != E_EOF) {
+    say("geckos: -> error %d", (int8_t)error);
+  }
+  linkByte(error);
+  linkByte(length);
+  for (size_t i = 0; i < length; i++) {
+    linkByte(data[i]);
+  }
+}
+
+// Whether the directory a name is in is not there
+static bool noDir(const char *path) {
+  const char *last = strrchr(path, '/');
+  if (!last || last == path) {
+    return false;
+  }
+  char dir[128]; // as long as a name from GeckOS can be
+  size_t n = last - path;
+  if (n >= sizeof dir) {
+    return true;
+  }
+  memcpy(dir, path, n);
+  dir[n] = 0;
+  File32 d = fat.open(dir, O_RDONLY);
+  bool none = !d || !d.isDir();
+  d.close();
+  return none;
+}
+
+// A directory to list. The last part of the name may have * and ? in it, and
+// a name without them that is a directory is listed whole - as fsfat32 of
+// GeckOS has it for the card.
+static uint8_t list(OpenFile &o, char *path) {
+  char *last = strrchr(path, '/');
+  last = last ? last + 1 : path;
+  const char *pattern = "*";
+  File32 dir;
+  if (!strpbrk(last, "*?")) {
+    dir = fat.open(*path ? path : "/", O_RDONLY);
+    if (dir && !dir.isDir()) {
+      dir.close();
+    }
+  }
+  if (!dir) {
+    // a pattern, or the name of a file: of the directory in front of it
+    pattern = last;
+    if (last > path + 1) {
+      last[-1] = 0;
+      dir = fat.open(path, O_RDONLY);
+    } else {
+      dir = fat.open("/", O_RDONLY);
+    }
+  }
+  if (!dir || !dir.isDir() || strlen(pattern) >= sizeof o.pattern) {
+    dir.close();
+    return E_FNOPATH;
+  }
+  o.begin(LISTING, pattern);
+  o.file = dir;
+  strcpy(o.pattern, pattern);
+  return E_OK;
+}
+
+// What a request asks for, and the answer to it
+static void serve(uint8_t cmd, uint8_t number, uint8_t *data, size_t length) {
+  static const uint8_t reads = 1, writes = 2;
+  char *path = (char *)data;
+
+  if (cmd == FLOP_HELLO) {
+    dropFiles();
+    clockSet = length == 4;
+    if (clockSet) {
+      uint16_t time = data[0] | data[1] << 8, date = data[2] | data[3] << 8;
+      clockDays = daysOf(FS_YEAR(date), FS_MONTH(date), FS_DAY(date));
+      clockSeconds = FS_HOUR(time) * 3600ul + FS_MINUTE(time) * 60 + FS_SECOND(time);
+      clockAt = millis();
+      say("geckos: hello, it is %u-%02u-%02u %02u:%02u", FS_YEAR(date), FS_MONTH(date),
+          FS_DAY(date), FS_HOUR(time), FS_MINUTE(time));
+    } else {
+      say("geckos: hello");
+    }
+    answer(E_OK);
+    return;
+  }
+  if (number >= FILES) {
+    answer(E_ILLPAR);
+    return;
+  }
+  OpenFile &o = files[number];
+
+  if (cmd == FS_FORMAT) {
+    // a blank 1.44 MB disk with the name as its name
+    char label[12];
+    while (*path == '/') {
+      path++;
+    }
+    if (!makeLabel(path, label)) {
+      answer(E_FILLNAM);
+      return;
+    }
+    const char *error = driveSpin();
+    if (!error) {
+      error = diskIn();
+    }
+    if (error) {
+      answer(E_FMEDIA);
+      return;
+    }
+    if (floppy.get_write_protect()) {
+      answer(E_FWPROT);
+      return;
+    }
+    say("geckos: format, named \"%s\" - what is on the disk is lost", label);
+    error = disk.format(false, label);
+    lastUse = millis();
+    answer(error ? E_FMEDIA : E_OK);
+    return;
+  }
+
+  // All the rest is about the disk in the drive. If that is another one than
+  // before, driveOpen() has closed every file.
+  if (driveOpen()) {
+    answer(E_FMEDIA);
+    return;
+  }
+  bool changes = cmd == FS_OPEN_WR || cmd == FS_OPEN_OW || cmd == FS_OPEN_AP ||
+                 cmd == FS_RENAME || cmd == FS_DELETE || cmd == FS_RMDIR || cmd == FS_MKDIR;
+  if (changes && floppy.get_write_protect()) {
+    answer(E_FWPROT);
+    return;
+  }
+
+  bool changed = false;
+  uint8_t error = E_OK;
+  switch (cmd) {
+  case FS_OPEN_RD:
+    if (o.kind != FREE) {
+      o.end();
+    }
+    o.file = fat.open(path, O_RDONLY);
+    if (!o.file || o.file.isDir()) {
+      o.file.close();
+      answer(E_FNOFIL);
+      break;
+    }
+    o.begin(READING, path);
+    answer(E_OK, &reads, 1);
+    break;
+
+  case FS_OPEN_WR:
+  case FS_OPEN_OW:
+  case FS_OPEN_AP:
+    if (o.kind != FREE) {
+      o.end();
+    }
+    o.file = fat.open(path, cmd == FS_OPEN_AP ? O_WRONLY | O_CREAT | O_APPEND
+                                              : O_WRONLY | O_CREAT | O_TRUNC);
+    if (!o.file) {
+      answer(fat.exists(path) ? E_FILEXIST : noDir(path) ? E_FNOPATH : E_FILLNAM);
+      break;
+    }
+    o.begin(WRITING, path);
+    answer(E_OK, &writes, 1);
+    break;
+
+  case FS_OPEN_DR:
+    if (o.kind != FREE) {
+      o.end();
+    }
+    error = list(o, path);
+    if (error) {
+      answer(error);
+    } else {
+      answer(E_OK, &reads, 1);
+    }
+    break;
+
+  case FLOP_READ: {
+    uint8_t out[READ_LEN];
+    size_t count = 0;
+    if (o.kind == READING) {
+      int got = o.file.read(out, READ_LEN);
+      if (got < 0) {
+        error = E_FMEDIA;
+      } else {
+        count = got;
+        if (count < READ_LEN) {
+          error = E_EOF;
+        }
+      }
+    } else if (o.kind == LISTING) {
+      while (count < READ_LEN) {
+        if (o.entrySent >= o.entryLength && !o.nextEntry()) {
+          error = E_EOF;
+          break;
+        }
+        out[count++] = o.entry[o.entrySent++];
+      }
+    } else {
+      error = E_ILLPAR;                   // not open - or the disk was changed
+    }
+    o.bytes += count;
+    if (error != E_OK && o.kind != FREE) {
+      if (o.kind == READING) {
+        say("geckos: %s read, %lu bytes in %lu ms", o.name, (unsigned long)o.bytes,
+            (unsigned long)(millis() - o.since));
+      }
+      o.end();
+    }
+    answer(error, out, count);
+    break;
+  }
+
+  case FLOP_WRITE:
+    if (o.kind != WRITING) {
+      answer(E_ILLPAR);
+      break;
+    }
+    if (o.file.write(data, length) != length) {
+      o.end();
+      disk.syncDevice();
+      answer(E_FDISKFULL);
+      break;
+    }
+    o.bytes += length;
+    answer(E_OK);
+    break;
+
+  case FS_CLOSE:
+    if (o.kind == WRITING) {
+      bool ok = o.file.close();
+      ok = disk.syncDevice() && ok;
+      say("geckos: %s written, %lu bytes in %lu ms", o.name, (unsigned long)o.bytes,
+          (unsigned long)(millis() - o.since));
+      if (!ok) {
+        error = E_FMEDIA;
+        mounted = false;                  // read the disk afresh next time
+      }
+    }
+    o.end();
+    answer(error);
+    break;
+
+  case FS_DELETE:
+    say("geckos: delete %s", path);
+    if (!fat.remove(path)) {
+      error = fat.exists(path) ? E_FWPROT : E_FNOFIL;
+    }
+    changed = true;
+    break;
+
+  case FS_RENAME: {
+    const char *to = path + strlen(path) + 1;
+    if (to >= path + length) {
+      answer(E_ILLPAR);
+      break;
+    }
+    say("geckos: rename %s to %s", path, to);
+    if (!fat.rename(path, to)) {
+      error = fat.exists(path) ? E_FILEXIST : E_FNOFIL;
+    }
+    changed = true;
+    break;
+  }
+
+  case FS_MKDIR:
+    say("geckos: mkdir %s", path);
+    if (!fat.mkdir(path, false)) {
+      error = fat.exists(path) ? E_FILEXIST : E_FNOPATH;
+    }
+    changed = true;
+    break;
+
+  case FS_RMDIR:
+    say("geckos: rmdir %s", path);
+    if (!fat.rmdir(path)) {
+      error = fat.exists(path) ? E_FDNEMPTY : E_FNOFIL;
+    }
+    changed = true;
+    break;
+
+  default:
+    answer(E_NOTIMP);
+    break;
+  }
+
+  if (changed) {
+    // what these did goes to the disk at once
+    if (error == E_OK && !disk.syncDevice()) {
+      error = E_FMEDIA;
+      mounted = false;
+    }
+    answer(error);
+  }
+  lastUse = millis();
+}
+
+// A request: what comes behind the SOH. One that stops short gets no answer.
+static void request() {
+  static uint8_t data[256 + 1];
+  int cmd = linkRead(FRAME_TIMEOUT), number = linkRead(FRAME_TIMEOUT);
+  int length = linkRead(FRAME_TIMEOUT);
+  for (int i = 0; i < length; i++) {
+    int byte = linkRead(FRAME_TIMEOUT);
+    if (byte < 0) {
+      length = -1;
+      break;
+    }
+    data[i] = byte;
+  }
+  if (cmd < 0 || number < 0 || length < 0) {
+    say("geckos: a request that stops short");
+    return;
+  }
+  data[length] = 0;                       // a name ends, whatever came
+  busyEvery = 500;
+  lastSign = millis();
+  serve(cmd, number, data, length);
+  busyEvery = 0;
+}
+
+}   // namespace geckos
+
 // --- the commands ------------------------------------------------------------
 
 static void doLoad(const char *raw) {
@@ -1140,10 +1698,10 @@ static void doSave(const char *raw) {
     status("52,FILE TOO LARGE");
     return;
   }
-  saving = true;
+  busyEvery = 2000;
   lastSign = millis();
   const char *result = writeFile(name);
-  saving = false;
+  busyEvery = 0;
   status(result);
 }
 
@@ -1254,6 +1812,8 @@ void setup() {
   // A step every 4 ms instead of 22: step() waits step_delay_us / 1000 + 1 ms
   // twice for each, and a 3.5" drive takes one every 3 ms.
   floppy.step_delay_us = 1000;
+  floppy.motor_delay_ms = 0;    // driveSpin() does the waiting
+  FsDateTime::setCallback(geckos::fileTime);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW);
 

@@ -1,4 +1,4 @@
-# Diskettenlaufwerk an MS-BASIC: Raspberry Pi Pico als Controller
+# Diskettenlaufwerk an MS-BASIC und GeckOS: Raspberry Pi Pico als Controller
 
 Ein PC-Diskettenlaufwerk (3,5", 34-polig) bekommt einen Raspberry Pi Pico als
 eigenen Controller. MS-BASIC spricht ihn über die serielle Schnittstelle an,
@@ -12,10 +12,14 @@ LOAD "$",8              das Inhaltsverzeichnis als Programm laden, dann LIST
 
 Ohne `,8` bleibt alles wie bisher bei der SD-Karte.
 
+Unter GeckOS ist das Laufwerk `c:`. GeckOS startet von dort, wenn eine Diskette
+mit seinen Programmen im Laufwerk liegt, sonst wie bisher von der SD-Karte -
+siehe „GeckOS-Seite“.
+
 Stand: Pico und Laufwerk laufen am Board, vorerst mit Steckbrücken verdrahtet.
 Verzeichnis, LOAD und SAVE gehen mit einer 1,44-MB-Diskette, auch mit einem
-Wechsel der Diskette. `format` und 720-KB-Disketten sind bisher nur auf dem Mac
-geprüft (siehe „Testen ohne Laufwerk“). Der Umschalter fehlt noch.
+Wechsel der Diskette. `format`, 720-KB-Disketten und GeckOS sind bisher nur auf
+dem Mac geprüft (siehe „Testen ohne Laufwerk“). Der Umschalter fehlt noch.
 
 ## Warum der Pico
 
@@ -206,6 +210,52 @@ Prompt überliest BASIC ein ENQ wie jedes Steuerzeichen.
 dem Mac oder PC lesbar. Namensregeln wie bei der SD-Karte: die Endung gehört
 dazu (`"HELLO.BAS"`).
 
+## Protokoll für GeckOS
+
+GeckOS lädt Programme, also Binärdaten, und hat mehrere Dateien zugleich offen.
+Dafür gibt es neben den Zeilen von BASIC Rahmen mit Längenangabe. Der Pico
+erkennt sie am ersten Byte, SOH ($01) - so beginnt keine Zeile von BASIC:
+
+```
+6502 -> Pico   $01, Befehl, Datei, n, n Bytes
+Pico -> 6502   Fehler, n, n Bytes
+```
+
+Datei ist 0 bis 3, die Nummer, unter der der Pico eine Datei offen hält. Die
+Befehle sind die des Dateisystems von GeckOS (`FS_*` in
+`GeckOS-V2/include/fdefs.i65`), mit dem Namen, wie ein Programm ihn schickt,
+dazu drei eigene:
+
+| Befehl | Code | n Bytes zum Pico | Antwort |
+|---|---|---|---|
+| HELLO | 0 | Uhrzeit und Datum im FAT-Format, 4 Bytes | |
+| FS_OPEN_RD | 1 | Name | 1 |
+| FS_OPEN_WR, _OW, _AP | 2, 4, 5 | Name | 2 |
+| FS_OPEN_DR | 6 | Verzeichnis oder Muster | 1 |
+| FS_RENAME | 7 | alter und neuer Name | |
+| FS_DELETE | 8 | Name | |
+| FS_FORMAT | 9 | Name der Diskette | |
+| FS_CLOSE | 11 | | |
+| FS_RMDIR, FS_MKDIR | 12, 13 | Name | |
+| READ | 64 | | die nächsten Bytes der Datei, bis zu 56 |
+| WRITE | 65 | bis zu 128 Bytes der Datei | |
+
+- Ein Öffnen bringt ein Byte zurück: 1 für eine Datei zum Lesen - auch ein
+  Verzeichnis -, 2 für eine zum Schreiben.
+- Fehler sind die Codes von GeckOS: 0 OK, -10 Dateiende (mit den letzten Bytes
+  eines READ), -33 Pfad fehlt, -36 Datei fehlt, -37 Schreibschutz, -39 Diskette
+  voll, -40 Verzeichnis nicht leer, -42 keine oder unlesbare Diskette. Nach dem
+  Dateiende oder einem Fehler hat der Pico die Datei selbst geschlossen.
+- Ein Verzeichnis liest sich wie eine Datei, Eintrag für Eintrag im Format von
+  GeckOS: Länge, Datum, Art, Name in Kleinbuchstaben. Vorweg kommt der Name der
+  Diskette, am Ende der freie Platz.
+- Vor der Antwort schickt der Pico für jede halbe Sekunde, die er braucht, ein
+  ENQ ($05). Kommt kein Byte, gibt GeckOS nach 2,5 s auf (bei 4 MHz), auf
+  HELLO nach 1 s.
+- Ein READ ist so kurz, dass die Antwort samt Kopf in den Empfangspuffer von
+  GeckOS passt (64 Bytes). Der Pico schickt nur auf Anfrage, also geht kein
+  Byte verloren, wie lange GeckOS auch nicht zum Lesen kommt.
+
 ## BASIC-Seite
 
 - `LOAD` und `SAVE` (`db6502_sdbasic.s`): nach dem Namen ein Blick auf `,8`.
@@ -216,6 +266,41 @@ dazu (`"HELLO.BAS"`).
   wartet `ser_endsave` auf die zweite Statuszeile.
 - ROM: geschätzt 200-300 Bytes, in der Lücke bei `$E512` (siehe
   `Software/MEMORY_MAP.md`).
+
+## GeckOS-Seite
+
+- `fsflop` (`GeckOS-V2/arch/jp6502/fsflop.a65`, rund 540 Bytes im ROM) ist der
+  Dateisystem-Server für `c:`. Er reicht die Anfragen der Programme an den
+  Pico weiter und schiebt die Bytes der offenen Dateien zwischen Leitung und
+  Streams hin und her, bis zu vier Dateien zugleich.
+- Beim Start schickt er HELLO, mit Uhrzeit und Datum der DS3231 für die
+  Zeitstempel der Dateien, die der Pico schreibt. Antwortet niemand -
+  Schalter auf „Mac“, kein Pico, oder einer, der noch nicht läuft -, bleibt
+  die Leitung beim seriellen Gerät, und GeckOS startet wie ohne Laufwerk. Der
+  Pico muss also laufen, bevor GeckOS startet.
+- Antwortet der Pico, gehört ihm die Leitung: Die Shell auf der seriellen
+  Leitung entfällt, nur die Konsole hat eine.
+- init startet die Shell der Konsole von `c:`. Geht das nicht - keine
+  Diskette, keine `lsh` darauf -, nimmt es die von der SD-Karte, `b:`. Dafür
+  haben die ROM-Einträge von init ein neues Bit, `PK_ALT`: Der Eintrag startet
+  nur, wenn der davor nicht starten konnte (`INIT_ALT` in
+  `GeckOS-V2/sysapps/init/init.a65`). Die Shell auf der seriellen Leitung hat
+  es auch, hinter `fsflop`.
+- Eine Diskette zum Starten: GeckOS von der SD-Karte starten, die Diskette
+  einlegen, dann
+
+  ```
+  format c:BOOT     1,44 MB, Name BOOT - was auf der Diskette war, ist weg
+  cp b:* c:         alle Programme der SD-Karte auf die Diskette
+  ```
+
+  `format` dauert etwa zwei Minuten, `cp b:* c:` gut eine Minute. Beide
+  Programme liegen auf der SD-Karte (`GeckOS-V2/arch/jp6502/boot/sdcard`).
+  Eine Diskette, die nur zum Speichern dient, braucht kein `lsh`.
+- Tempo, 19200 Baud: Lesen etwa 1,35 KB/s - `lsh` (7,4 KB) lädt in 5,5 s -,
+  Schreiben etwa 0,8 KB/s.
+- Ohne Laufwerk: `make FLOPPY=-DNO_FLOPPY` in `GeckOS-V2/arch/jp6502` baut
+  GeckOS wie vorher, mit rund 650 Bytes mehr Platz im ROM.
 
 ## Pico-Firmware
 
@@ -269,10 +354,15 @@ dazu (`"HELLO.BAS"`).
   `00,OK`, SAVE schreibt erst nach dem EOT. Beim Lesen einer Spur sind die
   Interrupts eine Umdrehung lang aus; der UART verlöre dabei Bytes, aber der
   6502 wartet dann ohnehin.
+- Unter GeckOS gehen Dateien stückweise über die Leitung, gleich wie groß.
+  Eine geschriebene Datei kommt mit FS_CLOSE ganz auf die Diskette, samt FAT
+  und Verzeichnis, ebenso jedes DELETE, RENAME, MKDIR und RMDIR. Zeitstempel:
+  die Uhr aus HELLO, weitergezählt; ohne HELLO, unter BASIC, 1.1.2026 12:00.
 - Diskettenwechsel: DSKCHG (Pin 34) gilt nur bei angewähltem Laufwerk und wird
   vor jedem Befehl gelesen. Ist es aktiv, macht der Kopf einen Schritt hin und
   zurück. Bleibt es danach aktiv, ist keine Diskette drin
-  (`74,DRIVE NOT READY`), sonst wird die Diskette neu eingelesen.
+  (`74,DRIVE NOT READY`), sonst wird die Diskette neu eingelesen. Offene
+  Dateien von GeckOS sind dann geschlossen.
 - Motor aus nach 3 s ohne Befehl, außer während das Listing eines SAVE kommt.
 - Der Kopf macht alle 4 ms einen Schritt. Adafruit Floppy wartet ab Werk
   zweimal `step_delay_us / 1000 + 1` ms je Schritt, mit 10000 also 22 ms; die
@@ -308,18 +398,24 @@ dazu (`"HELLO.BAS"`).
   an ein Programm, etwa `drivesim.py --stdio`, und läuft dann in Echtzeit -
   sonst rechnet er 10 s Emulatorzeit in einem Bruchteil davon durch, und die
   Antwort des Programms kommt für BASIC zu spät.
-- `Arduino/floppy_pico/host/` baut die Pico-Firmware für den Mac: Attrappen
-  ersetzen Arduino-Core, Adafruit Floppy und SdFat, die Diskette ist ein
-  Ordner. `make -C Arduino/floppy_pico/host test` lässt sie im Emulator gegen
-  das MS-BASIC aus `Software/build/rom` laufen, in etwa einer Minute. Die Fälle
-  liegen in `host/tests/`: Verzeichnis, LOAD, SAVE, Datei fehlt, Pico startet
-  zu spät, keine Diskette, keine Flusswechsel, Schreibschutz, 720 KB, langsames
-  Laufwerk, Schreiben länger als 10 s, Formatieren und Hexdump über USB. Jeder
-  ist ein Emulator-Skript; Kommentare darin sagen, wie sich das Laufwerk
-  verhält und was herauskommen muss. Die
-  Spuren selbst - MFM, Sektoren, das FAT12 einer formatierten Diskette - prüft
-  das nicht, die Attrappe behält keine Spur; ebenso wenig Adafruit Floppy am
-  echten Laufwerk.
+- `Arduino/floppy_pico/host/` baut die Pico-Firmware für den Mac, mit dem
+  SdFat und dem MFM-Code des Pico-Builds aus den Arduino-Bibliotheken. Nur das
+  Laufwerk ist eine Attrappe: Sie behält die Flusswechsel jeder geschriebenen
+  Spur, eine Umdrehung je Spur, und dekodiert mit dem Decoder von Adafruit
+  Floppy - was ein Test liest und schreibt, ist eine FAT12-Diskette in MFM. Die
+  Diskette beginnt mit den Dateien eines Ordners und gibt am Ende alles an ihn
+  zurück. `make -C Arduino/floppy_pico/host test` lässt die Firmware im
+  Emulator gegen das MS-BASIC aus `Software/build/rom` und gegen GeckOS laufen,
+  in gut einer Minute. Mit `-r` kommen die Bytes der Leitung im Takt der
+  Baudrate, ob der 6502 sie abholt oder nicht; verlorene zählt der Emulator.
+  Die Fälle liegen in `host/tests/`. BASIC: Verzeichnis, LOAD, SAVE, Datei
+  fehlt, Pico startet zu spät, keine Diskette, keine Flusswechsel,
+  Schreibschutz, 720 KB, langsames Laufwerk, Schreiben länger als 10 s,
+  Formatieren und Hexdump über USB. GeckOS: Start von der Diskette, ohne
+  Diskette, ohne Pico, `format` und `cp` Byte für Byte, Umleiten, Umbenennen,
+  Verzeichnisse, Löschen und Fehler. Jeder Fall ist ein Emulator-Skript;
+  Kommentare darin sagen, wie sich das Laufwerk verhält und was herauskommen
+  muss. Adafruit Floppy am echten Laufwerk prüft das nicht.
 
 ## Schritte
 
@@ -329,3 +425,5 @@ dazu (`"HELLO.BAS"`).
    UF2 flashen. *Erledigt.*
 4. Erst eine Diskette lesen, die am Mac oder PC beschrieben wurde, dann
    speichern. *Erledigt.*
+5. GeckOS: Laufwerk `c:`, Start von der Diskette, `format` und `cp`. Im
+   Emulator geprüft, am Board noch nicht.

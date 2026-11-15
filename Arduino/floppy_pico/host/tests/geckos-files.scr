@@ -1,0 +1,37 @@
+# Files on the disk GeckOS came from: written through a redirection, renamed,
+# copied into a directory, deleted - and a directory that is not empty stays.
+# A copy that cannot be made names the file it is about, and no more.
+# rom: geckos
+# disk: geckos
+# emu: -r
+# expect: |d/ls
+# expect: geckos: rename /x to y
+# expect: geckos: -> error -40
+# expect: nofile: FILE NOT FOUND
+# expect: Child terminated:
+# expect: q/x: ILLEGAL PATH
+# expect: overruns=0
+# check: cmp -s y lsh
+# check: test ! -e x -a -d d -a ! -e d/y -a ! -e z -a ! -e q
+# check: cmp -s d/ls ls
+# check: ! grep -a -q -E '^.(z|q/x) +.$' ../geckos-files.out
+wait 14
+kbd cat lsh >x\r
+wait 16
+kbd mv x y\r
+wait 5
+kbd mkdir d\r
+wait 5
+kbd cp ls y d\r
+wait 16
+screen
+kbd rm d/y\r
+wait 5
+kbd rmdir d\r
+wait 4
+kbd cp nofile z\r
+wait 5
+kbd cp ls q/x\r
+wait 5
+screen
+quit

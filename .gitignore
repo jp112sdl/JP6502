@@ -8,3 +8,4 @@ Arduino/keyboard_168P/build/diy_atmega8_series.avr.atmega168_diy/keyboard_168P.i
 Arduino/floppy_pico/build/
 Arduino/floppy_pico/host/picohost
 Arduino/floppy_pico/host/out/
+Arduino/floppy_pico/host/build/

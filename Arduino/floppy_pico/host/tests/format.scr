@@ -5,7 +5,8 @@
 # expect: formatting as 1.44 MB, named "TEST"
 # expect: track 80 of 80
 # expect: formatted in
-# expect: 0 "FLOPPY"
+# expect: 0 "TEST"
+# expect: 2847 BLOCKS FREE
 wait 8
 kbd LOAD "$",8\r
 wait 4

@@ -1,0 +1,18 @@
+# GeckOS without the drive on the line - the switch on "Mac": no answer to the
+# hello, so the serial line gets its shell as before, and the console the one
+# from the card. A program on c:, which is not there, is an error and no more.
+# rom: geckos
+# pico: none
+# emu: -r
+# expect: Start "fsflop": ok!
+# expect: Start "c:lsh -d c:": failed!
+# expect: GECKOS
+# expect: Bytes free.
+# check: test $(grep -a -c 'Start "b:lsh -d b:": ok!' ../geckos-serial.out) = 2
+wait 14
+ser ls\r
+wait 5
+kbd c:ls\r
+wait 3
+screen
+quit

@@ -1,6 +1,7 @@
-# Writing the file takes longer than the ten seconds BASIC waits - four tracks
-# of three seconds each. The ENQs the drive sends in between keep it waiting.
-# env: PICO_WRITE_MS=3000
+# Writing the file takes longer than the ten seconds BASIC waits - the tracks
+# of the file, the FAT and the directory, four seconds each. The ENQs the
+# drive sends in between keep it waiting.
+# env: PICO_WRITE_MS=4000
 # expect: wrote X.BAS
 # check: test -e X.BAS
 # check: ! grep -q 'NOT PRESENT' ../slowsave.out

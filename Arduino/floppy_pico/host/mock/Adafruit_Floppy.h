@@ -1,10 +1,13 @@
-// The drive, played by environment variables: PICO_NODISK, PICO_WP (write
-// protect), PICO_SPT (sectors per track, 9 for 720 KB), PICO_SPINUP_MS,
-// PICO_MOUNT_MS and PICO_WRITE_MS (how long the motor, the first read and the
-// write of a track take). Its disk reads at the bit rate of its format only: a
-// boot sector on track 0, zeros elsewhere. Written tracks are not kept.
+// The drive, as far as floppy_pico.ino uses Adafruit_Floppy: it keeps the flux
+// of every track written, a revolution each, and decodes with the MFM code of
+// the library itself. Environment variables say how it behaves: PICO_NODISK,
+// PICO_WP (write protect), PICO_SPINUP_MS, PICO_MOUNT_MS and PICO_WRITE_MS
+// (how long the motor, the first read and the write of a track take).
 #pragma once
-#include "SdFat.h"
+#include <cmath>
+#include <map>
+#include <vector>
+#include <mfm_impl.h>
 
 class Adafruit_Floppy {
 public:
@@ -13,10 +16,12 @@ public:
   bool begin() { return true; }
   void select(bool) {}
   bool spin_motor(bool on) {
-    fprintf(stderr, "mock: motor %s\n", on ? "on" : "off");
+    if (driveLive) {
+      fprintf(stderr, "mock: motor %s\n", on ? "on" : "off");
+    }
     if (on) {
-      delay(envInt("PICO_SPINUP_MS", 0));
-      return !envInt("PICO_NODISK", 0);
+      delay(motor_delay_ms + driveEnv("PICO_SPINUP_MS"));
+      return !driveEnv("PICO_NODISK");
     }
     return true;
   }
@@ -28,65 +33,70 @@ public:
     onSide = head;
     return true;
   }
-  bool get_ready_sense() { return envInt("PICO_NODISK", 0); }
-  bool get_write_protect() { return envInt("PICO_WP", 0); }
-  uint32_t getSampleFrequency() { return 24000000; }
+  bool get_ready_sense() { return driveEnv("PICO_NODISK"); }
+  bool get_write_protect() { return driveEnv("PICO_WP"); }
+  uint32_t getSampleFrequency() { return SAMPLES; }
 
-  size_t capture_track(volatile uint8_t *, size_t max, int32_t *index, bool, uint32_t) {
-    if (!captured++) {
+  // The pulses of a revolution and the start of the next, like the 220 ms of
+  // a capture
+  size_t capture_track(volatile uint8_t *pulses, size_t max, int32_t *index, bool, uint32_t) {
+    if (driveLive && !captured++) {
       fprintf(stderr, "mock: disk read in\n");
       delay(envInt("PICO_MOUNT_MS", 0));
     }
+    const std::vector<uint8_t> &track = tracks[at * 2 + onSide];
+    size_t count = 0;
+    for (size_t i = 0; count < max && !track.empty() && i < track.size() * 11 / 10; i++) {
+      pulses[count++] = track[i % track.size()];
+    }
     *index = 0;
-    return max;
+    return count;
   }
 
-  // Like the real decoder, it leaves the sectors marked valid alone.
+  // As Adafruit_FloppyBase::decode_track_mfm does it
   size_t decode_track_mfm(uint8_t *sectors, size_t count, uint8_t *validity,
-                          const uint8_t *, size_t, float bitUs, bool clear,
+                          const uint8_t *pulses, size_t length, float bitUs, bool clear,
                           uint8_t *track = nullptr) {
     if (clear) {
       memset(validity, 0, count);
     }
-    int perTrack = envInt("PICO_SPT", 18);
-    bool readable = (perTrack == 9) == (bitUs > 1.5f);
-    size_t got = 0;
-    for (size_t i = 0; i < count; i++) {
-      if (readable && !validity[i]) {
-        uint8_t *s = sectors + i * 512;
-        memset(s, 0, 512);
-        if (i == 0 && at == 0 && onSide == 0) {
-          int total = 80 * 2 * perTrack;
-          s[0] = 0xEB;                    // the jump
-          s[1] = 0x3C;
-          s[2] = 0x90;
-          s[0x0C] = 2;                    // 512 bytes a sector
-          s[0x0D] = 1;                    // a cluster
-          s[0x10] = 2;                    // FATs
-          s[0x13] = total;
-          s[0x14] = total >> 8;
-          s[0x18] = perTrack;
-          s[0x1A] = 2;                    // heads
-        }
-        validity[i] = 1;
-        if (track) {
-          *track = at;
-        }
-      }
-      got += validity[i];
-    }
-    return got;
+    mfm_io_t io;
+    io.T1_nom = lround(SAMPLES * bitUs * 1e-6);
+    io.T2_max = lround(SAMPLES * bitUs * 2.5e-6);
+    io.T3_max = lround(SAMPLES * bitUs * 3.5e-6);
+    io.pulses = const_cast<uint8_t *>(pulses);
+    io.n_pulses = length;
+    io.sectors = sectors;
+    io.n_sectors = count;
+    io.n = 2;
+    io.head = onSide;
+    io.cylinder_ptr = track;
+    io.sector_validity = validity;
+    return ::decode_track_mfm(&io);
   }
 
-  bool write_track(uint8_t *, size_t, bool) {
-    fprintf(stderr, "mock: track %d, side %d written\n", at, onSide);
-    delay(envInt("PICO_WRITE_MS", 0));
+  // The write stops at the index: a revolution of 200 ms
+  bool write_track(uint8_t *pulses, size_t length, bool) {
+    std::vector<uint8_t> &track = tracks[at * 2 + onSide];
+    track.clear();
+    uint64_t time = 0;
+    for (size_t i = 0; i < length && time < SAMPLES / 5; i++) {
+      track.push_back(pulses[i]);
+      time += pulses[i];
+    }
+    if (driveLive) {
+      fprintf(stderr, "mock: track %d, side %d written\n", at, onSide);
+      delay(envInt("PICO_WRITE_MS", 0));
+    }
     return true;
   }
 
   Stream *debug_serial = nullptr;
   uint16_t step_delay_us = 10000;
+  uint16_t motor_delay_ms = 1000;
 
 private:
+  static constexpr uint32_t SAMPLES = 24000000;   // a second, as on the RP2040
+  std::map<int, std::vector<uint8_t>> tracks;
   int at = 0, onSide = 0, captured = 0;
 };

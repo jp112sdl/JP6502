@@ -1,0 +1,21 @@
+# GeckOS with a disk in the drive that has its programs: the shell on the
+# console comes from there, c:, and the card is not read at all. With -r the
+# bytes of the drive come at their baud rate, wanted or not: none is lost.
+# rom: geckos
+# disk: geckos
+# emu: -r
+# expect: geckos: hello, it is 20
+# expect: Start "fsflop": ok!
+# expect: Start "c:lsh -d c:": ok!
+# expect: lsh read, 7393 bytes
+# expect: |FLOPPY
+# expect: |lsmem
+# expect: Bytes free.
+# expect: SD reads=0
+# expect: overruns=0
+wait 14
+screen
+kbd ls\r
+wait 6
+screen
+quit

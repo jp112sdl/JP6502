@@ -1,0 +1,27 @@
+# The way a disk to boot from is made: GeckOS from the card, the blank disk in
+# the drive formatted, and programs copied onto it - byte for byte.
+# rom: geckos
+# disk: empty
+# emu: -r
+# expect: Start "c:lsh -d c:": failed!
+# expect: Start "b:lsh -d b:": ok!
+# expect: geckos: format, named "BOOT"
+# expect: |c:lsh
+# expect: |BOOT
+# expect: |     7393 lsh
+# expect: overruns=0
+# check: for f in lmon ls lsh lsmem; do cmp -s $f ../../../../../GeckOS-V2/arch/jp6502/boot/sdcard/$f || exit 1; done
+# check: cmp -s shell lsh
+# check: ! grep -q 'stops short' ../geckos-copy.log
+wait 14
+kbd format c:boot\r
+wait 8
+kbd cp b:l* c:\r
+wait 32
+screen
+kbd cp b:lsh c:shell\r
+wait 14
+kbd ls -l c:\r
+wait 6
+screen
+quit
